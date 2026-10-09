@@ -15,7 +15,7 @@ Migracja `004_memberships_roles.sql` rozszerza schemat 3 po M02A do 4, bez zmian
 | `foreman` | Brygadzista |
 | `worker` | Pracownik |
 
-Rola platformowa pozostaje w `platform_admins` i nie może być wpisana do `membership_roles`. Role nie dziedziczą po sobie; administrator firmy może otrzymać dodatkową rolę kierownika. Uprawnienia projektowe oraz reguła ostatniego administratora należą do dalszych etapów wskazanych w roadmapie.
+Rola platformowa pozostaje w `platform_admins` i nie może być wpisana do `membership_roles`. Role nie dziedziczą po sobie; administrator firmy może otrzymać dodatkową rolę kierownika. [PR10 (M05)](COMPANY_MEMBERS.md) dodaje panel firmy, profile pracowników, jawne zmiany ról/statusu, audyt i bazową ochronę ostatniego aktywnego administratora. Uprawnienia projektowe pozostają w dalszych etapach roadmapy.
 
 ## Granica RLS i kontekst transakcji
 

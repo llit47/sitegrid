@@ -9,6 +9,7 @@ import { registerOrganizationRoutes } from '../organization-routes.js';
 import { invitationEmail, registerInvitationRoutes } from '../invitation-routes.js';
 import { createInvitation, deliverInvitation, requireInvitationDelivery } from '../invitations.js';
 import { withTransaction } from '../organization-context.js';
+import { registerCompanyMemberRoutes } from '../company-member-routes.js';
 
 const token = () => randomBytes(32).toString('base64url');
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -55,11 +56,13 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
     const status = error.statusCode && error.statusCode >= 400 && error.statusCode < 500 ? error.statusCode : 503;
     if (status === 503) app.log.error({ requestId: request.id }, 'Request failed; check service/database availability');
     const message = status === 503 ? 'Usługa jest chwilowo niedostępna.'
-      : status === 401 ? 'Zaloguj się, aby kontynuować.' : status === 403 ? 'Brak uprawnień.' : 'Nieprawidłowe żądanie.';
+      : status === 401 ? 'Zaloguj się, aby kontynuować.' : status === 403 ? 'Brak uprawnień.'
+      : error.code === 'SG_LAST_ADMIN' ? 'Najpierw przekaż administrację innemu aktywnemu członkowi firmy.' : 'Nieprawidłowe żądanie.';
     return reply.code(status).send({ error: message });
   });
   registerOrganizationRoutes(app, pool, config);
   registerInvitationRoutes(app, pool, config, { checkCsrf, reserve });
+  registerCompanyMemberRoutes(app, pool, config, checkCsrf);
   app.get('/api/auth/session', async (request, reply) => {
     if (!await reserve(pool, `session:${request.ip}`, 120)) return reply.header('Retry-After', '900').code(429).send({ error: 'Spróbuj ponownie później.' });
     await pool.query('DELETE FROM sessions WHERE token_hash IN (SELECT token_hash FROM sessions WHERE expires_at <= now() LIMIT 1000)');

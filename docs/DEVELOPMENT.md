@@ -16,7 +16,7 @@ Frontend: http://localhost:5173. Produkcja: `npm run build`, `NODE_ENV=productio
 
 Migracje: kolejne `migrations/NNN_nazwa.sql`; suma SHA-256 każdej zapisanej migracji jest weryfikowana. Nie edytuj zastosowanych migracji. Zmiany wykonuje CLI w pojedynczej transakcji, z blokadą PostgreSQL. Serwer nie uruchamia migracji przy starcie i odmawia readiness przy niezgodnym schemacie.
 
-M02A dodaje `003_organizations.sql`, M02B `004_memberships_roles.sql`, M03 `005_organization_access.sql`, a PR9 `006_invitations.sql`; kontrakt `release.json` wymaga schematu 6 i dopuszcza migrację ze schematów 0–6. Testy integracyjne sprawdzają przejście ze schematów 2, 3, 4 i 5 z zachowaniem kont, firm, członkostw i ról oraz powtórzenie migracji.
+M02A dodaje `003_organizations.sql`, M02B `004_memberships_roles.sql`, M03 `005_organization_access.sql`, PR9 `006_invitations.sql`, a PR10 `007_company_members.sql`; kontrakt `release.json` wymaga schematu 7 i dopuszcza migrację ze schematów 0–7. Testy integracyjne sprawdzają przejście ze schematów 2, 3, 4, 5 i 6 z zachowaniem kont, firm, członkostw, ról i zaproszeń oraz powtórzenie migracji.
 
 Migracja przyznaje istniejącej roli runtime `sitegrid` odczyt/tworzenie firm i zapis audytu. Test z kontem PostgreSQL superuser sprawdza API z tą rolą; w razie jej braku tworzy tymczasową rolę `NOLOGIN` i usuwa ją po teście. Przy mniej uprzywilejowanej bazie tylko ten dodatkowy scenariusz jest pomijany.
 
@@ -37,3 +37,5 @@ node --import tsx --test tests/memberships.test.ts
 M03 używa tych samych dwóch połączeń testowych; `node --import tsx --test tests/organization-context.test.ts` uruchamia testy API, autoryzacji i polityk listowania firm. Zestaw wymaga rzeczywistego runtime URL i jest automatycznie objęty `npm run check` w CI. [Kontrakt M03](ORGANIZATION_CONTEXT.md).
 
 PR9: [zaproszenia email, SMTP i aktywacja administratora firmy](INVITATIONS.md). Testy korzystają z tych samych dwóch połączeń PostgreSQL i są objęte `npm run check`.
+
+PR10: [panel firmy, członkowie, pracownicy i ochrona ostatniego administratora](COMPANY_MEMBERS.md). `tests/company-members.test.ts` korzysta z tych samych dwóch połączeń, rzeczywistego runtime RLS i jest objęty `npm run check`. Zmiany administracji wymagają `READ COMMITTED` (domyślne dla aplikacji). Używaj świeżej syntetycznej bazy PostgreSQL 17+ z kodowaniem UTF-8.

@@ -14,6 +14,8 @@ Odbiorca otwiera `/invitations/accept#TOKEN`. Fragment nie trafia do serwera/pro
 
 Akceptacja tworzy wyłącznie członkostwo wskazanej firmy. Inne firmy i ich role pozostają bez zmian. Jeśli odbiorca już ma aktywne członkostwo w docelowej firmie, zaproszenie zostaje zużyte bez zmiany jego statusu i ról. Członkostwo oczekujące/nieaktywne powoduje odmowę; zaproszenie nie służy do reaktywacji ani zmiany istniejących ról. Wybór firmy nadal jest lokalny dla karty i nie zmienia sesji.
 
+[PR10 (M05)](COMPANY_MEMBERS.md) dodaje osobne, autoryzowane działania zmiany ról i reaktywacji. Współdzieli blokadę firmy z zaproszeniami i ponownie sprawdza uprawnienia wystawcy po oczekiwaniu na blokadę. Zaproszenia zachowują powyższe zasady; migracja do schematu 7 nie zmienia ich istniejących rekordów.
+
 ## API i zabezpieczenia
 
 - Platforma: GET/POST `/api/admin/organizations/:id/invitations` oraz POST `/:invitationId/revoke`. POST przyjmuje `{ email }`. Lista i anulowanie dotyczą wyłącznie pierwszych zaproszeń.

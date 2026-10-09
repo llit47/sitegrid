@@ -36,9 +36,19 @@ export function registerInvitationRoutes(app: FastifyInstance, pool: Pool, confi
   async function administer<T>(request: FastifyRequest, organizationId: string, platform: boolean,
     write: boolean, work: (client: PoolClient, actor: Session) => Promise<T>) {
     const run = async (client: PoolClient) => {
+      if (write) await lockInvitationCompany(client, organizationId);
       const actor = await readSession(client, request, config);
       if (!actor?.user_id) throw Object.assign(new Error('Authentication required'), { statusCode: 401 });
       if (write) csrf(request, actor);
+      if (write) {
+        // PR10 membership changes share this lock; recheck authority after waiting.
+        const available = await client.query(`SELECT o.id FROM organizations o WHERE o.id = $1 AND o.status = 'active'
+          AND ($3::boolean OR EXISTS (SELECT 1 FROM organization_memberships m JOIN membership_roles r
+            ON (r.organization_id, r.membership_id) = (m.organization_id, m.id)
+            WHERE m.organization_id = o.id AND m.user_id = $2 AND m.status = 'active' AND r.role = 'organization_admin'))`,
+        [organizationId, actor.user_id, platform && actor.admin]);
+        if ((platform && !actor.admin) || !available.rows[0]) throw Object.assign(new Error('Access denied'), { statusCode: 403 });
+      }
       return work(client, actor);
     };
     if (!platform) return withAuthorizedOrganization(pool, request, config, organizationId, run, ['organization_admin']);

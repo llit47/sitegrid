@@ -11,7 +11,7 @@ import { readConfig } from '../apps/server/src/config.js';
 import { createPool } from '../apps/server/src/db.js';
 import { buildApp } from '../apps/server/src/app.js';
 import { bootstrapAdmin } from '../apps/server/src/auth/bootstrap.js';
-import { migrate } from '../apps/server/src/migrations.js';
+import { migrate, migrationFiles } from '../apps/server/src/migrations.js';
 import { invitationHash, deliverInvitation, lockInvitationCompany } from '../apps/server/src/invitations.js';
 import { withTransaction, withOrganization } from '../apps/server/src/organization-context.js';
 
@@ -123,8 +123,9 @@ test('email invitations and first administrator activation under runtime RLS', {
         }
         const tables = ['users', 'credentials', 'platform_admins', 'organizations', 'organization_memberships', 'membership_roles', 'sessions'];
         const before = await Promise.all(tables.map(table => owner.query(`SELECT * FROM ${table} ORDER BY 1`)));
-        assert.equal(await migrate(owner, 'migrations'), 6);
-        assert.equal(await migrate(owner, 'migrations'), 6);
+        const version = (await migrationFiles('migrations')).length;
+        assert.equal(await migrate(owner, 'migrations'), version);
+        assert.equal(await migrate(owner, 'migrations'), version);
         for (const [i, table] of tables.entries()) assert.deepEqual((await owner.query(`SELECT * FROM ${table} ORDER BY 1`)).rows, before[i].rows);
       } finally { await rm(previous, { recursive: true, force: true }); }
     });
@@ -313,7 +314,9 @@ test('email invitations and first administrator activation under runtime RLS', {
     });
     await t.test('issuer role revocation, account blocking and inactive companies invalidate pending grants', async () => {
       const invitation = await invite(organizationA, companyAdmin, 'issuer-revoked@example.test');
-      await owner.query("DELETE FROM membership_roles WHERE organization_id = $1 AND role = 'organization_admin'", [organizationA]);
+      // Revoke the issuer after handing administration to another active member.
+      await owner.query("INSERT INTO membership_roles(organization_id, membership_id, role) SELECT organization_id, id, 'organization_admin' FROM organization_memberships WHERE organization_id = $1 AND user_id = (SELECT id FROM users WHERE email = 'wrong@example.test')", [organizationA]);
+      await owner.query("DELETE FROM membership_roles WHERE organization_id = $1 AND role = 'organization_admin' AND membership_id IN (SELECT id FROM organization_memberships WHERE user_id = (SELECT id FROM users WHERE email = 'first@example.test'))", [organizationA]);
       assert.equal((await accept(tokenOf(invitation), anon, { email: 'issuer-revoked@example.test', password })).statusCode, 409);
       assert.equal((await get(invitePath(organizationA), companyAdmin)).statusCode, 403);
       await owner.query("INSERT INTO membership_roles(organization_id, membership_id, role) SELECT organization_id, id, 'organization_admin' FROM organization_memberships WHERE organization_id = $1 AND user_id = (SELECT id FROM users WHERE email = 'first@example.test')", [organizationA]);
