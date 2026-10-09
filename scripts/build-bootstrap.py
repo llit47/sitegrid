@@ -25,12 +25,14 @@ with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as z:
         info.compress_type = zipfile.ZIP_DEFLATED
         z.writestr(info, data)
 payload = base64.b64encode(buffer.getvalue()).decode()
+host_guard = "if [ -e /etc/pve ] || command -v pveversion >/dev/null 2>&1; then echo 'Instalacja na hoście Proxmoxa jest zabroniona; użyj gotowego Debiana 13.' >&2; exit 1; fi"
 script = '''#!/bin/bash
 set -euo pipefail
 umask 077
 [ "$(id -u)" = 0 ] || { echo 'SiteGrid wymaga root.' >&2; exit 1; }
 . /etc/os-release
 [ "$ID" = debian ] && [ "$VERSION_ID" = 13 ] || { echo 'Wymagany gotowy Debian 13.' >&2; exit 1; }
+@SITEGRID_HOST_GUARD@
 [ -d /run/systemd/system ] || { echo 'Wymagany systemd.' >&2; exit 1; }
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl python3 openssl iproute2 util-linux
@@ -48,6 +50,7 @@ with zipfile.ZipFile(root / 'payload.zip') as archive:
 SITEGRID_UNPACK
 python3 "$sitegrid_bootstrap_tmp/bootstrap.py" "$@"
 '''
+script = script.replace('@SITEGRID_HOST_GUARD@', host_guard)
 output = Path(a.output)
 output.mkdir(parents=True, exist_ok=True)
 bootstrap = output / f'sitegrid-install-{a.version}.sh'
@@ -55,7 +58,7 @@ bootstrap.write_text(script)
 bootstrap.chmod(0o755)
 sha = hashlib.sha256(bootstrap.read_bytes()).hexdigest()
 # The command itself is the initial trust anchor and must be copied from a trusted instruction.
-runner = f'''set -euo pipefail; test "$(id -u)" = 0; . /etc/os-release; test "$ID:$VERSION_ID" = debian:13; apt-get update; apt-get install -y ca-certificates curl; f=$(mktemp); trap 'rm -f -- "$f"' EXIT; curl --disable --fail --silent --show-error --location --proto =https --proto-redir =https --connect-timeout 15 --max-time 120 --max-filesize 1048576 https://github.com/llit47/sitegrid/releases/download/v{a.version}/{bootstrap.name} -o "$f"; echo "{sha}  $f" | sha256sum --check --status; bash "$f"'''
+runner = f'''set -euo pipefail; test "$(id -u)" = 0; . /etc/os-release; test "$ID:$VERSION_ID" = debian:13; {host_guard}; apt-get update; apt-get install -y ca-certificates curl; f=$(mktemp); trap 'rm -f -- "$f"' EXIT; curl --disable --fail --silent --show-error --location --proto =https --proto-redir =https --connect-timeout 15 --max-time 120 --max-filesize 1048576 https://github.com/llit47/sitegrid/releases/download/v{a.version}/{bootstrap.name} -o "$f"; echo "{sha}  $f" | sha256sum --check --status; bash "$f"'''
 command = 'bash -c ' + shlex.quote(runner)
 (output / 'INSTALL_COMMAND.txt').write_text(command + '\n')
 (output / (bootstrap.name + '.sha256')).write_text(sha + '  ' + bootstrap.name + '\n')

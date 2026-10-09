@@ -251,7 +251,7 @@ class ChannelTests(unittest.TestCase):
         tools = self.root / 'tools'
         tools.mkdir()
         for name, body in {
-            'id': 'echo 0', 'apt-get': 'exit 0',
+            'id': 'echo 0', 'apt-get': 'touch "$APT_MARKER"',
             'curl': 'for arg; do destination="$arg"; done; cp "$BOOTSTRAP_SOURCE" "$destination"',
             'bash': 'echo verified > "$RUNNER_MARKER"',
         }.items():
@@ -262,7 +262,18 @@ class ChannelTests(unittest.TestCase):
         os_release.write_text('ID=debian\nVERSION_ID=13\n')
         runner = parts[2].replace('/etc/os-release', str(os_release))
         marker = self.root / 'executed'
-        env = {**os.environ, 'PATH': str(tools) + ':' + os.environ['PATH'], 'BOOTSTRAP_SOURCE': str(first / 'sitegrid-install-0.1.0.sh'), 'RUNNER_MARKER': str(marker)}
+        apt_marker = self.root / 'apt-called'
+        env = {**os.environ, 'PATH': str(tools) + ':' + os.environ['PATH'], 'BOOTSTRAP_SOURCE': str(first / 'sitegrid-install-0.1.0.sh'), 'RUNNER_MARKER': str(marker), 'APT_MARKER': str(apt_marker)}
+        pve = tools / 'pveversion'
+        pve.write_text('#!/bin/sh\nexit 0\n'); pve.chmod(0o755)
+        bootstrap = (first / 'sitegrid-install-0.1.0.sh').read_text().replace('/etc/os-release', str(os_release))
+        for program in (runner, bootstrap):
+            result = subprocess.run(['/bin/bash', '-c', program], env=env, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('hoście Proxmoxa'.encode(), result.stderr)
+            self.assertFalse(apt_marker.exists())
+            self.assertFalse(marker.exists())
+        pve.unlink()
         subprocess.run(['/bin/bash', '-c', runner], env=env, capture_output=True, check=True)
         self.assertTrue(marker.exists())
         marker.unlink()
