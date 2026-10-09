@@ -80,7 +80,10 @@ def backup_database(operation):
     digest = hashlib.sha256()
     with destination.open('rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''): digest.update(chunk)
-    return {'path': str(destination), 'sha256': digest.hexdigest()}
+    metadata = destination.with_suffix('.json')
+    write_json(metadata, {'operation': operation, 'version': read_manifest(ROOT / 'current')['version'],
+                          'schema': len(schema_state()), 'dump': str(destination), 'sha256': digest.hexdigest()})
+    return {'path': str(destination), 'sha256': digest.hexdigest(), 'metadata': str(metadata)}
 
 
 def stage(args):
