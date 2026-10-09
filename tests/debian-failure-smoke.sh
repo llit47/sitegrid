@@ -45,13 +45,13 @@ backup=$(python3 -c "import json; print(json.load(open('/var/lib/sitegrid/deploy
 runuser -u postgres -- createdb sitegrid_restore_smoke
 runuser -u postgres -- pg_restore --exit-on-error --no-owner --no-privileges --dbname=sitegrid_restore_smoke < "$backup"
 [[ $(identity sitegrid_restore_smoke) == "$before" ]]
-[[ $(runuser -u postgres -- psql -X -At -d sitegrid_restore_smoke -c 'SELECT max(version) FROM schema_migrations') == 2 ]]
+[[ $(runuser -u postgres -- psql -X -At -d sitegrid_restore_smoke -c 'SELECT max(version) FROM schema_migrations') == 3 ]]
 python3 - <<'PY'
 import json,pathlib,hashlib
 state=json.loads(pathlib.Path('/var/lib/sitegrid/deployment.json').read_text())
 info=state['backup']; metadata=pathlib.Path(info['metadata'])
 assert metadata.stat().st_mode & 0o777 == 0o600
-value=json.loads(metadata.read_text()); assert value['version']=='0.1.0' and value['schema']==2
+value=json.loads(metadata.read_text()); assert value['version']=='0.1.0' and value['schema']==3
 assert hashlib.sha256(pathlib.Path(info['path']).read_bytes()).hexdigest()==value['sha256']
 PY
 sitegrid status

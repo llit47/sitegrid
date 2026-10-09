@@ -27,6 +27,14 @@ button:disabled { opacity: .55; cursor: wait; }
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 28px; }
 .tile { background: white; padding: 28px; border: 1px solid #d9e3dd; border-radius: 16px; }
 .tile h2 { font-size: 20px; letter-spacing: -.4px; }
+.organizations { margin-top: 24px; }
+.organization-form { max-width: 480px; }
+.organization-form h3 { margin-bottom: 0; }
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th, td { padding: 12px; border-bottom: 1px solid #d9e3dd; }
+th { font-size: 14px; }
+td:first-child { overflow-wrap: anywhere; }
 .indicator { display: block; height: 10px; width: 10px; border-radius: 50%; background: #4b9664; }
 dl { font-size: 14px; line-height: 1.8; } dt { color: #59716b; } dd { margin: 0 0 12px; }
 @media (max-width: 700px) { .tiles { grid-template-columns: 1fr; } .dashboard-heading { flex-direction: column; align-items: flex-start; } .dashboard { margin-top: 36px; } }

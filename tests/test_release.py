@@ -80,7 +80,7 @@ class ReleaseTests(unittest.TestCase):
         sha = hashlib.sha256(archive.read_bytes()).hexdigest()
         with tempfile.TemporaryDirectory() as directory:
             manifest = extract_release(archive, Path(directory) / 'release', sha, version)
-            self.assertEqual(manifest['schema']['target'], 2)
+            self.assertEqual(manifest['schema']['target'], 3)
             self.assertEqual((Path(directory) / 'release').stat().st_mode & 0o777, 0o755)
             wrong = '9999.9999.9999' if version != '9999.9999.9999' else '0.0.0'
             with self.assertRaises(SiteGridError): extract_release(archive, Path(directory) / 'wrong', sha, wrong)
