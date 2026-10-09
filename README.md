@@ -2,7 +2,7 @@
 
 SiteGrid to rozwijana, self-hosted platforma do zarządzania projektami budowlanymi, zadaniami i pracą zespołów wielu niezależnych firm. Architektura zakłada React/TypeScript, Fastify, PostgreSQL i instalowalną PWA z podstawową pracą offline; docelowe uruchomienie w LXC Debian 13 na Proxmoxie.
 
-**Status:** implementacja M01 w toku. Fundament aplikacji i prawdziwe logowanie są zaimplementowane; instalator, updater i rollback są kolejnymi checkpointami. Dokładny postęp i wyniki: [M01_STATUS.md](docs/M01_STATUS.md).
+**Status:** M01 na PR #5 (draft): fundament, prawdziwe logowanie, instalator ręczny dla Debiana 13, updater/rollback są zaimplementowane i testowane; nadal brakuje docelowego one-line bootstrapu w gotowym Debianie 13 oraz prostego `sitegrid update` bez flag. Nie ma instalatora tworzącego LXC na hoście Proxmoxa. Dokładny postęp i wyniki: [M01_STATUS.md](docs/M01_STATUS.md).
 
 - [Architektura SiteGrid](docs/audit/ARCHITECTURE.md)
 - [Uprawnienia i cykl kont](docs/audit/PERMISSIONS.md)
