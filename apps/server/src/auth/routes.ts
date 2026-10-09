@@ -80,8 +80,9 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
     try { email = normalizeEmail(request.body.email); }
     catch { email = ''; }
     const ipAllowed = await reserve(pool, `login-ip:${request.ip}`, 30);
+    if (!ipAllowed) return reply.header('Retry-After', '900').code(429).send({ error: 'Zbyt wiele prób. Spróbuj ponownie później.' });
     const emailAllowed = await reserve(pool, `login-email:${email}`, 10);
-    if (!ipAllowed || !emailAllowed) return reply.header('Retry-After', '900').code(429).send({ error: 'Zbyt wiele prób. Spróbuj ponownie później.' });
+    if (!emailAllowed) return reply.header('Retry-After', '900').code(429).send({ error: 'Zbyt wiele prób. Spróbuj ponownie później.' });
     const { rows } = await pool.query<{ id: string; password_hash: string }>(`
       SELECT u.id, c.password_hash FROM users u JOIN credentials c ON c.user_id = u.id WHERE u.email = $1 AND u.blocked_at IS NULL`, [email]);
     const account = rows[0];

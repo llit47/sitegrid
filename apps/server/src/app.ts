@@ -4,11 +4,13 @@ import type { Pool } from 'pg';
 import type { Config } from './config.js';
 import { checkMigrations } from './migrations.js';
 import { registerAuth } from './auth/routes.js';
+import { readFile } from 'node:fs/promises';
 
 export async function buildApp(config: Config, pool: Pool, options: { logger?: boolean; serveWeb?: boolean } = {}) {
   const app = Fastify({ logger: options.logger ? { redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'] } : false,
     logController: new LogController({ disableRequestLogging: true }), bodyLimit: 8192,
     trustProxy: config.production ? '127.0.0.1' : false });
+  const release: { version: string } = JSON.parse(await readFile('release.json', 'utf8'));
   app.addHook('onSend', async (_request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');
@@ -18,7 +20,7 @@ export async function buildApp(config: Config, pool: Pool, options: { logger?: b
   app.get('/health/live', async () => ({ status: 'ok' }));
   app.get('/health/ready', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    try { return { status: 'ready', schema: await checkMigrations(pool, config.migrationsRoot) }; }
+    try { return { status: 'ready', version: release.version, schema: await checkMigrations(pool, config.migrationsRoot) }; }
     catch { return reply.code(503).send({ status: 'not_ready' }); }
   });
   await registerAuth(app, pool, config);
