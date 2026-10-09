@@ -1,5 +1,8 @@
 # Własna aplikacja — ulepszenia i priorytety
 
+> Aktualizacja zakresu produktu (PR #2): poniższy backlog pozostaje zapisem rekomendacji po audycie. Obowiązujący projekt MVP i kolejność prac określają [ARCHITECTURE.md](ARCHITECTURE.md) oraz [ROADMAP.md](ROADMAP.md): offline-first jest warunkiem pierwszego pilotażu, a osobna aplikacja natywna jest poza zakresem produktu.
+
+
 Data: 2026-10-09. **wnioskowana:** backlog własnego produktu oparty na potrzebach budowy oraz rzeczywistych obserwacjach V01–V30 z [FUNCTIONALITY.md](FUNCTIONALITY.md). Propozycja funkcji nie oznacza, że HERC jej nie ma. **niezweryfikowana:** dopasowanie do procesów użytkownika, liczba użytkowników i koszt realizacji.
 
 **potwierdzona:** ograniczony audyt interaktywny zakończony: 30 widoków, 2 próby logowania, rola `worker`, bez zapisów biznesowych. Rozpoznano m.in. zadania w folderach, lokalną obecność i raporty, kalendarz oraz magazyn. Nie zweryfikowano zapisów ani innych ról.
