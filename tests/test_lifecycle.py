@@ -74,9 +74,10 @@ class LifecycleTests(unittest.TestCase):
 
     def test_newer_db_blocks_automatic_old_code_restart(self):
         manifest = json.loads((self.new / 'release.json').read_text())
-        manifest['schema'].update(target=3, min=3, max=3, upgradeMax=3)
+        target = manifest['schema']['target'] + 1
+        manifest['schema'].update(target=target, min=target, max=target, upgradeMax=target)
         (self.new / 'release.json').write_text(json.dumps(manifest))
-        (self.new / 'migrations/003_test.sql').write_text('SELECT 1;')
+        (self.new / f'migrations/{target:03d}_test.sql').write_text('SELECT 1;')
         def migrated_then_failed(*args):
             self.rows = self.history(self.new)
             raise SiteGridError('grant failed after migration')
@@ -100,7 +101,7 @@ class LifecycleTests(unittest.TestCase):
     def test_incompatible_rollback_rejected_before_stopping_service(self):
         atomic_link(self.new, self.root / 'current')
         write_json(lc.JOURNAL, {'phase': 'done', 'completed_versions': ['0.1.0', '0.1.1']})
-        self.rows.append({'version': 3, 'checksum': 'b' * 64})
+        self.rows.append({'version': len(self.rows) + 1, 'checksum': 'b' * 64})
         with self.assertRaisesRegex(SiteGridError, 'Rollback zablokowany'):
             lc.rollback(argparse.Namespace(version='0.1.0', yes=True))
         self.assertEqual(self.events, [])

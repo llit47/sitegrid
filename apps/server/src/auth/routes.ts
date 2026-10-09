@@ -105,4 +105,35 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
     const { rows } = await pool.query('SELECT created_at FROM installation WHERE id = true');
     return { email: current.email, installedAt: rows[0].created_at, status: 'ready' };
   });
+  app.get('/api/admin/organizations', async (request, reply) => {
+    const current = await session(request);
+    if (!current?.user_id) return reply.code(401).send({ error: 'Zaloguj się, aby kontynuować.' });
+    if (!current.admin) return reply.code(403).send({ error: 'Brak uprawnień.' });
+    const { rows } = await pool.query('SELECT id, name, status, created_at AS "createdAt" FROM organizations ORDER BY created_at DESC, id DESC');
+    return { organizations: rows };
+  });
+  app.post('/api/admin/organizations', async (request, reply) => {
+    const current = await session(request);
+    if (!current?.user_id) return reply.code(401).send({ error: 'Zaloguj się, aby kontynuować.' });
+    if (!current.admin) return reply.code(403).send({ error: 'Brak uprawnień.' });
+    if (!checkCsrf(request, current)) return reply.code(403).send({ error: 'Odśwież stronę i spróbuj ponownie.' });
+    // Validate raw input: do not coerce types or silently accept extra fields.
+    const body = request.body as { name?: unknown } | null | undefined;
+    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || typeof body.name !== 'string') {
+      return reply.code(400).send({ error: 'Podaj wyłącznie nazwę firmy jako tekst.' });
+    }
+    const name = body.name.trim();
+    if ([...name].length < 1 || [...name].length > 200 || /\p{Cc}/u.test(body.name)) {
+      return reply.code(400).send({ error: 'Nazwa firmy musi mieć od 1 do 200 znaków i nie może zawierać znaków sterujących.' });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query('INSERT INTO organizations(name) VALUES ($1) RETURNING id, name, status, created_at AS "createdAt"', [name]);
+      await client.query("INSERT INTO platform_audit_events(actor_id, event, organization_id) VALUES ($1, 'organization_created', $2)", [current.user_id, rows[0].id]);
+      await client.query('COMMIT');
+      return reply.code(201).send({ organization: rows[0] });
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  });
 }
