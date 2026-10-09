@@ -90,7 +90,7 @@ class InstallerRetryTests(unittest.TestCase):
 
     def extract(self, archive, staging, sha, version):
         (staging / 'ops').mkdir(parents=True)
-        for name in ('release.py', 'system.py', 'manage.py', 'lifecycle.py', 'sitegrid', 'sitegrid.service', 'sitegrid-proxy.service'):
+        for name in ('release.py', 'system.py', 'manage.py', 'lifecycle.py', 'channel.py', 'release-public.pem', 'sitegrid', 'sitegrid.service', 'sitegrid-proxy.service'):
             (staging / 'ops' / name).write_text('test fixture')
         return {'version': version}
 

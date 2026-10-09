@@ -1,0 +1,67 @@
+name: Prepare signed release (draft only)
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  tag:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+  ci:
+    needs: tag
+    uses: ./.github/workflows/ci.yml
+    with:
+      release-version: ${{ needs.tag.outputs.version }}
+  draft:
+    needs: [tag, ci]
+    runs-on: ubuntu-24.04
+    environment: release-signing
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: sitegrid-m01-linux-x64
+          path: artifacts
+      - env:
+          RELEASE_VERSION: ${{ needs.tag.outputs.version }}
+        run: python3 scripts/build-bootstrap.py "$RELEASE_VERSION"
+      - env:
+          RELEASE_VERSION: ${{ needs.tag.outputs.version }}
+          SITEGRID_SIGNING_KEY: ${{ secrets.SITEGRID_ED25519_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$SITEGRID_SIGNING_KEY"
+          signing_file="$RUNNER_TEMP/sitegrid-ed25519.pem"
+          trap 'rm -f -- "$signing_file"' EXIT
+          printf '%s\n' "$SITEGRID_SIGNING_KEY" > "$signing_file"
+          unset SITEGRID_SIGNING_KEY
+          python3 scripts/sign-release.py "$RELEASE_VERSION" --key-file "$signing_file"
+      - name: Create draft; publication requires operator approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.tag.outputs.version }}
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title "SiteGrid $RELEASE_VERSION" --notes-file artifacts/RELEASE_NOTES.md artifacts/sitegrid-*.tar.gz artifacts/sitegrid-*.sha256 artifacts/sitegrid-install-*.sh artifacts/sitegrid-manifest.json artifacts/sitegrid-manifest.sig artifacts/INSTALL_COMMAND.txt

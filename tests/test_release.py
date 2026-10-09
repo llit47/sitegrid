@@ -76,12 +76,14 @@ class ReleaseTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('SITEGRID_TEST_BUNDLE'), 'Run packaging test with SITEGRID_TEST_BUNDLE')
     def test_actual_built_bundle(self):
         archive = Path(os.environ['SITEGRID_TEST_BUNDLE'])
+        version = os.environ.get('SITEGRID_TEST_VERSION', '0.1.0')
         sha = hashlib.sha256(archive.read_bytes()).hexdigest()
         with tempfile.TemporaryDirectory() as directory:
-            manifest = extract_release(archive, Path(directory) / 'release', sha, '0.1.0')
+            manifest = extract_release(archive, Path(directory) / 'release', sha, version)
             self.assertEqual(manifest['schema']['target'], 2)
             self.assertEqual((Path(directory) / 'release').stat().st_mode & 0o777, 0o755)
-            with self.assertRaises(SiteGridError): extract_release(archive, Path(directory) / 'wrong', sha, '0.2.0')
+            wrong = '9999.9999.9999' if version != '9999.9999.9999' else '0.0.0'
+            with self.assertRaises(SiteGridError): extract_release(archive, Path(directory) / 'wrong', sha, wrong)
 
 
 if __name__ == '__main__': unittest.main()

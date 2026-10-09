@@ -5,6 +5,7 @@ import sys
 from release import SiteGridError, require
 from system import ROOT, STATE, lock, app_cli
 import lifecycle
+import channel
 
 
 def main():
@@ -14,7 +15,7 @@ def main():
     commands.add_parser('status')
     update = commands.add_parser('update')
     for name in ('bundle', 'sha256', 'version'):
-        update.add_argument('--' + name, required=True)
+        update.add_argument('--' + name)
     update.add_argument('--curl-config')
     update.add_argument('--yes', action='store_true')
     rollback = commands.add_parser('rollback')
@@ -29,7 +30,13 @@ def main():
             return 0
         with lock():
             require((STATE / 'installation.json').is_file(), 'Brak zarządzanej instalacji SiteGrid.')
-            if args.command == 'update': lifecycle.update(args)
+            if args.command == 'update':
+                manual = any((args.bundle, args.sha256, args.version, args.curl_config))
+                if manual:
+                    require(all((args.bundle, args.sha256, args.version)), 'Tryb manualny wymaga --bundle, --version i --sha256.')
+                    lifecycle.update(args)
+                else:
+                    channel.automatic_update(args, STATE)
             elif args.command == 'rollback': lifecycle.rollback(args)
             else:
                 require(sys.stdin.isatty() and sys.stdout.isatty(), 'Bootstrap wymaga lokalnego terminala.')

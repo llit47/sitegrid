@@ -163,6 +163,8 @@ def install(args):
             if previous and previous.get('phase') == 'done':
                 require(read_manifest(ROOT / 'current')['version'] == args.version, 'Aktywne wydanie jest inne; instalator nie wykona downgrade.')
                 require(health(args.version, 1), 'Instalacja istnieje, lecz readiness nie działa. Sprawdź journalctl -u sitegrid.')
+                if getattr(args, 'signed_version', None) == args.version:
+                    write_json(STATE / 'channel.json', {'version': args.version})
                 print('Instalacja już ukończona; dane i konfiguracja zachowane.')
                 return
             origin = previous['origin'] if previous else (args.origin or origin_prompt())
@@ -216,7 +218,7 @@ def install(args):
             library = Path('/usr/local/lib/sitegrid')
             library.mkdir(mode=0o755, parents=True, exist_ok=True)
             library.chmod(0o755)
-            for name in ('release.py', 'system.py', 'manage.py', 'lifecycle.py'):
+            for name in ('release.py', 'system.py', 'manage.py', 'lifecycle.py', 'channel.py', 'release-public.pem'):
                 shutil.copyfile(target / 'ops' / name, library / name)
             shutil.copyfile(target / 'ops/sitegrid', '/usr/local/bin/sitegrid')
             Path('/usr/local/bin/sitegrid').chmod(0o755)
@@ -226,6 +228,8 @@ def install(args):
             require(health(args.version), 'Health check nie powiódł się; dane zachowane. Sprawdź journalctl -u sitegrid i ponów ten sam instalator.')
             state['phase'] = 'done'
             write_json(marker, state)
+            if getattr(args, 'signed_version', None) == args.version:
+                write_json(STATE / 'channel.json', {'version': args.version})
             print(f'Gotowe: {origin}\nUtwórz administratora lokalnie: sudo sitegrid bootstrap-admin\nTLS: /etc/sitegrid/tls. Trwałe dane: PostgreSQL; konfiguracja: /etc/sitegrid.')
 
 
