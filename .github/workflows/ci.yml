@@ -25,6 +25,7 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql://sitegrid_test@127.0.0.1:5432/sitegrid_test
+      TEST_RUNTIME_DATABASE_URL: postgresql://sitegrid@127.0.0.1:5432/sitegrid_test
       SITEGRID_TEST_VERSION: ${{ inputs.release-version || '0.1.0' }}
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +34,16 @@ jobs:
           node-version: 24.21.0
           cache: npm
       - run: npm ci
+      - name: Create unprivileged PostgreSQL runtime role for RLS tests
+        run: |
+          node --input-type=module <<'JS'
+          import pg from 'pg';
+          const db = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+          await db.connect();
+          try {
+            await db.query('CREATE ROLE sitegrid LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS');
+          } finally { await db.end(); }
+          JS
       - run: npm run check
       - name: Select pinned key (ephemeral fixture only for branch CI)
         run: |
