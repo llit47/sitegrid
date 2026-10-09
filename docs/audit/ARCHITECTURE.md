@@ -1,139 +1,123 @@
-# Własna aplikacja self-hosted — propozycja architektury
+# Architektura produktu — propozycja do zatwierdzenia w PR #2
 
-Data: 2026-10-09. **wnioskowana:** wszystkie decyzje projektowe w tym dokumencie są rekomendacją dla własnej aplikacji. **potwierdzona:** UI i inicjalizacja klienta HERC wskazują Supabase dla dostępu i danych projektów/folderów/zadań oraz osobne dane lokalne (V05/V17–V24). **niezweryfikowana:** pełny backend, schemat bazy i egzekwowanie uprawnień HERC. Adres aplikacji nie jest dowodem jej pełnego stosu technologicznego. Niczego nie wdrożono.
+Data: 2026-10-09. Dokument dotyczy własnego produktu, nie implementacji referencyjnego HERC. **Status: projekt do zatwierdzenia; brak implementacji i wdrożenia.** Wymagania użytkownika są wiążącym zakresem; opisane mechanizmy i limity są propozycją wykonania. Zastępuje wcześniejszy wariant „MVP online, offline później”. Historyczne obserwacje pozostają w [FUNCTIONALITY.md](FUNCTIONALITY.md).
 
-## Założenia do potwierdzenia
+## Decyzje produktowe
 
-**niezweryfikowana:** liczba jednoczesnych użytkowników, wolumen zdjęć, sprzęt Proxmoxa, dostępność z internetu/VPN, liczba firm, wymagania retencji, integracje i tolerancja przestoju. **wnioskowana:** rozpocząć od niewielkiego pilotażu i modularnego monolitu. Mikroserwisy, Kubernetes, Redis i osobny silnik wyszukiwania nie są potrzebne do pierwszego zakresu. Docelowe wersje wspieranych komponentów przypiąć w przyszłym PR technicznym po sprawdzeniu ich cyklu wsparcia.
+- Jedna instalacja obsługuje wiele firm, z izolacją wszystkich danych i operacji między tenantami. Użytkownik ma jedną tożsamość i może należeć do kilku firm, z innymi rolami w każdej.
+- Administrator platformy tworzy firmy i pierwszych administratorów. Administrator firmy zarządza kontami, rolami i pracownikami wyłącznie własnej firmy. Nie ma publicznej rejestracji.
+- Pierwszy dostęp wymaga bezpiecznej jednorazowej aktywacji. Hasła nie są nadawane ani przekazywane przez administratora.
+- Nazwa, logo i ustawienia firmy są w PostgreSQL. `.env`/konfiguracja usług zawiera wyłącznie konfigurację instalacji i sekrety infrastruktury, nigdy branding, listę firm ani role.
+- Jedna instalowalna PWA React/TypeScript dla Androida, iOS i desktopu; bez osobnej aplikacji natywnej. Fastify jest jedyną bramą do centralnego PostgreSQL. Bez Supabase, także dla logowania, plików i synchronizacji.
+- Offline-first dla podstawowej pracy jest warunkiem MVP: IndexedDB, trwała kolejka, retry, idempotencja i jawne konflikty. Brak cichego nadpisywania.
+- Hosting: nieuprzywilejowany LXC Debian 13 na Proxmoxie, usługi systemd. Modularny monolit, bez wymogu Redis, Kubernetes czy mikroserwisów.
 
-## Decyzje wynikające z audytu — wnioskowana
+## Małe MVP i granica offline
 
-V17–V24 pokazują mieszanie danych lokalnych i online. Własna aplikacja ma jeden serwerowy stan projektów, zadań, obecności, raportów, kalendarza i magazynu; urządzenie przechowuje wyłącznie jawnie opisany cache/szkic. Interfejs pokazuje stan synchronizacji modułu i konkretnego zapisu. Nie importujemy żadnych danych HERC.
+| Operacja | MVP | Bez sieci po przygotowaniu urządzenia |
+|---|---|---|
+| Firma, branding, konta, aktywacja, role, przydziały | Tak | Nie; wymagane aktualne uprawnienia i odpowiedź serwera. |
+| Projekty i proste zadania: opis, wykonawca, status | Tak | Odczyt wcześniej pobranych projektów i przypisanych zadań. Tworzenie projektu/zadania i zmiana przydziału online. |
+| Rozpoczęcie zadania, zgłoszenie wykonania lub przeszkody | Tak | Lokalna operacja i kolejka; skuteczność serwerowa dopiero po synchronizacji. |
+| Własny wpis pracy: dzień, opis, opcjonalna liczba minut | Tak | Utworzenie i korekta własnego niezatwierdzonego wpisu, trwale kolejkowane. To roboczy zapis, nie ewidencja płac. |
+| Odbiór lub zwrot zadania przez kierownika | Tak | Tylko online, na aktualnej wersji; wykonawca nie odbiera własnej pracy. |
+| Przełączanie firm | Tak | Wyłącznie do wcześniej przygotowanego, nadal lokalnie ważnego zakresu; brak mieszania kolejek. |
 
-Hierarchia projektu/folderu z V07–V13 uzasadnia lokalizacje robót wiążące zadania i dokumenty. V19 rozróżnia bieżący stan zadań od dnia raportu: zapis raportu powinien utrwalać własny snapshot podsumowania, a nie zmieniać historyczny wynik przy każdym odczycie. `worker` widzi Pulpit kierownika, ale nie badano kontroli serwera — nasza macierz jest osobnym projektem.
+Poza MVP: magazyn/zakupy, PDF i zdjęcia, pinezki, czat, kalendarz, budżety, pełne brygady, raporty zbiorcze z akceptacją, zależności harmonogramu, powiadomienia. Nie są warunkami pierwszego pilotażu. Pliki robocze i ich kolejka pojawią się oddzielnie; logo jest częścią MVP.
 
-## Topologia: LXC Debian 13 na Proxmoxie — decyzja zakresowa
+Pierwsza aktywacja, logowanie na nowym urządzeniu, instalacja/pobranie powłoki oraz przygotowanie projektu wymagają połączenia. UI pokazuje „gotowe offline” dopiero po kompletnym zapisaniu powłoki i danych; nie udaje dostępności niepobranych projektów. Proponowany maksymalny okres dostępu offline: 7 dni od ostatniego potwierdzenia uprawnień online. Po tym czasie blokada dostępu do danych do ponownej autoryzacji, bez automatycznego usunięcia kolejki. Ten limit wymaga akceptacji przy zatwierdzeniu architektury.
 
-**potwierdzona:** użytkownik wybrał LXC Debian 13 zamiast wcześniejszej VM. Poniższe szczegóły są **wnioskowaną** propozycją wdrożenia, nie wykonaną konfiguracją.
+## Topologia i eksploatacja
 
 ```mermaid
 flowchart TD
-    U[Komputer lub telefon — React / PWA] -->|HTTPS przez LAN lub VPN| R
-    subgraph P[Proxmox — nieuprzywilejowany LXC Debian 13]
-      R[Reverse proxy i pliki statyczne React] --> A[Node.js / Fastify — usługa systemd]
-      A --> D[(PostgreSQL — usługa systemd)]
-      A --> F[Lokalny wolumen załączników]
-      W[Worker — osobna usługa systemd] --> D
-      W --> F
-      T[Timer kopii aplikacyjnej] --> B[Kopia bazy, plików i manifest]
-      D --> B
-      F --> B
+    U[PWA React — Android / iOS / desktop] --> L[IndexedDB — dane i kolejka per konto i firma]
+    U -->|HTTPS / ponawianie komend| R[Reverse proxy]
+    subgraph C[Proxmox — nieuprzywilejowany LXC Debian 13]
+      R --> A[Fastify — systemd]
+      A --> D[(PostgreSQL — centralny stan)]
+      W[Worker i timer kopii — systemd] --> D
+      A --> F[Pliki robocze — po MVP]
     end
-    B --> E[Szyfrowane kopie poza hostem Proxmoxa]
+    D --> B[Szyfrowana kopia poza hostem]
+    F --> B
 ```
 
-**wnioskowana:** jeden nieuprzywilejowany kontener systemowy LXC z Debianem 13, usługami systemd i oddzielnymi kontami systemowymi proxy/API/PostgreSQL/workera. Frontend budowany w CI, dostarczany jako pliki statyczne; API i worker jako wersjonowane artefakty Node.js z przypiętym runtime. Bez Docker-in-LXC, nesting i uruchamiania aplikacji na hoście hypervisora. LXC współdzieli jądro hosta; nie traktować go jak odrębnego jądra VM. Wersję Proxmoxa, dostępność szablonu Debian 13 i mapowanie UID/GID sprawdzić przed wdrożeniem.
+Osobne konta systemowe usług; API i PostgreSQL na loopback/socket, użytkownicy przez HTTPS. React budowany w CI i dostarczany jako statyczny artefakt; API/worker z przypiętym runtime i migracjami. Bez Docker-in-LXC/nesting. LXC współdzieli jądro hosta. Panel Proxmoxa i uprawnienia systemowe są oddzielone od panelu administratora platformy.
 
-**wnioskowana:** początkowy budżet do pomiaru: 4 vCPU, limit 8 GB RAM, około 40 GB systemu oraz osobny wolumen danych według załączników i retencji. To nie wynik benchmarku. Ograniczyć zużycie CPU/RAM/dysku, monitorować zapas; pojedynczy host i kontener nie zapewniają HA. Dane PostgreSQL pod katalogiem zarządzanym przez usługę bazy; pliki np. `/srv/herc/files`, kod w wersjonowanym `/opt/herc/releases`, sekrety poza repo w chronionym pliku konfiguracji usługi. Prawa zapisu API/workera tylko do potrzebnych katalogów. Uzgodnić właścicieli mount pointów z mapowaniem nieuprzywilejowanego LXC.
+Początkowa hipoteza zasobów: 4 vCPU, 8 GB RAM, 40 GB systemu plus policzony wolumen danych; wymaga pomiarów. Szablon Debian 13, wersja Proxmoxa, mapowanie UID/GID i zakres backupu rootfs/mount pointów muszą być sprawdzone przed wdrożeniem. Nie zakładać objęcia bind mountów kopią kontenera. Kod w `/opt/herc/releases`, przyszłe pliki w `/srv/herc/files`, sekrety w chronionej konfiguracji usług poza repozytorium.
 
-**wnioskowana:** reverse proxy udostępnia HTTPS; API nasłuchuje na loopback, PostgreSQL przez lokalny socket lub loopback. Firewall ogranicza wejście do HTTPS i kontrolowanej administracji; panel Proxmoxa nie jest panelem aplikacji. Pilotaż przez LAN/VPN. Wybór domeny, certyfikatu i dostępu publicznego pozostaje decyzją operacyjną. Ograniczenia systemd dopasować do rzeczywistych ścieżek zapisu i sprawdzić w testowym LXC.
+MVP: kopia PostgreSQL obejmuje także branding i logo. Później spójna kopia DB i plików z manifestem, przy zatrzymaniu zapisów i workera. Proponowane cele RPO 24 h / RTO 4 h wymagają zatwierdzenia i próby odtworzenia do odizolowanego LXC. Snapshot na tym samym hoście nie zastępuje kopii. Monitorować błędy, miejsce, kolejkę serwera i wiek kopii; nie logować payloadów, haseł, tokenów aktywacji ani cookies. Backup serwera nie obejmuje jeszcze niewysłanych zmian urządzenia.
 
-**wnioskowana — wolumeny i kopie:** preferować mount point zarządzany przez storage Proxmoxa, z jawnie ustalonym objęciem kopią. Dla bind mountów nie zakładać, że backup kontenera obejmuje zawartość hostowego katalogu; zaplanować oddzielną kopię i test odtworzenia. Lista rootfs/mount pointów, ich zawartość i zakres kopii są częścią manifestu operacyjnego. Snapshot kontenera sam nie dowodzi spójności PostgreSQL i załączników. Wykonać spójną kopię aplikacyjną oraz próbę odtworzenia do nowego, odizolowanego LXC.
+## Model danych i izolacja
 
-**potwierdzona — źródła i granice:** oficjalna strona [Debian 13 — trixie](https://www.debian.org/releases/trixie/) potwierdza wydanie Debian 13. Odczyt [Proxmox — Linux Container](https://pve.proxmox.com/pve-docs/chapter-pct.html) w tej sesji zwrócił HTTP 403; nie ponawiano tego żądania ani nie obchodzono blokady. Dlatego dokładne opcje mount pointów, backupu i wsparcia szablonu są **niezweryfikowane w docelowym środowisku** i stanowią kryteria PR operacyjnego. Nie wdrażano usług.
-
-## Frontend, API i podział odpowiedzialności — wnioskowana
-
-- **React + TypeScript:** wspólna nawigacja, jawny kontekst firmy/projektu, widoki według roli, formularze i mobilna „moja praca”. Serwer jest źródłem prawdy; cache zapytań nie zastępuje autoryzacji.
-- **Node.js + Fastify:** REST pod `/api/v1`, kontrakty wejścia/wyjścia, paginacja, limity załączników, spójny format błędu z kodem, błędami pól i identyfikatorem żądania. Moduły: identity, organizations, projects, crews, tasks, reports, inventory, files, defects, calendar, audit, sync.
-- **PostgreSQL:** transakcje, więzy, migracje i jeden model prawdy o stanie biznesowym. Worker korzysta z tabeli zadań/outbox; można uruchomić go jako osobny proces tego samego kodu.
-- **Współdzielone kontrakty:** schematy i klient API dla web/PWA, później aplikacji natywnej. Reguły biznesowe i kontrola dostępu pozostają na serwerze.
-
-**potwierdzona — dokumentacja technologii:** Fastify obsługuje walidację i serializację opartą na schematach, w tym JSON Schema. **wnioskowana:** schematy definiować w kodzie, a sprawdzenie uprawnień i zależności w bazie wykonywać po walidacji struktury. Źródło: [Fastify — Validation and Serialization](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/).
-
-## Model wielu firm i relacji — wnioskowana
-
-| Encje | Relacja i ograniczenie |
+| Encje | Własność / reguła |
 |---|---|
-| `users`, `organizations`, `organization_memberships` | Tożsamość globalna, członkostwo i rola per firma; jedna osoba może należeć do kilku firm. |
-| `projects`, `project_memberships` | Projekt należy do jednej organizacji; członkostwo projektowe zawęża dostęp. Dostęp do firmy nie daje automatycznie prawa do każdego projektu. |
-| `crews`, `crew_memberships`, `crew_project_assignments` | Brygada należy do firmy; daty członkostwa i przypisania projektu pozwalają odtworzyć obsadę w przeszłości. |
-| `work_locations` | Drzewo lokalizacji/folderów w projekcie; rodzic w tym samym projekcie, bez cykli. Zadanie i dokument mogą wskazywać lokalizację. |
-| `calendar_events` | Firma, opcjonalny projekt, zakres czasu i strefa projektu, opis; uprawnienia zgodne z kontekstem. Wydarzenie nie zastępuje dostawy ani zależności zadania. |
-| `tasks`, `task_assignments`, `task_dependencies` | Projekt, lokalizacja robót, termin, priorytet, wersja, przydział osoby/brygady; zależności bez cykli i w obrębie dozwolonego projektu. |
-| `daily_reports`, `report_lines`, `time_entries` | Raport wiąże projekt, dzień roboczy, brygadę, pozycje pracy i snapshot podsumowania z chwili złożenia; korekty zatwierdzonych wersji są jawne. |
-| `materials`, `warehouses`, `stock_movements`, `reservations` | Ruch niezmienny po zatwierdzeniu; korekta przez ruch odwracający. Rezerwacja nie jest wydaniem. Jednostki i ilości o ustalonej precyzji. |
-| `requisitions`, `requisition_lines`, `deliveries` | Zapotrzebowanie i częściowe realizacje; przyjęcie magazynowe powiązane z dostawą. |
-| `documents`, `file_versions`, `file_links` | Kolejne wersje pliku, metadane w DB, treść na dysku, wiązanie z zasobem i projektem. |
-| `defects`, `inspections` | Usterka ma odpowiedzialnego i termin, a odbiór osobny wynik i historię. |
-| `audit_events`, `outbox_events`, `idempotency_keys` | Odrębne cele: rozliczalność zmian, dostarczenie zdarzeń, bezpieczne ponowienie komendy. |
+| `users`, `credentials`, `sessions` | Globalna tożsamość, hasło i sesje. Administrator firmy nie przegląda globalnego katalogu kont ani nie zmienia cudzych danych logowania. |
+| `platform_admins` | Osobne uprawnienie platformowe; nie jest rolą nadawaną przez administratora firmy. |
+| `organizations` | Firma i stan aktywności. Nazwa i identyfikator należą do danych DB. |
+| `organization_settings`, `organization_logos` | Wersjonowane, walidowane ustawienia; logo jako ograniczone rozmiarem `bytea` w PostgreSQL wraz z MIME i wersją. Nie tylko ścieżka do logo w `.env`. |
+| `organization_memberships`, `membership_roles` | Unikalne `(organization_id, user_id)`, stan oczekujące/aktywne/nieaktywne, role per firma. |
+| `employees` | Profil pracownika per firma, opcjonalne powiązanie z członkostwem. Dezaktywacja zachowuje historię; pracownik nie musi mieć konta. |
+| `account_invitations` | Firma, odbiorca, cel, hash sekretu, termin, stan wykorzystania; dostęp tylko dla uprawnionego administratora. |
+| `projects`, `project_memberships`, `tasks`, `work_entries` | Obowiązkowe `organization_id`; projektowe rekordy mają `project_id`, wersję i autora; przypisanie tylko do aktywnego członka firmy i projektu. |
+| `audit_events`, `command_receipts` | Audyt zmian i wyniki idempotencji w zakresie firmy/aktora; zapis atomowy ze zmianą biznesową. |
 
-**wnioskowana:** każda tabela biznesowa ma `organization_id`, a projektowa również `project_id`. Relacje złożone, np. `(organization_id, project_id)`, uniemożliwiają przypadkowe połączenie rekordów różnych firm. Wszystkie zapytania, wyszukiwania, pliki i eksporty podlegają temu samemu zakresowi dostępu. Indeksy dopasować do kontekstu firmy/projektu, statusu i terminów. ID zasobu nie stanowi uprawnienia.
+Każda relacja tenantowa używa złożonych kluczy i więzów, np. `(organization_id, project_id)`, również dla pracownika i wykonawcy. Nie wolno połączyć zasobu firmy A z członkostwem B. Ten sam człowiek w dwóch firmach ma oddzielne profile pracownicze, role i historię. Projekt należy do jednej firmy; współpraca podwykonawcy wymaga jawnego członkostwa w tej firmie i projekcie, nie automatycznego łączenia tenantów.
 
-**wnioskowana:** w MVP współpraca podwykonawcy to jawne członkostwo jego użytkownika w wybranym projekcie organizacji właściciela, bez dostępu do pozostałych danych. Docelowe relacje `project_partners` wymagają ustalenia właściciela informacji i dokładnie udostępnianych zasobów. Nie łączyć tenantów automatycznie po nazwie budowy. Utrata członkostwa zatrzymuje nowe odczyty, zapisy, pobrania i synchronizację.
+API bierze aktora z sesji, sprawdza członkostwo dla wskazanego kontekstu i ustawia zakres transakcji; nie ufa `organization_id` z payloadu. Kontekst jest jawny w każdym żądaniu, nie jako globalny przełącznik sesji mogący zmienić znaczenie żądań z innej karty. Wyszukiwanie, odczyt pojedynczego ID, pliki/logo, eksporty, kopie aplikacyjne, worker i synchronizacja stosują ten sam zakres. Brak uprawnienia nie ujawnia istnienia obcego rekordu.
 
-## Uprawnienia i uwierzytelnianie — wnioskowana
+RLS jest dodatkową barierą: `ENABLE`/`FORCE ROW LEVEL SECURITY` na tabelach tenantowych; rola runtime bez superuser/`BYPASSRLS`, niebędąca właścicielem tabel. Migracje osobną rolą; kontekst ustawiany lokalnie w transakcji po autoryzacji i nieprzenoszony między połączeniami puli. Warstwa API dodatkowo egzekwuje role, projekty i relację do rekordu. PostgreSQL opisuje wyjątki dla ról uprzywilejowanych — pełna izolacja aplikacyjna nie oznacza ukrycia danych przed operatorem systemu lub bazy. [Dokumentacja RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html).
 
-Model: rola + zakres firmy/projektu/brygady + relacja użytkownika do konkretnego rekordu. Domyślnie odmowa. UI ukrywa niedostępne operacje, lecz API sprawdza je niezależnie.
+Panel platformy ma oddzielne endpointy i polityki do tworzenia firmy/pierwszego administratora. Nie daje domyślnie dostępu do zadań, wpisów ani plików firm i nie stosuje nieograniczonego połączenia superuser. Czynności platformowe mają oddzielny audyt. Szczegółowe reguły: [PERMISSIONS.md](PERMISSIONS.md).
 
-| Rola | Zakres i domyślne możliwości | Granica |
-|---|---|---|
-| Administrator firmy | Członkostwa, role, konfiguracja i historia administracyjna swojej firmy. | Nie uzyskuje dostępu do innych firm; dostęp do treści projektów nadawany jawnie. |
-| Kierownik budowy | Plan, przydziały, raporty i odbiory przypisanych projektów. | Dane finansowe wymagają dodatkowego uprawnienia. |
-| Brygadzista | Zadania swojej brygady, raport zbiorczy, zgłoszenie wykonania. | Nie odbiera automatycznie własnych robót jako kierownik. |
-| Pracownik | Własne/przydzielone zadania, instrukcje, własny raport i zgłoszenie przeszkody. | Brak danych kadrowych innych osób i edycji zatwierdzonych raportów. |
-| Magazynier | Przydzielone magazyny, rezerwacje, przyjęcia, wydania i korekty. | Bez administracji użytkownikami i swobodnej zmiany historycznego salda. |
+## Konta, aktywacja i sesje
 
-**wnioskowana:** operator platformy nie jest zwykłym administratorem firmy. Dostęp serwisowy do danych powinien być wyjątkowy, czasowy i rejestrowany. Macierz jest punktem wyjścia do rozmów, nie potwierdzonym modelem HERC.
+1. Pierwszy administrator platformy jest przygotowywany kontrolowaną jednorazową procedurą operatora, bez publicznego endpointu bootstrap. To jedyne konto startowe; późniejsze firmy i pierwszych administratorów tworzy panel platformy.
+2. Administrator platformy tworzy firmę i zaproszenie pierwszego administratora. Administrator firmy tworzy profil pracownika i oczekujące członkostwo/konto lub zaprasza istniejącą tożsamość. Odpowiedź nie ujawnia członkostw w innych firmach. Zaproszenie nie aktywuje dostępu samoistnie.
+3. Nowe konto otrzymuje jednorazowy link przez skonfigurowaną pocztę transakcyjną. Sekret generowany CSPRNG (propozycja: 32 bajty), w DB tylko hash, termin ważności 24 h, związanie z odbiorcą, firmą i celem. Ponowne zaproszenie unieważnia poprzednie. Dostawa wiadomości weryfikowana przy wdrożeniu; brak wspólnych haseł startowych.
+4. Otwarcie linku GET niczego nie aktywuje (także przez skaner poczty). Strona bez skryptów zewnętrznych, analityki i cache; sekret w fragmencie URL przenoszony do pamięci i usuwany z adresu, wysłany dopiero w POST. Brak logowania treści aktywacji; `Referrer-Policy: no-referrer`. Niewykorzystany, niewygasły token jest atomowo zużywany razem z ustawieniem hasła i aktywacją członkostwa. Dwie równoczesne próby nie mogą go użyć dwukrotnie.
+5. Osoba z istniejącą tożsamością loguje się na właściwe konto i jednorazowo przyjmuje zaproszenie do kolejnej firmy. Administrator tej firmy nie resetuje jej globalnego hasła. Przyjęcie zaproszenia wymaga zgodnego odbiorcy, ważnego zaproszenia i aktywnej firmy.
+6. Po aktywacji użytkownik loguje się normalnie. Hasła: Argon2id, parametry dobrane pomiarem. Sesja serwerowa, losowy identyfikator w cookie `Secure`, `HttpOnly`, `SameSite`; rotacja przy logowaniu, CSRF, limity prób. Brak sekretów sesji w IndexedDB/localStorage. Odzyskiwanie konta stosuje osobny jednorazowy, wygasający przepływ; nie stanowi publicznej rejestracji.
 
-**wnioskowana:** lokalne konta na początek, hasła haszowane sprawdzoną implementacją Argon2id z parametrami dobranymi pomiarem na serwerze. Losowe identyfikatory sesji w ciasteczkach `Secure`, `HttpOnly`, `SameSite`; sesje przechowywane po stronie serwera, odwoływalne, z ograniczeniem bezczynności i czasu życia. Ochrona CSRF operacji zmieniających dane oraz ograniczenie prób logowania. Nie przechowywać tokenów dostępowych w localStorage. Administrator: MFA przed udostępnieniem publicznym; odzyskiwanie konta przez jednorazowy, wygasający mechanizm. Nie wprowadzać własnej kryptografii. OIDC rozważyć, jeśli użytkownik ma już dostawcę tożsamości.
+Jednorazowość, losowość, bezpieczne przechowanie i wygaśnięcie sekretów bazują na zaleceniach [OWASP dla tokenów odzyskiwania dostępu](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html); opis aktywacji i konkretne limity są decyzją tego projektu. Dostawca poczty otrzymuje token potrzebny do dostarczenia linku — jego retencja i dostęp muszą być ograniczone; token nie trafia do audytu aplikacji.
 
-**potwierdzona — dokumentacja technologii:** OWASP opisuje właściwości cookies sesyjnych, rotację identyfikatorów i unieważnianie sesji. Źródło: [Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html). **wnioskowana:** powyższa konfiguracja wymaga późniejszej implementacji i testów, nie jest dowodem zabezpieczeń HERC.
+Dezaktywacja konta przez administratora firmy oznacza dezaktywację członkostwa w tej firmie, unieważnienie jej zaproszeń i uprawnień, a nie globalnej tożsamości. Działa przy każdym kolejnym żądaniu i synchronizacji; pozostałe firmy pozostają dostępne. Globalne blokowanie konta należy do platformy i unieważnia wszystkie sesje. Nie wolno zdezaktywować ostatniego aktywnego administratora firmy bez atomowego przekazania obowiązków. Reaktywacja dostępu jest jawna i audytowana.
 
-**wnioskowana:** zastosować RLS jako dodatkową barierę izolacji firm. Kontekst organizacji ustawiany przez serwer lokalnie dla transakcji po sprawdzeniu członkostwa; brak kontekstu oznacza odmowę. Rola aplikacyjna bez `BYPASSRLS`, niebędąca właścicielem tabel; migracje osobną rolą. Testować reset kontekstu przy poolingu połączeń i workerach. RLS nie zastępuje reguł projektowych ani poprawnych kluczy obcych.
+## PWA i instalacja
 
-**potwierdzona — dokumentacja technologii:** PostgreSQL umożliwia polityki dostępu do wierszy; właściciele tabel i role uprzywilejowane mogą je omijać w opisanych w dokumentacji sytuacjach. Źródło: [PostgreSQL — Row Security Policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html).
+Manifest, stabilne `id`/`start_url`, ikony i tryb `standalone`; HTTPS oraz service worker dla powłoki offline. Jedna instalacja PWA zawiera przełącznik firm; ikona instalacji jest ogólną ikoną produktu, a branding aktywnej firmy pobierany jest z DB. Android: instrukcja instalacji z menu przeglądarki i dostępny mechanizm instalacji. iOS: instrukcja dodania do ekranu głównego. UI nie uzależnia instalacji od jednego programowego promptu. Mechanizmy różnią się między przeglądarkami. [MDN — instalowalność PWA](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).
 
-## Statusy, transakcje i historia — wnioskowana
+Synchronizacja obowiązkowo uruchamia się po otwarciu/wznowieniu aplikacji, odzyskaniu połączenia i ręcznym „Synchronizuj”. Działanie w tle jest wyłącznie optymalizacją, bez obietnicy wysłania danych z zamkniętej PWA na Android/iOS. Service worker i IndexedDB nie gwarantują nieusuwalnej pamięci urządzenia. Obsłużyć odmowę miejsca, ewentualne usunięcie danych przez system/użytkownika i ostrzeżenie o niewysłanej pracy; prośba o persistent storage jest tylko dodatkowym zabezpieczeniem. [MDN — offline i zadania w tle](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation).
 
-Proponowane statusy własnego produktu, **niezweryfikowane w HERC**:
+## Kontrakt offline-first w MVP
 
-- Zadanie: `zaplanowane → w toku → zgłoszone do odbioru → odebrane`; zwrot do pracy z powodem. Blokada osobnym atrybutem, anulowanie osobną operacją.
-- Raport: `szkic → złożony → zatwierdzony` lub `do poprawy`; korekta zatwierdzonego raportu tworzy nową wersję.
-- Zapotrzebowanie: `szkic → zgłoszone → zaakceptowane → częściowo zrealizowane → zrealizowane`; odrzucenie i anulowanie jawne.
-- Usterka: `otwarta → w naprawie → do weryfikacji → zamknięta`; możliwe ponowne otwarcie z powodem.
+**Lokalny zapis.** IndexedDB przechowuje oddzielnie stan potwierdzony przez serwer, szkice/projekcję oczekujących zmian i kolejkę komend. Klucz zakresu: konto + firma + projekt. Jedna transakcja IndexedDB zapisuje zmianę i komendę; dopiero jej sukces pozwala pokazać „zapisano na urządzeniu”. Błąd quota/transakcji nie może wyglądać jak sukces. Cache Storage zawiera powłokę, nie przypadkowe odpowiedzi API z danymi firm.
 
-**wnioskowana:** komenda zmieniająca stan w jednej transakcji sprawdza uprawnienia, wersję i przejście, modyfikuje dane oraz dopisuje audyt i outbox. Historia obejmuje aktora, zakres firmy/projektu, czas serwera, rodzaj operacji, zasób, wersję i ograniczony zestaw zmienionych pól. Bez haseł, cookies, tokenów i surowych treści dokumentów. Dane identyfikujące aktora w działającym systemie mają kontrolowany dostęp i retencję; nie są eksportowane do tego audytu. Rola aplikacji nie edytuje zdarzeń audytowych, ale administrator bazy technicznie może — nie nazywać tego niepodważalnym rejestrem.
+**Komenda.** `operation_id` UUID, `organization_id`, `project_id`, zasób, typ, wersja bazowa, wersja schematu payloadu, dane i zależność od poprzedniej komendy. Aktor wynika z sesji, a identyfikator lokalnego właściciela zapobiega wysłaniu kolejki przez inne konto. Komendy na jednym zasobie są uporządkowane; kolejne czekają na wynik poprzedniej. Przy wielu kartach jedna dzierżawa synchronizacji w IndexedDB; idempotencja serwera pozostaje zabezpieczeniem rozstrzygającym. Nowe wpisy otrzymują UUID na urządzeniu.
 
-**wnioskowana:** wersja rekordu i `If-Match`/`expectedVersion` wykrywają konflikt; API zwraca ustalony kod 409 lub 412 i informację do porównania. Dla magazynu blokada odpowiedniego salda/rezerwacji i transakcja chronią przed podwójnym wydaniem. Kwoty i ilości jako liczby dziesiętne; czas zdarzenia UTC, dzień raportu według strefy projektu. Korekty nie usuwają historii.
+**Retry i restart.** Trwałe stany: oczekuje, wysyłanie, potwierdzono, konflikt, wymaga logowania, odrzucono. Restart odzyskuje przerwane wysyłanie z tym samym ID i payloadem. Timeout/utrata odpowiedzi/5xx: wykładniczy backoff z jitterem i limitem częstotliwości; 429 respektuje `Retry-After`; 401 wstrzymuje do logowania; 403 zatrzymuje zakres i wymusza ponowną ocenę dostępu; błędy walidacji wymagają poprawy, nie pętli retry. Zdarzenie `online` tylko inicjuje próbę, nie dowodzi dostępności serwera. UI pokazuje kolejkę, błąd, czas ostatniego potwierdzenia i odróżnia „na urządzeniu” od „na serwerze”.
 
-## Pliki lokalne — wnioskowana
+**Idempotencja.** Unikalne `(organization_id, actor_id, operation_id)` i hash kanonicznego payloadu. W jednej transakcji: aktualne uprawnienia, deduplikacja, oczekiwana wersja, przejście statusu, zmiana, audyt i wynik komendy. Równoległe duplikaty rozstrzyga unikalność/blokada. Powtórzony identyczny zapis zwraca wcześniejszy wynik; ten sam ID z inną treścią jest błędem. Sprawdzenie aktualnych uprawnień poprzedza także odczyt starego wyniku. Potwierdzone identyfikatory komend w MVP nie są automatycznie usuwane; przyszła retencja musi zapewnić odrzucenie zbyt starych retry, zanim skróci deduplikację.
 
-Przechowywać treść poza katalogiem publicznym, pod nieprzewidywalnym kluczem technicznym; nazwa użytkownika wyłącznie w metadanych. Metadane: firma, projekt, rodzaj, rozmiar, suma kontrolna, rewizja, autor i stan dostępności. Każde pobranie autoryzowane w API; reverse proxy może dostarczyć plik dopiero po tej kontroli. Nie wystawiać wolumenu jako publicznego katalogu.
+**Konflikt.** `expectedVersion` sprawdzana atomowo; niezgodność daje 409 z aktualną dozwoloną wersją. Klient zachowuje bazę, lokalną propozycję i serwerowy stan, wstrzymuje zależne komendy i daje porównanie. Użytkownik wybiera rezygnację z lokalnej zmiany albo świadomie buduje nową komendę na aktualnej wersji (nowe ID); reguły przejść nadal obowiązują. Niezależne wpisy o różnych UUID można dołączyć, ale edycji wspólnego pola/statusu nigdy nie rozstrzyga automatycznie „ostatni zapis wygrywa”. Usunięcie/archiwizacja obiektu nie odtwarza go przy retry.
 
-Przesyłanie: plik tymczasowy → kontrola limitu, typu i treści → stan oczekujący → atomowe przeniesienie na docelowym filesystemie → oznaczenie gotowości w DB. Baza i dysk nie mają wspólnej transakcji: worker uzgadnia niedokończone operacje, osierocone pliki i brakujące obiekty. Pobranie dopiero dla stanu gotowego. Rewizje niezmienne; usunięcie logiczne, fizyczne dopiero po retencji i sprawdzeniu odniesień. Adapter magazynu pozwoli później przejść na S3 bez zmiany API.
+**Pobieranie.** Dla małego MVP pełny, ograniczony rozmiarem snapshot wybranego projektu zamiast od razu budować strumień przyrostowy. Limit liczby rekordów i rozmiaru odpowiedzi ustalić przed implementacją; przekroczenie daje jawny brak gotowości offline, nie ucięty zbiór. Snapshot jest spójny transakcyjnie, ograniczony uprawnieniami; zastępuje potwierdzoną lokalną bazę atomowo, pozostawiając kolejkę i lokalne propozycje. Brak rekordu w kompletnym snapshotcie usuwa go z cache; niekompletna odpowiedź nie usuwa niczego. Przed pobraniem/wysłaniem odświeżyć zakres dostępu; po wysłaniu pobrać nowy snapshot. Odebranie projektu wymusza usunięcie jego cache. W przyszłości: paginowany snapshot z trwałą granicą i kursor zmian/tombstones; nie używać samego numeru przydzielonego przed commitem jako bezpiecznego kursora.
 
-## Synchronizacja i przyszłe mobile — wnioskowana
+**Konto i utrata dostępu.** Przełączenie firmy nie zmienia właściciela już utworzonych komend. Kolejka firmy A może być obsłużona tylko jako A po nowej autoryzacji; nigdy wysłana jako B. Wylogowanie ostrzega o niewysłanych zmianach: użytkownik synchronizuje, anuluje wylogowanie albo jawnie odrzuca dane. Zakończone lokalne wylogowanie czyści dane/queue/cache konta przed dopuszczeniem innej osoby; brak sieci uniemożliwia natychmiastowe unieważnienie cookie na serwerze, więc klient blokuje dalsze użycie tej sesji do potwierdzonego wylogowania online i nowego logowania. Nie utożsamiać tego z samym zamknięciem PWA, które zachowuje kolejkę.
 
-1. **MVP online:** odświeżanie po zapisie i okresowe sprawdzanie zmian aktywnego projektu. Opcjonalne SSE wysyła informację o zmianie, a klient ponownie pobiera autoryzowany rekord. SSE nie zastępuje trwałego protokołu synchronizacji.
-2. **Szkice terenowe:** service worker przechowuje powłokę aplikacji; IndexedDB wybrane dane i szkice per użytkownik/firma/projekt. Widoczne stany: lokalnie, w kolejce, wysyłanie, zsynchronizowano, konflikt, błąd. Osobny czas ostatniej synchronizacji.
-3. **Kolejka komend:** UUID operacji, zasób, wersja bazowa i payload. API sprawdza uprawnienia przy każdym ponowieniu. Unikalny klucz idempotencji w zakresie firmy i aktora z hashem payloadu; identyczna operacja zwraca wcześniejszy wynik, inny payload z tym kluczem jest błędem. Zapisy biznesowe i wynik idempotencji atomowe.
-4. **Odczyt przyrostowy:** kursor serwera, paginacja i tombstones dla usunięć. Kursor musi odpowiadać kompletnej, trwałej pozycji w strumieniu — sam rosnący numer przydzielony przed commitem może pominąć później zatwierdzoną transakcję. Użyć uporządkowanego publikatora po commicie albo protokołu z bezpiecznym nakładaniem i deduplikacją. Snapshot i strumień muszą mieć wspólną granicę; wygasły kursor wymusza ponowny snapshot.
-5. **Konflikty:** notatki i zdjęcia można dołączać; równoczesna edycja opisu wymaga wyboru wersji. Wydania magazynowe, nadawanie ról i zatwierdzanie raportów tylko online w pierwszej wersji. Nie stosować bezwarunkowo „ostatni zapis wygrywa”.
-6. **Utrata dostępu:** przy powrocie online serwer odrzuca komendy poza aktualnym zakresem, klient usuwa odpowiedni cache. Wylogowanie czyści cache/szkice zgodnie z jawną decyzją użytkownika o niewysłanych danych; dane nie mogą przejść do kolejnego konta. Odebranie roli nie usuwa zdalnie danych z urządzenia, które pozostaje offline — zakres cache i jego ważność wymagają decyzji biznesowej.
-7. **Załączniki:** kolejka i retry oddzielone od tekstowych szkiców, limit rozmiaru i podgląd postępu. Synchronizacja działa po otwarciu aplikacji i ręcznym wznowieniu; nie zależy wyłącznie od zadań przeglądarki w tle. Aplikacja natywna później wykorzystuje te same kontrakty i reguły.
+Po potwierdzonej utracie uprawnień klient blokuje synchronizację i usuwa dane oraz komendy odebranego zakresu, pokazując informację o odrzuceniu niewysłanej pracy. Serwer nie przyjmuje zmian tylko dlatego, że powstały przed odebraniem roli. Zdalne cofnięcie uprawnienia nie usuwa natychmiast danych z urządzenia bez sieci; limit offline ogranicza zwykłe użycie, lecz nie stanowi ochrony przed właścicielem zmodyfikowanego klienta. Izolacja między tenantami w aplikacji i serwerze pozostaje obowiązkowa; ochrona utraconego urządzenia wymaga także blokady systemowej.
 
-**potwierdzona — dokumentacja technologii:** service worker może obsługiwać cache i operacje offline, a mechanizmy pracy w tle mają ograniczenia zależne od środowiska. Źródło: [MDN — Offline and background operation](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation). **niezweryfikowana:** zgodność docelowej funkcji z telefonami użytkowników; potrzebne testy fizycznych urządzeń.
+**Odtworzenie serwera.** Każdy snapshot i komenda mają epokę synchronizacji instalacji. Restore zmienia epokę przed dopuszczeniem klientów; różnica blokuje automatyczny replay i wymaga uzgodnienia danych. Pozwala to uniknąć odtworzenia komend na bazie, która utraciła ich wcześniejsze potwierdzenia.
 
-## Eksploatacja i odtwarzanie — wnioskowana
+**Aktualizacje.** Migracje IndexedDB i aktualizacja service workera zachowują niewysłane operacje. Nie czyścić kolejki przy nowej wersji klienta ani pełnym odświeżeniu. API rozpoznaje wersję komendy; nieobsługiwany schemat zatrzymuje synchronizację z instrukcją aktualizacji, bez pozornego sukcesu.
 
-- Proponowane początkowe cele do uzgodnienia: RPO 24 godziny, RTO 4 godziny. Jeśli utrata dnia pracy jest niedopuszczalna, przed pilotażem zaprojektować częstsze kopie i odtwarzanie punktowe z równie spójnymi plikami.
-- Prosty spójny backup: tryb utrzymania blokujący zapisy i upload, zakończenie transakcji, zatrzymanie workera, kopia DB i plików z manifestem, wznowienie pracy. Długość przerwy zmierzyć. Same nieskoordynowane snapshoty LXC nie są kryterium poprawnej kopii aplikacji.
-- Kopie szyfrowane poza hostem Proxmoxa, oddzielne uprawnienia i kopia poza lokalizacją. Retencję ustalić z właścicielem danych. Snapshot na tym samym dysku nie rozwiązuje awarii dysku/hosta.
-- Odtworzenie na osobnej instancji: migracje zgodne z wersją aplikacji, kontrola relacji, sum plików, dostępu i przykładowego raportu. Zmierzyć faktyczny RPO/RTO; drill przed startem i okresowo.
-- Monitorować zdrowie procesu, DB, wolne miejsce, błędy, kolejkę i wiek ostatniej udanej kopii; alerty bez payloadów i sekretów. Logi strukturalne z redakcją nagłówków i danych osobowych.
-- Wdrożenia z wersjonowanych artefaktów i migracji; restart API/workera przez systemd. Runtime i zależności przypięte oraz weryfikowane w CI. Kopia i test migracji przed przełączeniem wydania. Stosować rozszerzenie schematu przed zmianą klienta; rollback kodu tylko przy zgodności schematu, w pozostałych przypadkach poprawka do przodu lub kontrolowane odtworzenie.
+## Statusy i minimalna kontrola jakości
 
-## Minimalna weryfikacja przed danymi rzeczywistymi — wnioskowana
+Zadanie: `zaplanowane → w toku → zgłoszone do odbioru → odebrane`; kierownik może zwrócić do pracy z powodem. Przeszkoda jest oddzielnym wpisem. Czasy zdarzeń serwerowe UTC, dzień pracy w strefie projektu; czas urządzenia nie ustala kolejności rozstrzygania konfliktów. Wpis pracy należy do autora; inna osoba nie koryguje go bez jego wiedzy. Audyt obejmuje aktora, firmę, zasób, komendę i wersje bez sekretów.
 
-Testy na własnej syntetycznej instancji: izolacja dwóch firm i projektów także dla plików, odebranie członkostwa, dozwolone przejścia statusów, atomowość audytu, konkurencyjne wydania, powtórzenie komendy i konflikt offline oraz odtworzenie kopii. To plan późniejszego rozwoju; nie wykonano żadnego z tych testów w HERC.
+Bramka pilotażu: izolacja dwóch firm przy wspólnym użytkowniku, aktywacja i jej replay, dezaktywacja tylko jednej firmy, trwałość kolejki po restarcie, utrata odpowiedzi po commicie, równoległe retry, konflikt dwóch urządzeń, cofnięcie dostępu, brak miejsca, aktualizacja PWA oraz odtworzenie DB. Wszystko na danych syntetycznych. Instalacja i ten sam proces offline na fizycznym Androidzie i iPhonie są warunkiem ukończenia MVP. Szczegóły: [roadmapa](ROADMAP.md).
+
+## Do zatwierdzenia razem z architekturą
+
+Mały zakres MVP i jego ograniczenia online; 7 dni dostępu offline; aktywacja 24 h; RPO/RTO; brak automatycznej retencji identyfikatorów komend w MVP. Przed wdrożeniem ustalić domenę/HTTPS, dostawcę poczty, retencję danych pracowników i limity snapshotów/logo. Nie są to wyniki testów ani deklaracja gotowości produktu.

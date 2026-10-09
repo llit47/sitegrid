@@ -1,86 +1,51 @@
-# Roadmapa i podział na małe PR-y
+# Roadmapa małego MVP offline-first
 
-Data: 2026-10-09. **wnioskowana:** proponowana kolejność prac nad własnym produktem; nie odtworzenie HERC. **potwierdzona:** obecna zmiana zawiera tylko dokumentację; nie uruchomiono usług ani implementacji aplikacji. Docelowe środowisko: **LXC Debian 13 na Proxmoxie**. Stan poznania referencji: [FUNCTIONALITY.md](FUNCTIONALITY.md).
+Data: 2026-10-09. **Projekt do zatwierdzenia w PR #2, bez implementacji.** Źródło decyzji: [architektura](ARCHITECTURE.md) i [macierz uprawnień](PERMISSIONS.md). Historyczny audyt referencji pozostaje w [FUNCTIONALITY.md](FUNCTIONALITY.md). Niniejszy plan zastępuje wcześniejszą kolejność z pilotażem online przed offline; wcześniejsze priorytety backlogu nie wyznaczają już bramki MVP.
 
-## Stan PR #1
+## Zakres i bramka pilotażu
 
-**potwierdzona:** [PR #1](https://github.com/llit47/herc/pull/1), branch `docs/herc-functional-audit`, jest uzupełniany tymi pięcioma dokumentami. Audyt odczytowy osiągnął 30 widoków i 2 próby logowania; brak zapisów biznesowych. Dotychczasowe hipotezy zastąpiono obserwacjami tam, gdzie pojawiły się dowody; pozostałe luki są jawne. Nie implementowano aplikacji i nie wykonano wdrożenia.
+MVP: wiele firm, provisioning przez platformę, administracja kontami i pracownikami firmy, jednorazowa aktywacja, użytkownik w kilku firmach, branding w PostgreSQL, projekty i przypisane zadania, postęp/przeszkody, własne wpisy pracy oraz odbiór online. Jedna PWA instalowana na Android/iOS. Offline-first dla odczytu przygotowanego zakresu i podstawowych zapisów musi działać przed pierwszym pilotażem, wraz z trwałością kolejki, retry, idempotencją i konfliktami.
 
-**wnioskowana:** następny etap to decyzje domenowe/MVP i testy na danych syntetycznych. Nie potrzeba kolejnego PR tylko do powtarzania tego samego audytu odczytowego. Testy innych ról, zapisów, synchronizacji i kopii pozostają odrębnym zakresem. PR #1 nie jest automatycznie mergowany.
+Bez magazynu, zakupów, kalendarza, czatu, PDF/zdjęć, kosztów, pełnych brygad i rozbudowanego raportowania. Rezygnacja z tych modułów zmniejsza MVP, nie odkłada niezawodności. Administracja, przygotowanie urządzenia i odbiór robót pozostają online zgodnie z macierzą.
 
-## Etap A — dowody i decyzje
+## Małe PR-y implementacyjne po zatwierdzeniu
 
-A01–A02 opisują **potwierdzony** stan dokumentacji i sesji. Pozostałe wiersze to **wnioskowane** propozycje. Numery PR-ów są numerami planu, nie istniejącymi numerami GitHuba.
+Identyfikatory M01–M15 są pozycjami planu, nie numerami GitHuba. Każdy PR ma jeden ocenialny rezultat; większy zakres dzielić dalej. Żaden z nich nie jest wykonywany w PR #2.
 
-| PR | Mały zakres | Zależność | Kryterium zakończenia |
+| ID | Zakres | Zależność | Kryterium zakończenia |
 |---|---|---|---|
-| A01 | Pięć dokumentów i granice — wykonane w PR #1. | Brak | Spójne oznaczenia pewności, brak sekretów i przypisanych bez dowodu funkcji HERC. |
-| A02 | Odczytowy audyt i UX desktop/mobile — wykonane w PR #1. | A01 | 30 widoków, 2 próby logowania, odstępy ≥2 s; V01–V30, jawne ograniczenia roli i zapisów. |
-| A03 | Słownik domeny, MVP, macierz ról i krótkie ADR-y dotyczące granic firm, offline, RPO/RTO. | A02; rozmowy z użytkownikami | Uzgodnione procesy pięciu ról; zakres P0/P1 zatwierdzony, niewiadome zapisane. |
+| M01 | Szkielet React/TS + Fastify, kontrakty, CI i konfiguracja instalacji | Zatwierdzony PR #2 | Build i health check; bez Supabase i danych firmy w `.env`. |
+| M02 | PostgreSQL: tożsamości, firmy, członkostwa, role i izolacja | M01 | Dwa tenanty, wspólny użytkownik, klucze złożone/RLS; izolacja puli połączeń. |
+| M03 | Sesje, logowanie/wylogowanie i bootstrap platformy | M02 | Brak publicznej rejestracji; kontrolowany bootstrap; odwoływalne sesje, CSRF i ograniczenie prób. |
+| M04 | Firma i zaproszenie pierwszego administratora, aktywacja | M03 | Transakcja zużycia tokenu, wygaśnięcie, ponowne zaproszenie, GET bez skutku; test poczty bez produkcyjnych odbiorców. |
+| M05 | Panel administratora firmy, pracownicy, role, dezaktywacja | M04 | Konto A+B i zaproszenie istniejącego konta; dezaktywacja tylko A; ochrona ostatniego administratora. |
+| M06 | Branding i przełącznik firm | M05 | Nazwa, ustawienia i ograniczone logo `bytea` w DB; autoryzowany odczyt i brak mieszania kontekstów kart. |
+| M07 | Projekty, przydziały i odczyt zadań | M05 | Uprawniony zakres i wersje rekordów; brak dostępu do obcego projektu. |
+| M08 | Jedna komenda postępu: audyt, wersja i idempotencja | M07 | Atomowy wynik i audyt; utrata odpowiedzi po commicie, równoległe duplikaty, zmieniony payload z tym samym ID. |
+| M09 | Instalowalna powłoka PWA i IndexedDB | M06–M07 | Android/iOS, restart offline po przygotowaniu; partycje konto/firma; brak sekretów sesji w storage. |
+| M10 | Pełny ograniczony snapshot projektu i odczyt offline | M09 | Spójny snapshot, limity bez cichego ucięcia, atomowa wymiana bazy bez kasowania kolejki; brak fałszywego „gotowe offline”. |
+| M11 | Trwała kolejka jednej komendy postępu i retry | M08–M10 | Atomowy zapis lokalny, restart PWA, timeout/5xx/429; synchronizacja na wznowieniu bez wymogu pracy w tle. |
+| M12 | Konflikty, utrata dostępu i zmiana konta | M11 | Dwa urządzenia, brak cichego nadpisania, 401/403, kolejki A+B, lokalne wylogowanie i aktualizacja IndexedDB bez utraty pracy. |
+| M13 | Własny wpis pracy i przeszkoda przez istniejącą kolejkę | M12 | Tworzenie/korekta offline, walidacja czasu, własność wpisu; brak duplikacji i cudzych edycji. |
+| M14 | Odbiór/zwrot online i mobilna „moja praca” | M12–M13 | Kierownik nie odbiera własnych robót; filtry, kontekst, stan synchronizacji i podstawowe akcje dotykowe. |
+| M15 | Testowy LXC Debian 13, systemd, backup i monitoring | M06; finalna weryfikacja po M14 | Poprawne mount pointy/UID/GID; DB odtworzona z logo w nowym LXC, zmierzony RPO/RTO, alert kopii/dysku. |
 
-## Etap B — fundamenty przed pilotażem
+M09–M12 są fundamentem produktu i częścią tej samej bramki MVP co konta oraz zadania. M07/M08 nie uzasadniają wcześniejszego pilotażu „tylko online”. M15 opisuje przygotowanie i odtworzenie testowe; uruchomienie docelowej produkcji wymaga osobnego zadania wdrożeniowego.
 
-| PR | Mały zakres | Zależność / rekomendacja | Kryterium zakończenia |
-|---|---|---|---|
-| B01 | Szkielet React/TS, Fastify, kontrakty i CI, lokalna konfiguracja bez sekretów. | A03 | Powtarzalny build i jeden sprawdzony endpoint zdrowia; bez wdrożenia produkcji. |
-| B02 | Migracje użytkowników, firm i członkostw; dwie syntetyczne firmy. | B01; I01 | Więzy i rollback/forward migracji sprawdzone lokalnie; żadnych danych referencyjnych. |
-| B03 | Logowanie, sesje, wylogowanie i odwołanie sesji. | B02; I02 | Test cyklu sesji oraz blokady po dezaktywacji konta. |
-| B04 | Kontekst firmy, polityki dostępu i RLS. | B03; I01 | Testy odmowy między firmami, także przy użyciu puli połączeń. |
-| B05 | Projekty i członkostwa projektowe z podstawową listą w UI. | B04; I01 | Użytkownik widzi tylko przypisane projekty; brak możliwości dowiązania cudzej firmy. |
-| B06 | Brygady i przypisania z datami obowiązywania. | B05; I01 | Historia składu i spójność zakresu projektu. |
-| B07 | Wspólny zapis audytu i kontrola wersji na jednym zasobie. | B05; I03 | Zmiana i audyt atomowe; równoczesna edycja zgłasza konflikt. |
-| B08 | Idempotencja komend i outbox na jednym zasobie. | B07; I03/I08 | Ponowienie nie dubluje skutków; retry workera nie gubi zdarzenia. |
-| B09 | Metadane i upload/pobranie pliku z autoryzacją. | B04–B05; I10 | Plik innej firmy niedostępny, ograniczenia rozmiaru, obsługa przerwanego uploadu. |
-| B10 | Rewizje i uzgadnianie plików po niedokończonej operacji. | B09; I10 | Nie ma widocznego „gotowego” dokumentu bez treści, stara rewizja zachowana. |
-| B11 | Instrukcja nieuprzywilejowanego LXC Debian 13 na Proxmoxie; usługi systemd, wolumeny, kopia i odtworzenie testowe. | B10; I04 | Sprawdzony szablon i UID/GID, jawny zakres kopii rootfs/mount pointów; odtworzona baza i pliki w nowym LXC, zmierzony czas. |
+## Obowiązkowy odbiór MVP
 
-**wnioskowana:** B11 przygotowuje artefakty operacyjne i testową procedurę; uruchomienie na docelowym Proxmoxie wymaga osobnego zadania wdrożeniowego. Każdy moduł od chwili powstania używa sprawdzonych granic dostępu; nie odkładać ochrony danych na końcowy PR.
+1. Platforma tworzy dwie firmy i pierwszych administratorów. Każdy administrator tworzy/przyjmuje konta tylko swojej firmy; nie zna obcych członkostw. Aktywacja jest jednorazowa i wygasająca.
+2. Wspólny użytkownik ma różne role w A i B. Izolacja obejmuje listy, konkretne ID, branding, profile, audyt i komendy; dezaktywacja A nie blokuje B.
+3. Na fizycznym Androidzie i iPhonie użytkownik instaluje PWA, przygotowuje projekt, odcina sieć, otwiera ponownie aplikację, zmienia postęp i tworzy wpis pracy. Kolejka pozostaje po zamknięciu/restarcie i synchronizuje się po wznowieniu.
+4. Serwer zatwierdza komendę, lecz odpowiedź ginie. Retry daje jeden efekt i ten sam wynik. Zmiana wspólnego rekordu na drugim urządzeniu wyświetla konflikt i zachowuje lokalną propozycję, bez nadpisania.
+5. Cofnięcie roli i wygasła sesja zatrzymują niewłaściwe zapisy; wylogowanie i przełączanie kont nie ujawniają danych poprzedniej osoby. Sprawdzony limit dostępu offline i brak możliwości natychmiastowego zdalnego czyszczenia są jawne.
+6. Brak miejsca, niepełny snapshot, restart podczas wysyłki i aktualizacja PWA nie dają pozornego sukcesu ani nie kasują kolejki. Długie zerwanie połączenia nie wymaga Background Sync do odzyskania pracy.
+7. Odtworzony PostgreSQL zachowuje firmy, członkostwa, branding, wpisy, audyt i identyfikatory komend; ponowienia po restore wymagają kontroli zgodności epoki synchronizacji opisanej niżej.
 
-## Etap C — pionowy proces kierownik–brygada–pracownik
+**Odtworzenie a retry:** kopia może pochodzić sprzed potwierdzonej komendy. Procedura restore zmienia serwerową epokę synchronizacji; klient wykrywa zmianę przed wysyłaniem, blokuje automatyczny replay i wymaga uzgodnienia lokalnego stanu z odtworzonym serwerem. Nie zakładać, że backup gwarantuje „dokładnie raz” wobec już utraconej historii. Ta obsługa jest częścią M12/M15.
 
-| PR | Mały zakres | Zależność / rekomendacja | Kryterium zakończenia |
-|---|---|---|---|
-| C01 | Lokalizacje/foldery, zadania, przydziały, terminy i lista z filtrami. | B06–B08; I06 | Zakres projektu/brygady egzekwowany w API, brak cyklicznych zależności. |
-| C02 | Przejścia statusów, blokady, zgłoszenie i odbiór. | C01; I06 | Pełny przebieg syntetycznego zadania z rozdzielonymi rolami. |
-| C03 | Mobilna „moja praca”, szczegół i kontekst budowy. | C02; I05 | Sprawdzenie klawiaturą i na telefonie; powrót do rodzica zachowuje filtry, liczniki jawnie odróżniają folder od projektu (UX-002–UX-005). |
-| C04 | Szkic raportu dziennego i pozycji czasu. | C03; I07 | Walidacja czasu/jednostek i poprawne wiązanie z projektem. |
-| C05 | Złożenie, zatwierdzanie i korekty raportu. | C04; I07 | Zatwierdzone dane i snapshot podsumowania nie zmieniają się bez historii i powodu; dwa urządzenia widzą ten sam raport (V19). |
-| C06 | Usterka z odpowiedzialnym i załącznikiem. | C02, B10; I11 | Usterka dostępna właściwemu projektowi, plik dziedziczy zakres. |
-| C07 | Weryfikacja naprawy i ponowne otwarcie. | C06; I11 | Zachowana historia odbiorów i właściwe uprawnienia. |
-| C08 | Wspólny kalendarz firmy/projektu, terminy i strefa czasu. | B05–B08; I15 | Termin widoczny na dwóch uprawnionych kontach; brak dostępu spoza projektu; tryb synchronizacji jawny (V20). |
+## Po MVP
 
-## Etap D — niezawodna praca terenowa
+Oddzielne decyzje i małe PR-y: brygady i raport zbiorczy; dokumenty/zdjęcia z własną kolejką uploadu; magazyn oparty na ruchach; kalendarz; powiadomienia; koszty. Rozrost danych uzasadnia synchronizację przyrostową z bezpiecznym kursorem i tombstones. Każdy moduł definiuje swój zakres offline przed wejściem do pilotażu. Nie planuje się osobnej aplikacji natywnej.
 
-| PR | Mały zakres | Zależność / rekomendacja | Kryterium zakończenia |
-|---|---|---|---|
-| D01 | Powłoka PWA i jawny tryb offline; cache minimalnego zakresu. | C03; I08 | Brak danych poprzedniego konta po wylogowaniu; wskazanie aktualności. |
-| D02 | Szkice lokalne i kolejka jednej komendy raportu. | D01, C04, B08; I08 | Utrata sieci nie usuwa szkicu; ponowienie nie tworzy drugiego raportu. |
-| D03 | Snapshot i strumień zmian z kursorem i tombstones. | D02; I08 | Brak pominięć przy kolejności commitów; poprawny reset wygasłego kursora. |
-| D04 | UI konfliktu, utrata uprawnień i wznowienie synchronizacji. | D03; I08 | Brak cichego nadpisania, widoczna odmowa i oczyszczenie nieuprawnionego cache po połączeniu. |
-| D05 | Kolejka zdjęć i test rzeczywistego telefonu na danych syntetycznych. | D04, B10; I08 | Retry uploadu nie dubluje załącznika; użytkownik zna stan wysyłki. |
-
-## Etap E — magazyn i zaopatrzenie
-
-| PR | Mały zakres | Zależność / rekomendacja | Kryterium zakończenia |
-|---|---|---|---|
-| E01 | Materiały, jednostki, magazyny i dostęp. | B04–B08; I09 | Spójność jednostek, zakres magazyniera niezależny od administracji firmy. |
-| E02 | Niezmienny rejestr przyjęć/wydań i korekt. | E01; I09 | Uzgadnialne salda, test konkurencyjnego wydania. |
-| E03 | Rezerwacje i powiązanie zużycia z projektem. | E02; I09 | Rezerwacja nie dubluje wydania ani dostępnego zapasu. |
-| E04 | Zapotrzebowania i częściowe dostawy. | E03; I09 | Pozostała ilość wynika z realizacji; anulowanie nie usuwa ruchów. |
-
-## Etap F — pilotaż i rozszerzenia
-
-**wnioskowana:** najpierw ograniczony pilotaż po B11 i C03, jeśli zapewniona praca online; raportowanie po C05, teren offline po D05, magazyn po E04. Przed każdą bramką potwierdzić uprawnienia, backup, ergonomię i integralność danych dla udostępnianego zakresu. Testy wykonuje się na własnych danych syntetycznych, nie na produkcyjnym HERC.
-
-| PR | Mały zakres | Zależność | Kryterium zakończenia |
-|---|---|---|---|
-| F01 | Monitoring, alert kopii/dysku i instrukcja reakcji. | B11; przed pilotażem | Kontrolowana awaria testowa widoczna operatorowi, bez sekretów w logach. |
-| F02 | Wnioski z pilotażu pięciu ról i poprawki o najwyższym wpływie. | Odpowiednie bramki C–E | Udokumentowane wyniki zadań użytkowników i poprawione rzeczywiste blokady. |
-| F03+ | Oddzielne PR-y: przypomnienia, raport kosztów, eksport. | Stabilne dane C–E; P2 | Każda funkcja ma konkretną potrzebę, właściciela i kryterium odbioru. |
-| F04+ | Osobne ADR-y i eksperymenty dla QR, integracji, aplikacji natywnej. | Potwierdzona potrzeba; P2 | Nie rozszerza zakresu MVP bez uzasadnienia. |
-
-## Reguły małego PR-a i zakończenia
-
-**wnioskowana:** jeden PR realizuje jedną decyzję lub możliwy do oceny fragment zachowania; zwykle 1–3 dni, a większy zakres dzielony przed implementacją. Każdy opisuje zmianę, zależności, sposób sprawdzenia, migrację i ryzyko. Testy koncentrują się na uprawnieniach, integralności i zachowaniu użytkownika; same zmiany dokumentacji wymagają sprawdzenia spójności, linków i braku danych wrażliwych. Żaden etap nie obejmuje kopiowania kodu, materiałów ani identyfikacji wizualnej HERC.
-
-**niezweryfikowana:** harmonogram kalendarzowy i ostateczny koszt — wymagają wyników A02/A03, składu zespołu i ograniczeń środowiska. Plan PR-ów nie jest deklaracją, że funkcje występują w referencji.
+Do zatwierdzenia: granice MVP, ważność aktywacji 24 h, dostęp offline do 7 dni, cele RPO/RTO i polityka retencji deduplikacji. Przed implementacją snapshotu określić jego limity i wersje docelowych przeglądarek; przed wdrożeniem domenę/HTTPS, pocztę i parametry hosta. Harmonogram kalendarzowy zależy od zespołu; nie jest deklarowany w tym PR.
