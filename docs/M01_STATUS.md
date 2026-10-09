@@ -2,7 +2,7 @@
 
 Branch: `feat/m01-working-foundation`, historyczna baza `59b2fb2`.
 Audyt odzyskiwania 2026-10-09: wykonano `git fetch origin`; zatwierdzone wymagania odczytano z `origin/main` = `2a298b5` (PR #4), pliki `docs/audit/ROADMAP.md` i `docs/audit/ARCHITECTURE.md`. Bez pull/reset/clean/rebase/merge.
-Ostatni commit CP3: `3ccd481`; CP2: `6c79ed2`; CP1: `7ccb040`.
+Commity implementacji: CP1 `7ccb040`, CP2 `6c79ed2`, CP3 `3ccd481`, CP4 `3c2d298`, CP5 `17e9d0c`; wszystkie wypchnięte na istniejącym branchu.
 
 | Checkpoint | Status |
 |---|---|
@@ -10,9 +10,9 @@ Ostatni commit CP3: `3ccd481`; CP2: `6c79ed2`; CP1: `7ccb040`.
 | CP2 — prawdziwe uwierzytelnianie | DONE |
 | CP3 — instalatory | KOD DONE; Debian 13/systemd PASS; Proxmox NIEZWERYFIKOWANY |
 | CP4 — updater i rollback | DONE; testy awarii + realny update/backup/rollback PASS |
-| CP5 — integracja | NOT STARTED |
+| CP5 — integracja | PASS wszystkich dostępnych testów; Proxmox NIEZWERYFIKOWANY |
 
-## Raport odzyskiwania po restarcie LXC
+## Raport odzyskiwania po restarcie LXC — stan początkowy
 
 - HEAD i zdalny branch: `c796204`; rozbieżność 0/0. CP1 `7ccb040`, CP2 `6c79ed2` oraz oba statusy są zapisane i wypchnięte. Lokalny main `59b2fb2`, zdalny main `2a298b5`; branch implementacyjny ma 4 własne commity, main 1. Wymagania PR #4 nie wymagają integracji historii.
 - Reflog potwierdza kolejność CP1/CP2; stash pusty; `git fsck --no-reflogs --unreachable` nie wykazał dodatkowego utraconego commita. Brak AGENTS.md dla tego repozytorium.
@@ -32,6 +32,20 @@ Niejasność dotyczy wyniku końcowego testu CP3, a nie własności/pochodzenia 
 React/TypeScript z responsywnym logowaniem i panelem administratora, Fastify/TypeScript, produkcyjny build i serwowanie frontendu. PostgreSQL 17+; transakcyjne migracje z blokadą i weryfikacją zapisanych sum SHA-256. Liveness i readiness; oddzielna konfiguracja development/production, wymagane HTTPS origin w produkcji.
 
 Globalne konta i credentials, Argon2id (64 MiB/3/1), sesje PostgreSQL z hashem identyfikatora i rotacją przy logowaniu. CSRF + Origin, trwałe atomowe limity IP/konta, bezpieczne komunikaty, wylogowanie z unieważnieniem sesji. Cookie HttpOnly/SameSite Strict; Secure i __Host w produkcji. Lokalny interaktywny jednorazowy bootstrap (również ochrona wyścigu), niewidoczne hasło, brak rejestracji i haseł domyślnych. Osobne uprawnienie platformowe przygotowuje model pod M02–M04.
+
+## Końcowa walidacja CP5 (2026-10-09)
+
+- Implementacja/testy wypchnięte: `17e9d0c`. Finalne artefakty: 0.1.0 SHA-256 `b83d1a4a9ce62054d2dd59f56133df5afe7b1c0fb436bf1de77bd635792bf5e4`; 0.1.1 `9c678e6bc5f93f3dfb51db6db7af2a6d6cdc2597405aa4376ce94e536c0f91ad`. Zgodność ops z artefaktami i brak .env/.recovery w paczkach potwierdzone. Wersje są lokalnymi artefaktami testowymi, nie opublikowanym wydaniem produkcyjnym.
+- **20/20 testów Python PASS**, zero pominięć; składnia wszystkich shell/Python i browser JS, git diff --check PASS. Oba produkcyjne buildy PASS. Regresja aplikacji po odzyskaniu: 15/15 PASS (szczegóły CP3); API/UI nie zmieniano ponownie.
+- Drugi świeży Debian 13/systemd, tylko jedna VM 2 vCPU/2 GiB naraz: finalny install/retry, prawa DB/runtime/config/TLS, peer auth, restart systemd i frontend HTTPS **PASS**. Dodatkowy pełny restart VM zachował konto i działającą instalację; ograniczono cache TCG do 64 MiB przed Chromium.
+- Dostarczany `sitegrid bootstrap-admin` w lokalnym interaktywnym terminalu VM: **PASS**. Powtórzenie i brak terminala odrzucone; niewidoczne hasło losowe poza repo, bez echo/logowania.
+- Chromium, Playwright 1.64.0, HTTPS przez loopback i lokalny certyfikat testowy: **PASS**. 401 bez sesji, błędne hasło, prawdziwe logowanie, panel, Secure/HttpOnly/SameSite Strict cookie. Ta sama sesja/konto po systemd restart, update 0.1.0→0.1.1 i rollback przez zainstalowany CLI. Logout i próba ponownego użycia starej sesji: 401. Widok mobilny 390×844 bez poziomego overflow.
+- Rzeczywiste awarie: **PASS**. Uszkodzone archiwum odrzucone przed zmianami; zaufany testowy release 0.1.2 z błędem startu odtworzył poprzedni zgodny kod/readiness, z zachowanym backupem. Przerwany journal przetrwał restart i zablokował komendę; równoległa blokada także odrzuciła operację.
+- Testowy release 0.1.3 ze schematem 3: **PASS**. Migracja i readiness, konto zachowane; rollback do schematu 2 odmówił przed zatrzymaniem sprawnej usługi. Backup schematu 2 odtworzono przez pg_restore do oddzielnej bazy sitegrid_restore_smoke: tożsamość/hash konta zgodne, schemat 2. Dump + trwałe metadane 0600, SHA-256 potwierdzona. Nie przywracano działającej DB i nie wykonywano downgrade.
+- Fixture 0.1.2/0.1.3 są wyłącznie do testów; nie publikować. Instrukcje odtworzenia testów: INSTALL.md. Brak trace/screenshots z sekretami; klucze i poświadczenia testowe wyłącznie w chronionych plikach /tmp poza repo.
+- Testowy PostgreSQL hosta oraz obie VM łagodnie zatrzymane. Dyski `/var/tmp/sitegrid-recovery-lab/{test,final}.qcow2` zachowane, razem z kontami i backupami wewnątrz VM. Przy restarcie LXC klucze /tmp mogą zniknąć; nie uruchamiać dwóch VM na tym samym dysku. Kopie oryginalnych artefaktów CP3/CP4 w ignorowanym .recovery, bez sekretów.
+- Zasoby końcowe po wyłączeniu VM: rzeczywisty LXC 4 GiB RAM, ~3.7 GiB dostępne; dysk ~2.3 GiB wolne po zachowaniu obu VM i artefaktów. Nie usuwano danych w celu zwolnienia miejsca.
+- CI CP4 SUCCESS: `37945221788`; status `37945228066`. CI CP5 **SUCCESS**: `37947734821` dla dokładnego SHA `17e9d0c`. Realny Proxmox nadal niezweryfikowany; nie deklarować całego M01 ani hostowego instalatora jako odebranych.
 
 ## Walidacja CP4 (2026-10-09)
 
@@ -61,10 +75,18 @@ Globalne konta i credentials, Argon2id (64 MiB/3/1), sesje PostgreSQL z hashem i
 
 ## Niezweryfikowane i blokery
 
-Brak testowego Proxmoxa. Sandbox nie ma systemd jako PID 1; test instalatora wykonywany wyłącznie w odizolowanej VM z systemd. Poprzednia sesja potwierdziła pierwszą instalację; odzyskana sesja potwierdziła końcowy artefakt na świeżej VM Debian 13/systemd. Przeglądarka/HTTPS pozostają do CP5. Nie ma obecnie blokera implementacji CP3. Sandboxing wymaga podniesienia uprawnień narzędzia dla zapisu `.git`, sieci oraz wiarygodnych testów z subprocessami/połączeniem PostgreSQL; te działania są objęte poleceniem użytkownika.
+**Jedyny otwarty element odbioru M01: rzeczywisty test instalatora hostowego na odizolowanym Proxmox VE 9.** Nie ma dostępnego/zatwierdzonego testowego hosta; nie wykonywano pct ani zmian na istniejących CT. Testy Debian/systemd/CLI/Chromium/update/rollback/restore przechodzą. Stan lokalnego kodu jest jednoznaczny; nie znaleziono utraconych zmian ani zagrożonej produkcyjnej DB.
+
+CI i lokalne testy nie zastępują Proxmoxa. Bez jego testu M01 pozostaje nieodebrany; kod CP1–CP5 i dostępna walidacja są zachowane/wypchnięte. Publiczna domena/TLS i wdrożenie produkcyjne nie były wykonywane w tym zadaniu. Sekrety/backupy/testowe dyski pozostają poza repo, a .recovery jest ignorowane.
 
 ## Dokładny następny krok
 
-CP5: spakować końcowe wydania 0.1.0/0.1.1, uruchomić pojedynczą nową VM Debian 13 (poprzednią najpierw łagodnie wyłączyć, zachować dysk), sprawdzić finalny instalator i dostarczany CLI. Lokalny interaktywny bootstrap, logowanie/wylogowanie w prawdziwej przeglądarce przez HTTPS, sesja po systemd restart/update/rollback, uszkodzony release, realna awaria readiness, odmowa rollback przy nowszej DB, odtworzenie backupu do oddzielnej testowej bazy. Testy kolejno; commit/push CP5 i statusu. Proxmox jawnie niezweryfikowany; bez tego nie ogłaszać całego M01 jako odebranego.
+Po udostępnieniu i zatwierdzeniu **odizolowanego testowego Proxmox VE 9** ustalić nowe wolne CT ID, storage rootdir/vztmpl, oficjalny pobrany szablon Debian 13, bridge/sieć i zasoby. Dostarczyć zaufany katalog ops i artefakt 0.1.0 z końcowego commita (SHA-256 powyżej) uwierzytelnionym kanałem. Uruchomić:
 
-W nowej sesji najpierw ten plik, git status i commity; nie powtarzaj CP1–CP4. Nie merguj, nie uruchamiaj Codex Review ani rzeczywistego pct. Instalator/testy tylko w izolacji, nigdy na roboczym LXC/hoście.
+```sh
+python3 /root/sitegrid-installer/ops/install-proxmox.py --bundle /root/sitegrid-0.1.0-linux-x64.tar.gz --version 0.1.0 --sha256 b83d1a4a9ce62054d2dd59f56133df5afe7b1c0fb436bf1de77bd635792bf5e4
+```
+
+Sprawdzić rzeczywisty nowy CT: unprivileged=1, Debian 13, systemd/HTTPS/readiness, lokalny bootstrap i logowanie/wylogowanie, update/rollback przez CLI z zachowaniem konta oraz odmowę zajętego ID bez naruszania istniejących CT. Nie kasować kontenera przy błędzie. Zapisać wyniki/parametry bez sekretów w tym pliku, commit/push. Dopiero wynik realnego PVE pozwala zamknąć bramkę M01; mock nie wystarczy.
+
+Do tego czasu nie powtarzać gotowych CP1–CP5 i nie uruchamiać hostowego skryptu na roboczym LXC. W nowej sesji zacząć od statusu/git status/commitów; nie pull/reset/clean/rebase/merge, nie mergować PR i nie uruchamiać Codex Review. Buildy/testy kolejno, pamięć oceniać na rzeczywistym LXC, nie na meminfo hosta widocznym w sandboxie.
