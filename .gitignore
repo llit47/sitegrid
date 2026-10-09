@@ -8,3 +8,5 @@ artifacts/
 test-results/
 playwright-report/
 *.log
+__pycache__/
+.recovery/
