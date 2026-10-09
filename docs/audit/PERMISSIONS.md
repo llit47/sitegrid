@@ -1,4 +1,4 @@
-# Macierz uprawnień i cykl kont — projekt do zatwierdzenia
+# SiteGrid — macierz uprawnień i cykl kont
 
 Data: 2026-10-09. Normatywna propozycja własnego produktu powiązana z [architekturą](ARCHITECTURE.md); nie opis uprawnień referencyjnego HERC. Wszystkie operacje podlegają autoryzacji API i izolacji danych. Ukrycie przycisku nie jest zabezpieczeniem.
 

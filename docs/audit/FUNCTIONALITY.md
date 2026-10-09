@@ -1,6 +1,6 @@
 # HERC — audyt funkcjonalny
 
-Data: 2026-10-09. Referencja: https://herc-zarzadzanie-budowa.vercel.app/. Wersja wyświetlana w UI: 1.0.12, pilotażowa. Kontynuacja [PR #1](https://github.com/llit47/herc/pull/1).
+Data: 2026-10-09. Referencja: https://herc-zarzadzanie-budowa.vercel.app/. Wersja wyświetlana w UI: 1.0.12, pilotażowa. Kontynuacja [PR #1](https://github.com/llit47/sitegrid/pull/1).
 
 ## Wynik i granice dowodów
 

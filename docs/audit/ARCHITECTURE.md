@@ -1,6 +1,6 @@
-# Architektura produktu — propozycja do zatwierdzenia w PR #2
+# SiteGrid — architektura produktu (PR #2)
 
-Data: 2026-10-09. Dokument dotyczy własnego produktu, nie implementacji referencyjnego HERC. **Status: projekt do zatwierdzenia; brak implementacji i wdrożenia.** Wymagania użytkownika są wiążącym zakresem; opisane mechanizmy i limity są propozycją wykonania. Zastępuje wcześniejszy wariant „MVP online, offline później”. Historyczne obserwacje pozostają w [FUNCTIONALITY.md](FUNCTIONALITY.md).
+Data: 2026-10-09. SiteGrid jest niezależnym produktem wielofirmowym, a HERC pozostaje wyłącznie analizowaną aplikacją referencyjną. **Status: kierunek architektury przyjęty w PR #2; brak implementacji i wdrożenia.** Szczegółowe mechanizmy oraz proponowane limity wymagają dalszej walidacji i zatwierdzenia. Dokument zastępuje wcześniejszy wariant „MVP online, offline później”. Historyczne obserwacje pozostają w [FUNCTIONALITY.md](FUNCTIONALITY.md).
 
 ## Decyzje produktowe
 
@@ -45,7 +45,7 @@ flowchart TD
 
 Osobne konta systemowe usług; API i PostgreSQL na loopback/socket, użytkownicy przez HTTPS. React budowany w CI i dostarczany jako statyczny artefakt; API/worker z przypiętym runtime i migracjami. Bez Docker-in-LXC/nesting. LXC współdzieli jądro hosta. Panel Proxmoxa i uprawnienia systemowe są oddzielone od panelu administratora platformy.
 
-Początkowa hipoteza zasobów: 4 vCPU, 8 GB RAM, 40 GB systemu plus policzony wolumen danych; wymaga pomiarów. Szablon Debian 13, wersja Proxmoxa, mapowanie UID/GID i zakres backupu rootfs/mount pointów muszą być sprawdzone przed wdrożeniem. Nie zakładać objęcia bind mountów kopią kontenera. Kod w `/opt/herc/releases`, przyszłe pliki w `/srv/herc/files`, sekrety w chronionej konfiguracji usług poza repozytorium.
+Początkowa hipoteza zasobów: 4 vCPU, 8 GB RAM, 40 GB systemu plus policzony wolumen danych; wymaga pomiarów. Szablon Debian 13, wersja Proxmoxa, mapowanie UID/GID i zakres backupu rootfs/mount pointów muszą być sprawdzone przed wdrożeniem. Nie zakładać objęcia bind mountów kopią kontenera. Kod w `/opt/sitegrid/releases`, przyszłe pliki w `/srv/sitegrid/files`, sekrety w chronionej konfiguracji usług poza repozytorium.
 
 MVP: kopia PostgreSQL obejmuje także branding i logo. Później spójna kopia DB i plików z manifestem, przy zatrzymaniu zapisów i workera. Proponowane cele RPO 24 h / RTO 4 h wymagają zatwierdzenia i próby odtworzenia do odizolowanego LXC. Snapshot na tym samym hoście nie zastępuje kopii. Monitorować błędy, miejsce, kolejkę serwera i wiek kopii; nie logować payloadów, haseł, tokenów aktywacji ani cookies. Backup serwera nie obejmuje jeszcze niewysłanych zmian urządzenia.
 

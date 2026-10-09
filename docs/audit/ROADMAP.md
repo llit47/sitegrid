@@ -1,6 +1,6 @@
-# Roadmapa małego MVP offline-first
+# SiteGrid — roadmapa małego MVP offline-first
 
-Data: 2026-10-09. **Projekt do zatwierdzenia w PR #2, bez implementacji.** Źródło decyzji: [architektura](ARCHITECTURE.md) i [macierz uprawnień](PERMISSIONS.md). Historyczny audyt referencji pozostaje w [FUNCTIONALITY.md](FUNCTIONALITY.md). Niniejszy plan zastępuje wcześniejszą kolejność z pilotażem online przed offline; wcześniejsze priorytety backlogu nie wyznaczają już bramki MVP.
+Data: 2026-10-09. **Architektura kierunkowa przyjęta w PR #2; bez implementacji, limity nadal do zatwierdzenia.** Źródło decyzji: [architektura](ARCHITECTURE.md) i [macierz uprawnień](PERMISSIONS.md). Historyczny audyt referencji pozostaje w [FUNCTIONALITY.md](FUNCTIONALITY.md). Niniejszy plan zastępuje wcześniejszą kolejność z pilotażem online przed offline; wcześniejsze priorytety backlogu nie wyznaczają już bramki MVP.
 
 ## Zakres i bramka pilotażu
 
