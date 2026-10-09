@@ -9,7 +9,7 @@ Ostatni commit CP3: `3ccd481`; CP2: `6c79ed2`; CP1: `7ccb040`.
 | CP1 — fundament aplikacji | DONE |
 | CP2 — prawdziwe uwierzytelnianie | DONE |
 | CP3 — instalatory | KOD DONE; Debian 13/systemd PASS; Proxmox NIEZWERYFIKOWANY |
-| CP4 — updater i rollback | NOT STARTED |
+| CP4 — updater i rollback | DONE; testy awarii + realny update/backup/rollback PASS |
 | CP5 — integracja | NOT STARTED |
 
 ## Raport odzyskiwania po restarcie LXC
@@ -32,6 +32,14 @@ Niejasność dotyczy wyniku końcowego testu CP3, a nie własności/pochodzenia 
 React/TypeScript z responsywnym logowaniem i panelem administratora, Fastify/TypeScript, produkcyjny build i serwowanie frontendu. PostgreSQL 17+; transakcyjne migracje z blokadą i weryfikacją zapisanych sum SHA-256. Liveness i readiness; oddzielna konfiguracja development/production, wymagane HTTPS origin w produkcji.
 
 Globalne konta i credentials, Argon2id (64 MiB/3/1), sesje PostgreSQL z hashem identyfikatora i rotacją przy logowaniu. CSRF + Origin, trwałe atomowe limity IP/konta, bezpieczne komunikaty, wylogowanie z unieważnieniem sesji. Cookie HttpOnly/SameSite Strict; Secure i __Host w produkcji. Lokalny interaktywny jednorazowy bootstrap (również ochrona wyścigu), niewidoczne hasło, brak rejestracji i haseł domyślnych. Osobne uprawnienie platformowe przygotowuje model pod M02–M04.
+
+## Walidacja CP4 (2026-10-09)
+
+- Implementacja i push: `3c2d298`; `update`, `rollback`, `status`, trwały journal, blokada, backup pg_dump, atomowe przełączenie i kontrola zgodności dokładnej historii migracji. Kontroler CLI pochodzi z aktywnego wydania.
+- **20/20 testów Python PASS**, zero pominięć: 10 release + 10 lifecycle. Awaria backupu bez migracji; readiness failure z odzyskaniem tylko zgodnego kodu; nowszy schemat blokuje restart starego; rollback bez migracji; uszkodzona historia; przerwany journal; status mimo niedostępnej DB. Syntax/compile/diff PASS; build obu aplikacji PASS.
+- Realna VM Debian 13 z CP3: `tests/debian-lifecycle-smoke.sh` z nowym zaufanym kontrolerem CP4 **PASS**. Uszkodzony artefakt odrzucony przed zmianami; update 0.1.0→0.1.1, root/0600 backup + pg_restore --list, readiness nowej wersji; rollback do 0.1.0, konto/hash/config/TLS zachowane, usługi aktywne. Pierwotny CP3 nie miał jeszcze komend lifecycle; finalny instalowany CLI zostanie sprawdzony przy CP5 na świeżej VM.
+- Artefakt testowy 0.1.1: SHA-256 `1dfbd6cab9e249e88f4f1ada8dc2b1b1f416c75aae3965faf270545d002e800e`. Testowy PostgreSQL na hoście zatrzymany po PASS dla oszczędności RAM; dane nieusunięte. Jedna VM, testy/buildy kolejno.
+- CI CP3 SUCCESS: implementacja `37944101061`, status `37944107831`. Proxmox nadal niezweryfikowany.
 
 ## Walidacja odzyskanego CP3 (2026-10-09)
 
@@ -57,6 +65,6 @@ Brak testowego Proxmoxa. Sandbox nie ma systemd jako PID 1; test instalatora wyk
 
 ## Dokładny następny krok
 
-CP4: rozszerzyć istniejący kontroler o update/rollback/status. Przypięty artefakt, kontrola zgodności historii migracji, backup przed migracją, trwały journal etapów, atomowy symlink i readiness; błędne wydanie odzyskuje wcześniejszy kod tylko jeśli rzeczywista DB jest zgodna. Brak automatycznego downgrade/restore DB. Testy awarii i integracja na tej samej izolowanej VM, kolejno; po wynikach commit/push CP4 oraz statusu. Następnie CP5: pełny cykl z kontem/sesją i przeglądarką. Proxmox pozostaje niezweryfikowany.
+CP5: spakować końcowe wydania 0.1.0/0.1.1, uruchomić pojedynczą nową VM Debian 13 (poprzednią najpierw łagodnie wyłączyć, zachować dysk), sprawdzić finalny instalator i dostarczany CLI. Lokalny interaktywny bootstrap, logowanie/wylogowanie w prawdziwej przeglądarce przez HTTPS, sesja po systemd restart/update/rollback, uszkodzony release, realna awaria readiness, odmowa rollback przy nowszej DB, odtworzenie backupu do oddzielnej testowej bazy. Testy kolejno; commit/push CP5 i statusu. Proxmox jawnie niezweryfikowany; bez tego nie ogłaszać całego M01 jako odebranego.
 
-W nowej sesji najpierw ten plik, git status i commity; nie powtarzaj CP1/CP2/CP3. Nie merguj, nie uruchamiaj Codex Review ani rzeczywistego pct. Testy wykonywać wyłącznie w izolacji; nigdy instalator na roboczym LXC/hoście.
+W nowej sesji najpierw ten plik, git status i commity; nie powtarzaj CP1–CP4. Nie merguj, nie uruchamiaj Codex Review ani rzeczywistego pct. Instalator/testy tylko w izolacji, nigdy na roboczym LXC/hoście.
