@@ -12,6 +12,15 @@ Commity implementacji: CP1 `7ccb040`, CP2 `6c79ed2`, CP3 `3ccd481`, CP4 `3c2d298
 | CP4 — updater i rollback | DONE; testy awarii + realny update/backup/rollback PASS |
 | CP5 — integracja | PASS wszystkich dostępnych testów; Proxmox NIEZWERYFIKOWANY |
 
+## PR #5 — naprawa retry i decyzja o kanale wydań
+
+- Naprawa P1 wypchnięta: `071374e`. Stan `dependencies` jest zapisywany atomowo i utrwalany przed apt-get, po weryfikacji artefaktu i potwierdzeniu. Faza nie przejmuje DB/roli SiteGrid; `started` następuje dopiero po sprawdzeniu ich nieistnienia. Retry rozpoznaje nginx pozostawiony przez własną instalację, nadal odrzucając obce zasoby, zmienioną konfigurację/vhost, inne listenery i inny artefakt.
+- Test dokładnego okna przerwania po apt-get install nginx-light: PASS; na kodzie sprzed poprawki potwierdzono brak installation.json i porażkę regresji. **28/28 testów Python PASS**, zero pominięć (20 dotychczasowych + 8 nowych); py_compile i git diff --check PASS. APT/systemd są granicami mockowanymi; stan i pliki instalacji zapisuje rzeczywisty kod w prywatnym katalogu testu. Nie ponawiano ciężkich VM/buildów lokalnych; walidacja zachowanego artefaktu nie oznacza nowego builda poprawionego instalatora.
+- CI poprawki `071374e`: **SUCCESS**, build nowego artefaktu i testy — https://github.com/llit47/sitegrid/actions/runs/37951411019 (drugi przebieg: https://github.com/llit47/sitegrid/actions/runs/37951407424).
+- Zakres odczytu: opis PR #5, sekcja M01 ROADMAP z origin/main i pliki instalacji/aktualizacji/testów/dokumentacji. Branch bez zmiany historii. LXC: 4 GiB RAM/~3.7 GiB dostępne, dysk ~2.3 GiB wolne; testy kolejno.
+- **Prosty sitegrid update: WSTRZYMANY DO DECYZJI O KANALE.** Wariant rekomendowany: prywatne GitHub Releases llit47/sitegrid, podpisany manifest kanału wskazujący wersję/artefakt/SHA-256, przypięty klucz, autoryzacja tylko do odczytu w root/0600. Alternatywa: konkretny serwer HTTPS. Nie skonfigurowano źródła, nie zmieniono flag ani trybu manualnego, nie dodano pozornego latest/main. Pytanie o wybór kanału przekazano użytkownikowi; brak odpowiedzi nie oznacza zgody.
+- Projekt i brakujące elementy prawdziwego bootstrapu Proxmoxa są w INSTALL.md: publikacja przypiętego bootstrapu + podpisane wydania, prywatna autoryzacja bez wycieku sekretów, konfiguracja źródła w LXC, pobranie szablonu/dependencies świeżego PVE, integracja i rzeczywisty test bez wcześniejszego transferu ops/archiwum. Dotychczasowy skrypt tego nie zapewnia. PR #5 nadal nie jest gotowy do merge.
+
 ## Raport odzyskiwania po restarcie LXC — stan początkowy
 
 - HEAD i zdalny branch: `c796204`; rozbieżność 0/0. CP1 `7ccb040`, CP2 `6c79ed2` oraz oba statusy są zapisane i wypchnięte. Lokalny main `59b2fb2`, zdalny main `2a298b5`; branch implementacyjny ma 4 własne commity, main 1. Wymagania PR #4 nie wymagają integracji historii.
@@ -75,18 +84,14 @@ Globalne konta i credentials, Argon2id (64 MiB/3/1), sesje PostgreSQL z hashem i
 
 ## Niezweryfikowane i blokery
 
-**Jedyny otwarty element odbioru M01: rzeczywisty test instalatora hostowego na odizolowanym Proxmox VE 9.** Nie ma dostępnego/zatwierdzonego testowego hosta; nie wykonywano pct ani zmian na istniejących CT. Testy Debian/systemd/CLI/Chromium/update/rollback/restore przechodzą. Stan lokalnego kodu jest jednoznaczny; nie znaleziono utraconych zmian ani zagrożonej produkcyjnej DB.
+**Otwarte P1 PR #5: prosty update i prawdziwy bootstrap one-line bez ręcznego transferu ops/archiwum.** Potrzebna decyzja o kanale dystrybucji i korzeniu zaufania; propozycja powyżej i w INSTALL.md. Obecny update działa wyłącznie w trybie manualnym. P1 retry jest poprawiony i objęty nową regresją, nie jest już otwartym defektem z opisu PR.
 
-CI i lokalne testy nie zastępują Proxmoxa. Bez jego testu M01 pozostaje nieodebrany; kod CP1–CP5 i dostępna walidacja są zachowane/wypchnięte. Publiczna domena/TLS i wdrożenie produkcyjne nie były wykonywane w tym zadaniu. Sekrety/backupy/testowe dyski pozostają poza repo, a .recovery jest ignorowane.
+Ponadto brak rzeczywistego testu instalatora hostowego na odizolowanym Proxmox VE 9. Dotychczasowe wyniki CP1–CP5 pozostają historycznym zapisem dostępnej walidacji, nie potwierdzają pełnej bramki M01 ani nowego bootstrapu. Nowy test przerwania używa kontrolowanych atrap APT/systemd. Nie ma zatwierdzonego testowego hosta; nie wykonywano pct ani zmian istniejących CT.
 
 ## Dokładny następny krok
 
-Po udostępnieniu i zatwierdzeniu **odizolowanego testowego Proxmox VE 9** ustalić nowe wolne CT ID, storage rootdir/vztmpl, oficjalny pobrany szablon Debian 13, bridge/sieć i zasoby. Dostarczyć zaufany katalog ops i artefakt 0.1.0 z końcowego commita (SHA-256 powyżej) uwierzytelnionym kanałem. Uruchomić:
+Uzyskać decyzję użytkownika: prywatne GitHub Releases llit47/sitegrid (rekomendowane) czy wskazany serwer HTTPS. Po wyborze ustalić miejsce publikacji i przypięty klucz weryfikacyjny; dopiero wtedy zaimplementować czytanie podpisanego manifestu przez sitegrid update, bezpieczny transport/autoryzację, konfigurację w LXC i zweryfikowany downloader bootstrapu Proxmoxa. Zachować tryb manualny, blokować brak konfiguracji/przeterminowany lub stary manifest i niezgodny artefakt przed zmianami.
 
-```sh
-python3 /root/sitegrid-installer/ops/install-proxmox.py --bundle /root/sitegrid-0.1.0-linux-x64.tar.gz --version 0.1.0 --sha256 b83d1a4a9ce62054d2dd59f56133df5afe7b1c0fb436bf1de77bd635792bf5e4
-```
+Po konfiguracji/opublikowaniu przypiętego bootstrapu wykonać test na świeżym odizolowanym PVE 9 bez wcześniejszego transferu plików, z brakiem autoryzacji, uszkodzonym pobraniem, istniejącym ID i przerwaniem. Samo ponowienie dotychczasowego polecenia z ręcznie dostarczonym ops nie zamknie P1 one-line. Nie wykonywać rzeczywistego pct bez zatwierdzonego środowiska.
 
-Sprawdzić rzeczywisty nowy CT: unprivileged=1, Debian 13, systemd/HTTPS/readiness, lokalny bootstrap i logowanie/wylogowanie, update/rollback przez CLI z zachowaniem konta oraz odmowę zajętego ID bez naruszania istniejących CT. Nie kasować kontenera przy błędzie. Zapisać wyniki/parametry bez sekretów w tym pliku, commit/push. Dopiero wynik realnego PVE pozwala zamknąć bramkę M01; mock nie wystarczy.
-
-Do tego czasu nie powtarzać gotowych CP1–CP5 i nie uruchamiać hostowego skryptu na roboczym LXC. W nowej sesji zacząć od statusu/git status/commitów; nie pull/reset/clean/rebase/merge, nie mergować PR i nie uruchamiać Codex Review. Buildy/testy kolejno, pamięć oceniać na rzeczywistym LXC, nie na meminfo hosta widocznym w sandboxie.
+Nie tworzyć nowego PR; kontynuować feat/m01-working-foundation i PR #5. Nie merge, reset, clean, rebase ani Codex Review. Testy/buildy sekwencyjnie; przed cięższą walidacją sprawdzić RAM/dysk rzeczywistego LXC.
