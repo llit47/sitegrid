@@ -146,7 +146,6 @@ http {
 
 
 def install(args):
-    require(not Path('/etc/pve').exists() and not shutil.which('pveversion'), 'Instalacja na hoście Proxmoxa jest zabroniona; użyj gotowego Debiana 13.')
     with lock():
         marker = STATE / 'installation.json'
         previous = json.loads(marker.read_text()) if marker.is_file() and not marker.is_symlink() else None

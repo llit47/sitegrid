@@ -50,7 +50,7 @@ class InstallerRetryTests(unittest.TestCase):
             'grant_runtime': lambda: None, 'health': lambda *args: True,
         }
         for name, value in values.items(): self.stack.enter_context(patch.object(installer, name, value))
-        self.stack.enter_context(patch.object(installer.shutil, 'which', side_effect=lambda name: '/usr/sbin/nginx' if name == 'nginx' and self.nginx else None if name in ('nginx', 'pveversion') else '/usr/bin/' + name))
+        self.stack.enter_context(patch.object(installer.shutil, 'which', side_effect=lambda name: '/usr/sbin/nginx' if name == 'nginx' and self.nginx else None if name == 'nginx' else '/usr/bin/' + name))
         self.stack.enter_context(patch.object(installer.shutil, 'disk_usage', return_value=SimpleNamespace(free=10 * 1024 ** 3)))
         self.stack.enter_context(patch.object(installer.shutil, 'copyfile', side_effect=lambda source, dest, **kw: copyfile(source, self.mapped(dest), **kw)))
         self.stack.enter_context(patch.object(installer.pwd, 'getpwnam', side_effect=self.get_user))
@@ -106,15 +106,15 @@ class InstallerRetryTests(unittest.TestCase):
         self.assertEqual(json.loads(self.marker.read_text())['phase'], 'dependencies')
         self.assertFalse(self.sql_calls)
 
-    def test_proxmox_host_refused_before_any_installation(self):
-        self.mapped('/etc/pve').mkdir()
-        with self.assertRaisesRegex(SiteGridError, 'hoście Proxmoxa'): self.run_installer()
-        self.mapped('/etc/pve').rmdir()
-        with patch.object(installer.shutil, 'which', return_value='/usr/bin/pveversion'):
-            with self.assertRaisesRegex(SiteGridError, 'hoście Proxmoxa'): self.run_installer()
-        self.assertFalse(self.state.exists())
-        self.assertFalse(self.calls)
-        self.assertFalse(self.sql_calls)
+    def test_debian_with_proxmox_markers_follows_normal_installation(self):
+        pve = self.mapped('/etc/pve')
+        pve.mkdir()
+        (pve / 'cluster-data').write_text('existing configuration')
+        self.assertTrue(installer.shutil.which('pveversion'))
+        self.interrupt_after_nginx()
+        self.run_installer()
+        self.assertEqual(json.loads(self.marker.read_text())['phase'], 'done')
+        self.assertEqual((pve / 'cluster-data').read_text(), 'existing configuration')
 
     def test_retry_after_state_directory_creation_before_receipt(self):
         self.crash = False

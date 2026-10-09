@@ -7,10 +7,10 @@ Self-hosted platforma projektów budowlanych i pracy wielu firm. React/TypeScrip
 Po zatwierdzeniu pierwszego Release operator jako root wklei jedno polecenie wygenerowane w `INSTALL_COMMAND.txt`. Docelowy wzorzec (placeholdery zastępuje builder, bez ręcznego kopiowania `ops/` lub paczki):
 
 ```sh
-bash -c 'set -euo pipefail; test "$(id -u)" = 0; . /etc/os-release; test "$ID:$VERSION_ID" = debian:13; if test -e /etc/pve || command -v pveversion >/dev/null 2>&1; then exit 1; fi; apt-get update; apt-get install -y ca-certificates curl; f=$(mktemp); trap '\''rm -f -- "$f"'\'' EXIT; curl --disable --fail --silent --show-error --location --proto =https --proto-redir =https "https://github.com/llit47/sitegrid/releases/download/v<VERSION>/sitegrid-install-<VERSION>.sh" -o "$f"; echo "<BOOTSTRAP_SHA256>  $f" | sha256sum --check --status; bash "$f"'
+bash -c 'set -euo pipefail; test "$(id -u)" = 0; . /etc/os-release; test "$ID:$VERSION_ID" = debian:13; apt-get update; apt-get install -y ca-certificates curl; f=$(mktemp); trap '\''rm -f -- "$f"'\'' EXIT; curl --disable --fail --silent --show-error --location --proto =https --proto-redir =https "https://github.com/llit47/sitegrid/releases/download/v<VERSION>/sitegrid-install-<VERSION>.sh" -o "$f"; echo "<BOOTSTRAP_SHA256>  $f" | sha256sum --check --status; bash "$f"'
 ```
 
-Komenda z zaufanej instrukcji przypina bootstrap i sprawdza go przed wykonaniem. Bootstrap weryfikuje podpis manifestu przypiętym kluczem Ed25519 i sumę paczki, instaluje PostgreSQL 17, nginx, runtime Node, SiteGrid/systemd, pyta o origin i sprawdza readiness. Nie tworzy LXC/VM i nie operuje na hoście Proxmoxa. Repo i Releases są publiczne; klient nie potrzebuje poświadczeń GitHub.
+Komenda z zaufanej instrukcji przypina bootstrap i sprawdza go przed wykonaniem. Bootstrap weryfikuje podpis manifestu przypiętym kluczem Ed25519 i sumę paczki, instaluje PostgreSQL 17, nginx, runtime Node, SiteGrid/systemd, pyta o origin i sprawdza readiness. Miejsce instalacji wybiera użytkownik: LXC, VM, bare metal lub host Proxmox VE z Debianem 13. Instalator nie tworzy LXC/VM. Repo i Releases są publiczne; klient nie potrzebuje poświadczeń GitHub.
 
 Po instalacji:
 

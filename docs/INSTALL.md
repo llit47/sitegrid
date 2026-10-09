@@ -1,12 +1,12 @@
 # Instalacja SiteGrid — gotowy Debian 13
 
-SiteGrid działa wyłącznie wewnątrz istniejącego Debiana 13 z systemd (LXC, VM lub fizycznego). Operator przygotowuje system; instalator nie zarządza hostem wirtualizacji. Wymagane root, dostęp HTTPS i do podpisanych repozytoriów Debian, 2 vCPU, 2 GiB RAM i 6 GiB wolnego miejsca w `/opt`; zalecane 4 vCPU/8 GiB/40 GiB.
+SiteGrid działa wyłącznie wewnątrz istniejącego Debiana 13 z systemd (LXC, VM lub fizycznego). Miejsce wybiera użytkownik: LXC, VM, bare metal lub host Proxmox VE z Debianem 13. Instalator nie tworzy maszyn; sprawdza rzeczywiste zależności, porty i istniejące dane. Wymagane root, dostęp HTTPS i do podpisanych repozytoriów Debian, 2 vCPU, 2 GiB RAM i 6 GiB wolnego miejsca w `/opt`; zalecane 4 vCPU/8 GiB/40 GiB.
 
 ## Jedno polecenie
 
 Pierwszy oficjalny Release **nie został opublikowany**. Nie ma jeszcze działającej komendy pobrania oficjalnej wersji. Przygotowany builder generuje pełną jednolinijkową komendę w `artifacts/INSTALL_COMMAND.txt`: przypięta wersja i SHA-256 bootstrapu, bez wykonywania kodu z main. Docelowy wzorzec jest w README; pełna zweryfikowana komenda trafi do instrukcji po zatwierdzeniu Release.
 
-Jako root w gotowym Debianie operator wkleja tę jedną komendę. Runner sprawdza root/OS i odmawia działania na hoście Proxmoxa (katalog /etc/pve lub pveversion) przed APT, instaluje narzędzia pobierania z APT, pobiera wersjonowany bootstrap i porównuje przypiętą sumę **przed wykonaniem**. Bootstrap zawiera kod instalatora i przypięty publiczny klucz; weryfikuje Ed25519 manifestu, wersję, architekturę, daty i SHA-256 pakietu z publicznego GitHub Release. Bez wcześniejszego kopiowania `ops/`, archiwum lub instalowania PostgreSQL/Node. Brak opublikowanego wydania, zły podpis lub checksum kończą operację; bez fallbacku.
+Jako root w gotowym Debianie operator wkleja tę jedną komendę. Runner sprawdza root/OS, instaluje narzędzia pobierania z APT, pobiera wersjonowany bootstrap i porównuje przypiętą sumę **przed wykonaniem**. Bootstrap zawiera kod instalatora i przypięty publiczny klucz; weryfikuje Ed25519 manifestu, wersję, architekturę, daty i SHA-256 pakietu z publicznego GitHub Release. Bez wcześniejszego kopiowania `ops/`, archiwum lub instalowania PostgreSQL/Node. Brak opublikowanego wydania, zły podpis lub checksum kończą operację; bez fallbacku.
 
 Instalator pyta o origin HTTPS oraz potwierdzenie `TAK`; instaluje PostgreSQL 17, nginx, przypięty Node 24, aplikację, konto systemowe i systemd. Kończy readiness właściwej wersji. Następnie lokalnie:
 
