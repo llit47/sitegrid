@@ -13,6 +13,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   if (origin.origin !== (env.PUBLIC_ORIGIN ?? 'http://localhost:5173')) throw new Error('PUBLIC_ORIGIN must be an origin without a path');
   if (production && origin.protocol !== 'https:') throw new Error('Production requires HTTPS PUBLIC_ORIGIN');
   if (!['https:', 'http:'].includes(origin.protocol)) throw new Error('Invalid PUBLIC_ORIGIN');
+  if (production && env.HOST && env.HOST !== '127.0.0.1') throw new Error('Production API must listen on loopback');
   return {
     production, databaseUrl, port, origin: origin.origin,
     host: env.HOST ?? '127.0.0.1',
