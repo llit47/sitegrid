@@ -49,6 +49,17 @@ Początkowa hipoteza zasobów: 4 vCPU, 8 GB RAM, 40 GB systemu plus policzony wo
 
 MVP: kopia PostgreSQL obejmuje także branding i logo. Później spójna kopia DB i plików z manifestem, przy zatrzymaniu zapisów i workera. Proponowane cele RPO 24 h / RTO 4 h wymagają zatwierdzenia i próby odtworzenia do odizolowanego LXC. Snapshot na tym samym hoście nie zastępuje kopii. Monitorować błędy, miejsce, kolejkę serwera i wiek kopii; nie logować payloadów, haseł, tokenów aktywacji ani cookies. Backup serwera nie obejmuje jeszcze niewysłanych zmian urządzenia.
 
+## Instalacja i cykl wydania od pierwszej wersji
+
+SiteGrid wymaga **instalatora one-line, aktualizatora i bezpiecznego rollbacku już w pierwszym działającym przyroście M01**, razem z minimalnym logowaniem administratora platformy. Docelowa pełna obsługa wielu firm pozostaje w kolejnych etapach; nie wolno wystawiać surowego szkieletu lub konta testowego jako działającej instalacji.
+
+- **Jedyna warstwa instalacji — gotowy Debian 13:** operator samodzielnie przygotowuje LXC/VM lub serwer z Debianem 13. Następnie uruchamia w nim jedno polecenie instalatora, który pobiera zaufany, przypięty artefakt, weryfikuje wydawcę i integralność, instaluje zależności/PostgreSQL/nginx/Node runtime/SiteGrid i konfiguruje systemd. Nie zarządzamy hostem Proxmoxa, nie tworzymy CT/VM i nie wymagamy wcześniejszego transferu plików. Prywatne źródło może wymagać bezpiecznego interaktywnego uwierzytelnienia.
+- **Artefakty:** wydania z przypiętą wersją i weryfikacją integralności; pliki programu w `/opt/sitegrid/releases/<wersja>`, atomowo przełączany `/opt/sitegrid/current`; konfiguracja i dane trwałe poza katalogiem wydania. Nie uruchamiać produkcyjnej instalacji z ruchomego HEAD `main`.
+- **Zarządzanie w LXC:** `sitegrid update`, `sitegrid rollback`, `sitegrid status`; blokada równoległych operacji, backup przed migracją, przerwanie przy niezgodności, `systemd`, testy gotowości. Rollback kodu nie może udawać rollbacku PostgreSQL; przy niezgodnym schemacie wymaga kontrolowanego odtworzenia.
+- **Kontrola jakości:** smoke test jednego polecenia instalacji na czystym Debianie 13 (bez wstępnego kopiowania plików), uruchomienia, logowania, ponowienia/przerwania instalacji, aktualizacji, uszkodzonego wydania i zgodnego rollbacku bez utraty danych. Nie wymagamy testowania skryptów `pct`, ponieważ instalator nie dotyka hosta Proxmox. Kolejne migracje i aktualizacje PWA nie mogą gubić niesynchronizowanej kolejki.
+
+Konkretne kryteria zakończenia pierwszego przyrostu określa [ROADMAP.md](ROADMAP.md), sekcja **M01**.
+
 ## Model danych i izolacja
 
 | Encje | Własność / reguła |
