@@ -6,6 +6,9 @@ import type { Config } from '../config.js';
 import { hashPassword, normalizeEmail, verifyPassword } from './password.js';
 import { readSession, type Session } from './session.js';
 import { registerOrganizationRoutes } from '../organization-routes.js';
+import { invitationEmail, registerInvitationRoutes } from '../invitation-routes.js';
+import { createInvitation, deliverInvitation, requireInvitationDelivery } from '../invitations.js';
+import { withTransaction } from '../organization-context.js';
 
 const token = () => randomBytes(32).toString('base64url');
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -28,7 +31,7 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
   const session = (request: FastifyRequest) => readSession(pool, request, config);
   const checkCsrf = (request: FastifyRequest, current?: Session) => {
     const supplied = request.headers['x-csrf-token'];
-    return current && request.headers.origin === config.origin && typeof supplied === 'string'
+    return current !== undefined && request.headers.origin === config.origin && typeof supplied === 'string'
       && /^[A-Za-z0-9_-]{43}$/.test(supplied)
       && timingSafeEqual(Buffer.from(supplied), Buffer.from(current.csrf_token));
   };
@@ -56,6 +59,7 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
     return reply.code(status).send({ error: message });
   });
   registerOrganizationRoutes(app, pool, config);
+  registerInvitationRoutes(app, pool, config, { checkCsrf, reserve });
   app.get('/api/auth/session', async (request, reply) => {
     if (!await reserve(pool, `session:${request.ip}`, 120)) return reply.header('Retry-After', '900').code(429).send({ error: 'Spróbuj ponownie później.' });
     await pool.query('DELETE FROM sessions WHERE token_hash IN (SELECT token_hash FROM sessions WHERE expires_at <= now() LIMIT 1000)');
@@ -113,22 +117,27 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
     if (!current.admin) return reply.code(403).send({ error: 'Brak uprawnień.' });
     if (!checkCsrf(request, current)) return reply.code(403).send({ error: 'Odśwież stronę i spróbuj ponownie.' });
     // Validate raw input: do not coerce types or silently accept extra fields.
-    const body = request.body as { name?: unknown } | null | undefined;
-    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || typeof body.name !== 'string') {
-      return reply.code(400).send({ error: 'Podaj wyłącznie nazwę firmy jako tekst.' });
+    const body = request.body as { name?: unknown; administratorEmail?: unknown } | null | undefined;
+    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !['name', 'administratorEmail'].includes(key)) || typeof body.name !== 'string') {
+      return reply.code(400).send({ error: 'Podaj nazwę firmy i opcjonalny email administratora jako tekst.' });
     }
     const name = body.name.trim();
     if ([...name].length < 1 || [...name].length > 200 || /\p{Cc}/u.test(body.name)) {
       return reply.code(400).send({ error: 'Nazwa firmy musi mieć od 1 do 200 znaków i nie może zawierać znaków sterujących.' });
     }
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    const email = body.administratorEmail === undefined ? undefined : invitationEmail(body.administratorEmail);
+    if (email) requireInvitationDelivery(config);
+    const created = await withTransaction(pool, async client => {
       const { rows } = await client.query('INSERT INTO organizations(name) VALUES ($1) RETURNING id, name, status, created_at AS "createdAt"', [name]);
       await client.query("INSERT INTO platform_audit_events(actor_id, event, organization_id) VALUES ($1, 'organization_created', $2)", [current.user_id, rows[0].id]);
-      await client.query('COMMIT');
-      return reply.code(201).send({ organization: rows[0] });
-    } catch (error) { await client.query('ROLLBACK'); throw error; }
-    finally { client.release(); }
+      let invitation: Awaited<ReturnType<typeof createInvitation>> | undefined;
+      if (email) {
+        await client.query("SELECT set_config('sitegrid.organization_id', $1::uuid::text, true)", [rows[0].id]);
+        invitation = await createInvitation(client, rows[0].id, current.user_id!, email, 'organization_admin', true);
+        await client.query("INSERT INTO platform_audit_events(actor_id, event, organization_id) VALUES ($1, 'invitation_created', $2)", [current.user_id, rows[0].id]);
+      }
+      return { organization: rows[0], invitation };
+    });
+    return reply.code(201).send({ organization: created.organization, ...(created.invitation ? await deliverInvitation(config, created.invitation) : {}) });
   });
 }

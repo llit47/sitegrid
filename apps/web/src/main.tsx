@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
 import { OrganizationSwitcher } from './organization-switcher.js';
+import { InvitationAcceptance, InvitationDelivery, InvitationManager, type InvitationDeliveryResult } from './invitations.js';
 
 type Session = { csrfToken: string; user: { email: string; platformAdmin: boolean } | null };
 type Overview = { email: string; installedAt: string; status: string };
@@ -16,6 +17,8 @@ function Organizations({ csrfToken }: { csrfToken: string }) {
   const [organizations, setOrganizations] = useState<Organization[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [invitationCompany, setInvitationCompany] = useState('');
+  const [delivery, setDelivery] = useState<InvitationDeliveryResult | null>(null);
   const load = async () => {
     setError(''); setBusy(true);
     try { setOrganizations((await api<{ organizations: Organization[] }>('/api/admin/organizations')).organizations); }
@@ -28,12 +31,14 @@ function Organizations({ csrfToken }: { csrfToken: string }) {
     if (busy || !organizations) return;
     const form = event.currentTarget;
     const name = new FormData(form).get('name');
-    setBusy(true); setError('');
+    const administratorEmail = new FormData(form).get('administratorEmail');
+    setBusy(true); setError(''); setDelivery(null);
     try {
-      const created = await api<{ organization: Organization }>('/api/admin/organizations', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ name }),
+      const created = await api<{ organization: Organization } & InvitationDeliveryResult>('/api/admin/organizations', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ name, administratorEmail }),
       });
       setOrganizations(current => [created.organization, ...(current ?? [])]);
+      setDelivery(created);
       form.reset();
     } catch (e) { setError(e instanceof Error ? e.message : 'Błąd połączenia.'); }
     finally { setBusy(false); }
@@ -42,13 +47,18 @@ function Organizations({ csrfToken }: { csrfToken: string }) {
     {error && <div className="error" role="alert">{error} {!organizations && <button className="secondary" onClick={() => void load()} disabled={busy}>Ponów połączenie</button>}</div>}
     {!organizations && !error && <p role="status">Ładowanie firm…</p>}
     {organizations && (organizations.length === 0 ? <p role="status">Nie dodano jeszcze żadnej firmy.</p> : <div className="table-scroll"><table>
-      <thead><tr><th scope="col">Nazwa</th><th scope="col">Status</th><th scope="col">Utworzona</th></tr></thead>
-      <tbody>{organizations.map(organization => <tr key={organization.id}><td>{organization.name}</td><td>{organization.status === 'active' ? 'Aktywna' : 'Nieaktywna'}</td><td>{new Date(organization.createdAt).toLocaleDateString('pl-PL')}</td></tr>)}</tbody>
+      <thead><tr><th scope="col">Nazwa</th><th scope="col">Status</th><th scope="col">Utworzona</th><th scope="col">Aktywacja</th></tr></thead>
+      <tbody>{organizations.map(organization => <tr key={organization.id}><td>{organization.name}</td><td>{organization.status === 'active' ? 'Aktywna' : 'Nieaktywna'}</td><td>{new Date(organization.createdAt).toLocaleDateString('pl-PL')}</td><td>{organization.status === 'active' && <button className="secondary" onClick={() => { setDelivery(null); setInvitationCompany(organization.id); }}>Pierwszy administrator</button>}</td></tr>)}</tbody>
     </table></div>)}
     <form className="organization-form" onSubmit={event => void create(event)}><h3>Dodaj firmę</h3>
       <label htmlFor="organization-name">Nazwa firmy</label><input id="organization-name" name="name" type="text" maxLength={200} required disabled={busy || !organizations} />
+      <label htmlFor="administrator-email">Email pierwszego administratora</label><input id="administrator-email" name="administratorEmail" type="email" maxLength={254} required disabled={busy || !organizations} />
       <button type="submit" disabled={busy || !organizations}>{busy && organizations ? 'Zapisywanie…' : 'Dodaj firmę'}</button>
     </form>
+    <InvitationDelivery result={delivery} />
+    {invitationCompany && <><h3>{organizations?.find(organization => organization.id === invitationCompany)?.name}</h3>
+      <InvitationManager key={invitationCompany} organizationId={invitationCompany} csrfToken={csrfToken} platform />
+      <button className="secondary" onClick={() => setInvitationCompany('')}>Zamknij zaproszenia</button></>}
   </section>;
 }
 function App() {
@@ -56,6 +66,14 @@ function App() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [workspaceRevision, setWorkspaceRevision] = useState(0);
+  const [invitationToken] = useState(() => {
+    if (window.location.pathname !== '/invitations/accept') return '';
+    const value = window.location.hash.slice(1);
+    // Keep the bearer token only in memory; remove it from the visible URL/history.
+    window.history.replaceState(null, '', window.location.pathname);
+    return value;
+  });
   const load = async () => {
     const next = await api<Session>('/api/auth/session');
     setSession(next);
@@ -87,12 +105,14 @@ function App() {
     finally { setBusy(false); }
   };
   return <main className="shell"><header className="brand"><span className="brand-mark" aria-hidden="true">S</span> SiteGrid</header>
+    {session && window.location.pathname === '/invitations/accept' && <InvitationAcceptance token={invitationToken} csrfToken={session.csrfToken} user={session.user}
+      onAccepted={async () => { await load(); setWorkspaceRevision(current => current + 1); }} />}
     {session?.user ? <section className="dashboard">
       <div className="dashboard-heading"><div><p className="eyebrow">{session.user.platformAdmin ? 'ADMINISTRACJA PLATFORMY' : 'TWOJE MIEJSCE PRACY'}</p><h1>Witaj w SiteGrid.</h1><p className="account">{session.user.email}</p></div><button className="secondary" onClick={() => void logout()} disabled={busy}>Wyloguj się</button></div>
       {overview ? <div className="tiles"><article className="tile"><span className="indicator" /> <h2>Instalacja jest gotowa</h2><p>Masz dostęp do panelu administratora platformy.</p><dl><dt>Utworzona</dt><dd>{new Date(overview.installedAt).toLocaleDateString('pl-PL')}</dd><dt>Konto</dt><dd>Administrator platformy</dd></dl></article>
         <article className="tile"><h2>Twoja platforma</h2><p>Zarządzaj firmami w sekcji poniżej.</p></article></div> : null}
       {session.user.platformAdmin && <Organizations csrfToken={session.csrfToken} />}
-      <OrganizationSwitcher key={session.user.email} />
+      <OrganizationSwitcher key={`${session.user.email}:${workspaceRevision}`} csrfToken={session.csrfToken} />
     </section> : <section className="card"><p className="eyebrow">TWOJE MIEJSCE PRACY</p><h1>Zaloguj się.</h1><p>Otwórz panel swojej instalacji SiteGrid.</p>
       <form onSubmit={event => void login(event)}><label htmlFor="email">Email</label><input id="email" name="email" type="email" autoComplete="username" maxLength={254} required disabled={busy} />
         <label htmlFor="password">Hasło</label><input id="password" name="password" type="password" autoComplete="current-password" maxLength={128} required disabled={busy} />

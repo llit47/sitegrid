@@ -25,6 +25,7 @@ Tryb manualny update nadal działa z `--bundle`, `--version` i `--sha256`. Rollb
 
 - [Architektura](docs/audit/ARCHITECTURE.md) i [roadmapa](docs/audit/ROADMAP.md)
 - [Uprawnienia](docs/audit/PERMISSIONS.md), [logowanie](docs/AUTH.md), [development](docs/DEVELOPMENT.md)
+- [Zaproszenia email i aktywacja administratora firmy](docs/INVITATIONS.md)
 - [Rekomendacje](docs/audit/IMPROVEMENTS.md)
 
 HERC pozostaje osobną aplikacją referencyjną: [audyt funkcjonalny](docs/audit/FUNCTIONALITY.md) i [ocena UX](docs/audit/UX_REVIEW.md).

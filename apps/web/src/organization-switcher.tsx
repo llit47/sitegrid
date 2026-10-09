@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { InvitationManager } from './invitations.js';
 
 type Organization = { id: string; name: string; roles: string[] };
 const roleNames: Record<string, string> = {
@@ -11,7 +12,7 @@ async function read<T>(path: string, signal: AbortSignal): Promise<T> {
   return data;
 }
 
-export function OrganizationSwitcher() {
+export function OrganizationSwitcher({ csrfToken }: { csrfToken: string }) {
   const [organizations, setOrganizations] = useState<Organization[] | null>(null);
   // Selection lives only in this mounted tab; it is never stored in the session or browser storage.
   const [selectedId, setSelectedId] = useState('');
@@ -52,7 +53,8 @@ export function OrganizationSwitcher() {
       </select>
       {selectedId && !context && !contextError && <p role="status">Ładowanie kontekstu firmy…</p>}
       {context?.id === selectedId && <div aria-live="polite"><h3>{context.name}</h3>
-        <p>Twoje role: {context.roles.length ? context.roles.map(role => roleNames[role] ?? role).join(', ') : 'Brak przypisanych ról'}</p></div>}
+        <p>Twoje role: {context.roles.length ? context.roles.map(role => roleNames[role] ?? role).join(', ') : 'Brak przypisanych ról'}</p>
+        {context.roles.includes('organization_admin') && <InvitationManager key={context.id} organizationId={context.id} csrfToken={csrfToken} />}</div>}
       {contextError && <p className="error" role="alert">{contextError}</p>}
     </>)}
     <button className="secondary" onClick={refresh}>Odśwież dostępne firmy</button>
