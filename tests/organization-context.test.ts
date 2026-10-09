@@ -8,7 +8,7 @@ import pg from 'pg';
 import { readConfig } from '../apps/server/src/config.js';
 import { createPool } from '../apps/server/src/db.js';
 import { buildApp } from '../apps/server/src/app.js';
-import { migrate } from '../apps/server/src/migrations.js';
+import { migrate, migrationFiles } from '../apps/server/src/migrations.js';
 import { bootstrapAdmin } from '../apps/server/src/auth/bootstrap.js';
 import { withAuthorizedOrganization } from '../apps/server/src/organization-access.js';
 import { withTransaction } from '../apps/server/src/organization-context.js';
@@ -54,7 +54,7 @@ test('session-authorized organization API and discovery RLS on PostgreSQL 17', {
     }));
   await admin.query(`CREATE SCHEMA ${schema}`);
   try {
-    await t.test('migration 4 to 5 preserves accounts, memberships, roles and sessions; repeatable', async () => {
+    await t.test('migration 4 to current preserves accounts, memberships, roles and sessions; repeatable', async () => {
       const previous = await mkdtemp(join(tmpdir(), 'sitegrid-m03-migrations-'));
       try {
         for (const name of ['001_installation.sql', '002_auth.sql', '003_organizations.sql', '004_memberships_roles.sql']) {
@@ -87,8 +87,9 @@ test('session-authorized organization API and discovery RLS on PostgreSQL 17', {
           [randomBytes(32).toString('hex'), user.shared, randomBytes(32).toString('base64url')]);
         const tables = ['users', 'credentials', 'platform_admins', 'sessions', 'organizations', 'organization_memberships', 'membership_roles'];
         const before = await Promise.all(tables.map(table => owner.query(`SELECT * FROM ${table} ORDER BY to_jsonb(${table})::text`)));
-        assert.equal(await migrate(owner, 'migrations'), 5);
-        assert.equal(await migrate(owner, 'migrations'), 5);
+        const version = (await migrationFiles('migrations')).length;
+        assert.equal(await migrate(owner, 'migrations'), version);
+        assert.equal(await migrate(owner, 'migrations'), version);
         for (const [i, table] of tables.entries()) assert.deepEqual((await owner.query(`SELECT * FROM ${table} ORDER BY to_jsonb(${table})::text`)).rows, before[i].rows);
       } finally { await rm(previous, { recursive: true, force: true }); }
     });

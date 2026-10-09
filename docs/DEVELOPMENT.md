@@ -12,11 +12,11 @@ npm run dev:web
 
 Frontend: http://localhost:5173. Produkcja: `npm run build`, `NODE_ENV=production`, `DATABASE_URL`, `PUBLIC_ORIGIN=https://twoja-domena`, `npm start` w katalogu wydania. API domyślnie słucha wyłącznie na loopback; reverse proxy dostarcza HTTPS i frontend z tego samego origin.
 
-`npm run check` sprawdza typy, build i testy. Testy integracyjne wymagają `TEST_DATABASE_URL` do **osobnej syntetycznej bazy**; bez niej są jawnie pominięte. CI uruchamia prawdziwy PostgreSQL 17 w izolowanej usłudze runnera (Docker nie jest zależnością instalacji SiteGrid). M02A obejmuje tworzenie/odczyt firm, walidację, sesje i uprawnienia, CSRF/Origin oraz atomowy audyt; `node --import tsx --test tests/organizations.test.ts` uruchamia ten zestaw osobno.
+`npm run check` sprawdza typy, compiler lint, build i testy. Testy integracyjne wymagają `TEST_DATABASE_URL` do **osobnej syntetycznej bazy**; bez niej są jawnie pominięte. CI uruchamia prawdziwy PostgreSQL 17 w izolowanej usłudze runnera (Docker nie jest zależnością instalacji SiteGrid). M02A obejmuje tworzenie/odczyt firm, walidację, sesje i uprawnienia, CSRF/Origin oraz atomowy audyt; `node --import tsx --test tests/organizations.test.ts` uruchamia ten zestaw osobno.
 
 Migracje: kolejne `migrations/NNN_nazwa.sql`; suma SHA-256 każdej zapisanej migracji jest weryfikowana. Nie edytuj zastosowanych migracji. Zmiany wykonuje CLI w pojedynczej transakcji, z blokadą PostgreSQL. Serwer nie uruchamia migracji przy starcie i odmawia readiness przy niezgodnym schemacie.
 
-M02A dodaje `003_organizations.sql`, M02B `004_memberships_roles.sql`, a M03 `005_organization_access.sql`; kontrakt `release.json` wymaga schematu 5 i dopuszcza migrację ze schematów 0–5. Testy integracyjne sprawdzają przejście ze schematów 2, 3 i 4 z zachowaniem kont, firm, członkostw i ról oraz powtórzenie migracji.
+M02A dodaje `003_organizations.sql`, M02B `004_memberships_roles.sql`, M03 `005_organization_access.sql`, a PR9 `006_invitations.sql`; kontrakt `release.json` wymaga schematu 6 i dopuszcza migrację ze schematów 0–6. Testy integracyjne sprawdzają przejście ze schematów 2, 3, 4 i 5 z zachowaniem kont, firm, członkostw i ról oraz powtórzenie migracji.
 
 Migracja przyznaje istniejącej roli runtime `sitegrid` odczyt/tworzenie firm i zapis audytu. Test z kontem PostgreSQL superuser sprawdza API z tą rolą; w razie jej braku tworzy tymczasową rolę `NOLOGIN` i usuwa ją po teście. Przy mniej uprzywilejowanej bazie tylko ten dodatkowy scenariusz jest pomijany.
 
@@ -35,3 +35,5 @@ node --import tsx --test tests/memberships.test.ts
 ```
 
 M03 używa tych samych dwóch połączeń testowych; `node --import tsx --test tests/organization-context.test.ts` uruchamia testy API, autoryzacji i polityk listowania firm. Zestaw wymaga rzeczywistego runtime URL i jest automatycznie objęty `npm run check` w CI. [Kontrakt M03](ORGANIZATION_CONTEXT.md).
+
+PR9: [zaproszenia email, SMTP i aktywacja administratora firmy](INVITATIONS.md). Testy korzystają z tych samych dwóch połączeń PostgreSQL i są objęte `npm run check`.
