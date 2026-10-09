@@ -4,13 +4,21 @@ Branch: `feat/m01-working-foundation`, historyczna baza `59b2fb2`.
 Audyt odzyskiwania 2026-10-09: wykonano `git fetch origin`; zatwierdzone wymagania odczytano z `origin/main` = `2a298b5` (PR #4), pliki `docs/audit/ROADMAP.md` i `docs/audit/ARCHITECTURE.md`. Bez pull/reset/clean/rebase/merge.
 Commity implementacji: CP1 `7ccb040`, CP2 `6c79ed2`, CP3 `3ccd481`, CP4 `3c2d298`, CP5 `17e9d0c`; wszystkie wypchnięte na istniejącym branchu.
 
+## Aktualna decyzja produktowa — 2026-10-09
+
+**SiteGrid instalujemy TYLKO w istniejącym Debianie 13** (LXC/VM/fizyczny). Operator sam przygotowuje kontener/VM i wkleja **jedno polecenie do powłoki Debiana**. Instalator ma pobrać zweryfikowane wydanie i zainstalować samodzielnie PostgreSQL, nginx, runtime, aplikację i systemd. `ops/install-proxmox.py` usunięto; tworzenie LXC, polecenia `pct/pveam` i testy PVE nie są wymagane.
+
+**Pozostałe wymagania do odbioru M01:** (1) prawdziwy zaufany bootstrap one-line bez wcześniejszego przesyłania artefaktu/ops; (2) uproszczone `sitegrid update` bez wymagania ręcznych flag, z bezpiecznym skonfigurowanym kanałem wydań; (3) regresja P2 po przerwaniu między `STATE.mkdir()` a `write_json(marker)`. Obecne testy dotyczą dotychczasowego instalatora z ręcznym artefaktem, nie potwierdzają docelowego jednolinijkowca. **Nie deklarować, że cel jest już spełniony.** Prywatne GitHub Releases są rekomendacją, nie zatwierdzonym jeszcze wyborem kanału.
+
+Dalsze wzmianki poniżej o testach Proxmoxa i hostowym skrypcie dokumentują **historyczny, anulowany zakres** sprzed powyższej decyzji; nie są już zadaniami ani blockerami projektu.
+
 | Checkpoint | Status |
 |---|---|
 | CP1 — fundament aplikacji | DONE |
 | CP2 — prawdziwe uwierzytelnianie | DONE |
-| CP3 — instalatory | KOD DONE; Debian 13/systemd PASS; Proxmox NIEZWERYFIKOWANY |
+| CP3 — instalator Debiana | Ręczny tryb Debian 13/systemd PASS; docelowy bootstrap one-line W TOKU; skrypt hosta Proxmox usunięty |
 | CP4 — updater i rollback | DONE; testy awarii + realny update/backup/rollback PASS |
-| CP5 — integracja | PASS wszystkich dostępnych testów; Proxmox NIEZWERYFIKOWANY |
+| CP5 — integracja | PASS wcześniejszych testów Debian 13 i przeglądarki; nowy docelowy one-line Debian wymaga testu |
 
 ## PR #5 — naprawa retry i decyzja o kanale wydań
 
@@ -82,13 +90,13 @@ Globalne konta i credentials, Argon2id (64 MiB/3/1), sesje PostgreSQL z hashem i
 - Rzeczywiste CLI przez PTY: pierwsze utworzenie konta PASS, ponowienie odrzucone, hasło niewyświetlane; uruchomienie bez lokalnego terminala odrzucone.
 - CP2 `npm audit --omit=dev`: **0 podatności**. CI CP2 SUCCESS: `37936233716`; statusu CP2: `37936315231`.
 
-## Niezweryfikowane i blokery
+## Historyczne: niezweryfikowane i blokery (zastąpione bieżącą decyzją powyżej)
 
 **Otwarte P1 PR #5: prosty update i prawdziwy bootstrap one-line bez ręcznego transferu ops/archiwum.** Potrzebna decyzja o kanale dystrybucji i korzeniu zaufania; propozycja powyżej i w INSTALL.md. Obecny update działa wyłącznie w trybie manualnym. P1 retry jest poprawiony i objęty nową regresją, nie jest już otwartym defektem z opisu PR.
 
 Ponadto brak rzeczywistego testu instalatora hostowego na odizolowanym Proxmox VE 9. Dotychczasowe wyniki CP1–CP5 pozostają historycznym zapisem dostępnej walidacji, nie potwierdzają pełnej bramki M01 ani nowego bootstrapu. Nowy test przerwania używa kontrolowanych atrap APT/systemd. Nie ma zatwierdzonego testowego hosta; nie wykonywano pct ani zmian istniejących CT.
 
-## Dokładny następny krok
+## Historyczne: następny krok sprzed zmiany zakresu (już NIE wykonywać)
 
 Uzyskać decyzję użytkownika: prywatne GitHub Releases llit47/sitegrid (rekomendowane) czy wskazany serwer HTTPS. Po wyborze ustalić miejsce publikacji i przypięty klucz weryfikacyjny; dopiero wtedy zaimplementować czytanie podpisanego manifestu przez sitegrid update, bezpieczny transport/autoryzację, konfigurację w LXC i zweryfikowany downloader bootstrapu Proxmoxa. Zachować tryb manualny, blokować brak konfiguracji/przeterminowany lub stary manifest i niezgodny artefakt przed zmianami.
 
