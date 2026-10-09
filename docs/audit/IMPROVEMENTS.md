@@ -1,4 +1,4 @@
-# Własna aplikacja — ulepszenia i priorytety
+# SiteGrid — ulepszenia i priorytety
 
 > Aktualizacja zakresu produktu (PR #2): poniższy backlog pozostaje zapisem rekomendacji po audycie. Obowiązujący projekt MVP i kolejność prac określają [ARCHITECTURE.md](ARCHITECTURE.md) oraz [ROADMAP.md](ROADMAP.md): offline-first jest warunkiem pierwszego pilotażu, a osobna aplikacja natywna jest poza zakresem produktu.
 
