@@ -47,14 +47,15 @@ test('platform administrator organization management on PostgreSQL', { skip: !pr
       await adminPool.query('CREATE ROLE sitegrid NOLOGIN');
       createdRuntimeRole = true;
     }
-    await t.test('schema 2 upgrades to 3 without losing accounts; migration is repeatable', async () => {
+    await t.test('schema 2 upgrades without losing accounts; migration is repeatable', async () => {
       const previous = await mkdtemp(join(tmpdir(), 'sitegrid-migrations-'));
       try {
         for (const name of ['001_installation.sql', '002_auth.sql']) await copyFile(join(config.migrationsRoot, name), join(previous, name));
         assert.equal(await migrate(pool, previous), 2);
         await bootstrapAdmin(pool, 'admin@example.test', password);
-        assert.equal(await migrate(pool, config.migrationsRoot), 3);
-        assert.equal(await migrate(pool, config.migrationsRoot), 3);
+        const version = (await migrationFiles(config.migrationsRoot)).length;
+        assert.equal(await migrate(pool, config.migrationsRoot), version);
+        assert.equal(await migrate(pool, config.migrationsRoot), version);
         assert.equal((await pool.query('SELECT count(*) FROM users')).rows[0].count, '1');
       } finally { await rm(previous, { recursive: true, force: true }); }
     });
