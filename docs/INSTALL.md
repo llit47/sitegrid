@@ -65,7 +65,25 @@ Przy błędzie nowy CT pozostaje do inspekcji; skrypt niczego nie kasuje i odrzu
 
 Ponowienie tego samego instalatora weryfikuje sumę i zachowuje bazę/config. Po ukończeniu sprawdza aktywne wydanie/readiness bez ponownej instalacji. Przerwany etap można kontynuować tym samym wydaniem; pozostałe `.incoming`, `.next` lub `.tmp` powodują bezpieczne zatrzymanie do inspekcji operatora. Instalator nie usuwa takich plików w ciemno. Inna wersja wymaga aktualizatora, nie uruchomienia instalatora na istniejących danych.
 
+Przed `apt-get` instalator zapisuje trwałą fazę `dependencies`, po kontroli świeżego systemu, integralności artefaktu i potwierdzeniu operatora. Po przerwaniu tuż po instalacji nginx ten sam artefakt może wznowić instalację. Ta faza pozwala wyłącznie na stockową konfigurację nginx i jego listenery 80/443; nadal odrzuca obce pliki/konto SiteGrid, zmienioną konfigurację/proxy i inne procesy na zajętych portach. Dopiero po sprawdzeniu braku bazy i roli SiteGrid zapisuje `started` i rozpoczyna provisioning. Istniejący nginx bez takiej rezerwacji pozostaje odrzucany.
+
 Alternatywa: `--bundle https://zaufany-serwer/wydania/0.1.0/sitegrid.tar.gz`, zawsze z przypiętym `--version` i niezależnie zaufanym `--sha256`. Prywatny serwer może użyć `--curl-config /root/artifact-curl.conf` (root/0600, autoryzacja w pliku). Nie podawaj tokenów w URL, argumentach, historii powłoki ani logach. Transport nie podąża za przekierowaniami i nie wymaga publicznego GitHuba.
+
+## Prosty update i bootstrap Proxmoxa — decyzja o kanale
+
+**Stan: projekt do zatwierdzenia; automatyczne źródło nie jest zaimplementowane ani skonfigurowane.** Obecnie działa tryb manualny z trzema flagami. PR #5 pozostaje zablokowany przez brak kanału i pierwszego bootstrapu bez transferu plików.
+
+Rekomendowany wybór: **prywatne GitHub Releases w llit47/sitegrid**, bez nowego serwera artefaktów. Alternatywa: wskazany przez operatora dedykowany serwer HTTPS. Dla GitHuba token wyłącznie do odczytu Contents tego repo trafia przez niewidoczne pytanie do chronionego pliku root/0600; wartość nigdy do argv, URL, historii, środowiska procesów ani logów. Oddzielny prywatny klucz podpisujący wydania pozostaje po stronie wydawcy/CI, a publiczny klucz weryfikacyjny jest przypięty przy bootstrapie. Wybór kanału, punktu publikacji i klucza zaufania wymaga decyzji przed implementacją automatycznego pobierania.
+
+Kontrakt po zatwierdzeniu: `sitegrid update` czyta źródło, kanał, klucz i ścieżkę autoryzacji z rootowej konfiguracji. Pobiera podpisany manifest kanału (np. stable), sprawdza podpis, termin ważności i rosnący numer publikacji. Manifest wskazuje konkretną wersję, identyfikator wydania/artefaktu, architekturę i SHA-256. Dopiero wtedy aktualizator przekazuje przypięty artefakt do obecnego mechanizmu backup/migracje/readiness. Bez konfiguracji, poprawnego podpisu lub pasującego artefaktu kończy działanie przed zmianami. Automatyczny kanał odrzuca downgrade i odtworzenie starego manifestu; jawny tryb manualny pozostaje. Weryfikacja podpisanego manifestu zastępuje ręczne wpisywanie trzech flag; ruchome latest/main nie stanowią źródła zaufania. Transport musi ograniczać przekierowania i nie przekazywać autoryzacji innemu hostowi; obecny `download()` sam tego kanału GitHub nie implementuje.
+
+Do prawdziwego jednego polecenia na świeżym Proxmoxie potrzebne są jeszcze:
+
+1. Opublikowany bootstrap przypięty do wersji i SHA-256 oraz wydanie z podpisanym manifestem. Pierwszy downloader musi pobrać, zweryfikować i dopiero wykonać bootstrap; zawartość ops już znajduje się w pełnym artefakcie.
+2. Interaktywne uwierzytelnienie do prywatnego kanału bez sekretów w poleceniu/logach oraz bezpieczne przekazanie konfiguracji aktualizacji do nowego LXC. Brak tokena/źródła ma zatrzymać instalację, nie przełączać jej na publiczny main.
+3. Obsługa zależności świeżego hosta oraz automatyczne pobranie dokładnie wybranego oficjalnego szablonu Debian 13 przez pveam po walidacji storage i potwierdzeniu. Obecny skrypt wymaga wcześniej pobranego szablonu.
+4. Podłączenie zweryfikowanego artefaktu do istniejącego tworzenia nowego nieuprzywilejowanego CT, z zachowaniem kontroli ID/storage/sieci/zasobów i odmowy nadpisania.
+5. Rzeczywisty test na odizolowanym PVE 9 bez wcześniejszego transferu ops/archiwum, wraz z brakiem autoryzacji, uszkodzonym pobraniem, zajętym ID i przerwaniem. Dotychczasowe testy Debiana i mocki nie potwierdzają tej bramki.
 
 ## Powtarzalny test instalacji
 

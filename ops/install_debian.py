@@ -13,7 +13,7 @@ from release import SiteGridError, require, command, download, extract_release, 
 from system import ROOT, CONFIG, STATE, RUNTIME_DB_URL, lock, write_json, sql, app_cli, grant_runtime, health
 
 
-def preflight(managed):
+def preflight(managed, dependencies=False):
     release = dict(line.strip().split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
     require(release.get('ID', '').strip('"') == 'debian' and release.get('VERSION_ID', '').strip('"') == '13', 'Wymagany Debian 13.')
     require(Path('/run/systemd/system').is_dir(), 'Wymagany uruchomiony systemd (PID 1).')
@@ -28,7 +28,7 @@ def preflight(managed):
         require(shutil.which(executable), f'Brak zależności: {executable}.')
     for path in (ROOT, CONFIG, STATE):
         require(not path.is_symlink(), f'Zabroniony symlink: {path}.')
-        require(managed or not path.exists(), f'Istniejący {path}; odmowa nadpisania danych bez znacznika instalacji.')
+        require(managed or (dependencies and path == STATE) or not path.exists(), f'Istniejący {path}; odmowa nadpisania danych bez znacznika instalacji.')
     if not managed:
         for path in ('/usr/local/bin/sitegrid', '/usr/local/lib/sitegrid', '/etc/systemd/system/sitegrid.service', '/etc/systemd/system/sitegrid-proxy.service'):
             require(not Path(path).exists(), f'Istnieje niezarządzany plik {path}.')
@@ -37,9 +37,28 @@ def preflight(managed):
             raise SiteGridError('Istnieje niezarządzany użytkownik sitegrid.')
         except KeyError:
             pass
-        require(not shutil.which('nginx'), 'Istniejąca instalacja nginx; użyj dedykowanego kontenera Debian 13.')
-        listeners = command(['ss', '-H', '-ltn'])
-        require(not any(re.search(r':(?:80|443|3000)\s', line) for line in listeners.splitlines()), 'Port 80, 443 lub 3000 jest zajęty.')
+        if dependencies and shutil.which('nginx'):
+            require(not Path('/etc/nginx').is_symlink(), 'Obca konfiguracja nginx; odmowa przejęcia.')
+            require(not command(['dpkg', '--verify', 'nginx-common']), 'Konfiguracja nginx została zmieniona; odmowa przejęcia obcej instalacji.')
+            for directory, allowed in (('conf.d', set()), ('sites-available', {'default'}), ('sites-enabled', {'default'})):
+                path = Path('/etc/nginx') / directory
+                require(not path.is_symlink(), 'Obca konfiguracja nginx; odmowa przejęcia.')
+                require(not path.exists() or {p.name for p in path.iterdir()} <= allowed, 'Obca konfiguracja nginx; odmowa przejęcia.')
+            enabled = Path('/etc/nginx/sites-enabled/default')
+            available = Path('/etc/nginx/sites-available/default')
+            require(not available.is_symlink() and (not enabled.exists() and not enabled.is_symlink() or
+                    enabled.is_symlink() and enabled.resolve() == available), 'Obca konfiguracja nginx; odmowa przejęcia.')
+            for path in ('/etc/systemd/system/nginx.service', '/etc/systemd/system/nginx.service.d'):
+                require(not Path(path).exists(), 'Obca jednostka nginx; odmowa przejęcia.')
+        else:
+            require(not shutil.which('nginx') and not Path('/etc/nginx').exists(), 'Istniejąca instalacja nginx; użyj dedykowanego kontenera Debian 13.')
+        listeners = command(['ss', '-H', '-ltnp'])
+        for line in listeners.splitlines():
+            port = re.search(r':(80|443|3000)\s', line)
+            if port:
+                owners = re.findall(r'\("([^"]+)"', line)
+                require(dependencies and port[1] in ('80', '443') and owners and all(owner == 'nginx' for owner in owners),
+                        'Port 80, 443 lub 3000 jest zajęty przez obcy proces.')
 
 
 def origin_prompt():
@@ -105,11 +124,13 @@ http {
 def install(args):
     with lock():
         marker = STATE / 'installation.json'
-        managed = marker.is_file() and not marker.is_symlink()
-        preflight(managed)
-        previous = json.loads(marker.read_text()) if managed else None
+        previous = json.loads(marker.read_text()) if marker.is_file() and not marker.is_symlink() else None
         if previous:
             require(previous.get('version') == args.version and previous.get('sha256') == args.sha256, 'Ponowienie wymaga tego samego przypiętego artefaktu; inne wydanie dostarcza sitegrid update.')
+            require(previous.get('phase') in ('dependencies', 'started', 'done'), 'Nieznana faza instalacji; wymagana inspekcja stanu.')
+        dependencies = bool(previous and previous['phase'] == 'dependencies')
+        managed = bool(previous and not dependencies)
+        preflight(managed, dependencies)
         print('Weryfikacja przypiętego wydania…')
         with tempfile.TemporaryDirectory(prefix='sitegrid-install-') as temporary:
             archive = Path(temporary) / 'release.tar.gz'
@@ -124,16 +145,26 @@ def install(args):
             origin = previous['origin'] if previous else (args.origin or origin_prompt())
             require(re.fullmatch(r'https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?', origin), 'Nieprawidłowy origin HTTPS.')
             require(args.yes or input(f'Zainstalować {args.version} na tym Debianie ({origin})? Wpisz TAK: ').strip() == 'TAK', 'Instalacja anulowana.')
+            # Reserve the verified, confirmed installation before apt can leave
+            # nginx behind. This phase does not claim any SiteGrid DB or role.
+            state = previous or {'version': args.version, 'sha256': args.sha256, 'origin': origin, 'phase': 'dependencies'}
+            if not previous:
+                STATE.mkdir(mode=0o700)
+                descriptor = os.open(STATE.parent, os.O_DIRECTORY)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+                write_json(marker, state)
             print('Instalacja zależności Debian 13…')
             command(['apt-get', 'update'])
             command(['apt-get', 'install', '-y', 'ca-certificates', 'curl', 'postgresql-17', 'postgresql-client-17', 'nginx-light', 'openssl', 'util-linux'], env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'})
             command(['systemctl', 'enable', '--now', 'postgresql.service'])
-            state = previous or {'version': args.version, 'sha256': args.sha256, 'origin': origin, 'phase': 'started'}
             if not managed:
                 # Before claiming a DB/role, refuse any existing data with these names.
                 require(sql("SELECT count(*) FROM pg_database WHERE datname = 'sitegrid';", 'postgres') == '0', 'Baza sitegrid już istnieje; nie zostanie nadpisana.')
                 require(sql("SELECT count(*) FROM pg_roles WHERE rolname = 'sitegrid';", 'postgres') == '0', 'Rola sitegrid już istnieje; nie zostanie przejęta.')
-                STATE.mkdir(mode=0o700, exist_ok=True)
+                state['phase'] = 'started'
                 write_json(marker, state)
             command(['systemctl', 'disable', '--now', 'nginx.service'])
             try: pwd.getpwnam('sitegrid')
