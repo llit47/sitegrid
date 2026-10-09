@@ -25,6 +25,7 @@ test('platform administrator organization management on PostgreSQL', { skip: !pr
   const config = readConfig({ NODE_ENV: 'test', DATABASE_URL: url.href });
   const pool = createPool(config.databaseUrl);
   const app = await buildApp(config, pool);
+  let createdRuntimeRole = false;
   const endpoint = '/api/admin/organizations';
   const password = randomBytes(24).toString('base64url');
   const rowCount = async () => Number((await pool.query('SELECT count(*) FROM organizations')).rows[0].count);
@@ -41,6 +42,11 @@ test('platform administrator organization management on PostgreSQL', { skip: !pr
     return { cookie, origin: config.origin, 'x-csrf-token': session.json().csrfToken };
   };
   try {
+    const role = (await adminPool.query("SELECT rolsuper, EXISTS(SELECT 1 FROM pg_roles WHERE rolname = 'sitegrid') AS runtime_exists FROM pg_roles WHERE rolname = current_user")).rows[0];
+    if (role.rolsuper && !role.runtime_exists) {
+      await adminPool.query('CREATE ROLE sitegrid NOLOGIN');
+      createdRuntimeRole = true;
+    }
     await t.test('schema 2 upgrades to 3 without losing accounts; migration is repeatable', async () => {
       const previous = await mkdtemp(join(tmpdir(), 'sitegrid-migrations-'));
       try {
@@ -81,6 +87,30 @@ test('platform administrator organization management on PostgreSQL', { skip: !pr
       assert.equal((await pool.query('SELECT name FROM organizations WHERE id = $1', [organization.id])).rows[0].name, organization.name);
       assert.deepEqual((await pool.query('SELECT actor_id, event, organization_id FROM platform_audit_events WHERE organization_id = $1', [organization.id])).rows,
         [{ actor_id: actorId, event: 'organization_created', organization_id: organization.id }]);
+    });
+    await t.test('runtime role can list/create with the migration grants', { skip: !role.rolsuper }, async () => {
+      // Session lookup grants already provided by the installer, confined to this test schema.
+      await pool.query(`GRANT USAGE ON SCHEMA ${schema} TO sitegrid`);
+      await pool.query('GRANT SELECT ON sessions, users, platform_admins TO sitegrid');
+      const runtimeUrl = new URL(config.databaseUrl);
+      runtimeUrl.searchParams.set('options', `-c search_path=${schema} -c role=sitegrid`);
+      const runtimePool = createPool(runtimeUrl.href);
+      const runtimeApp = await buildApp(config, runtimePool);
+      let organizationId: string | undefined;
+      try {
+        assert.equal((await runtimePool.query('SELECT current_user')).rows[0].current_user, 'sitegrid');
+        assert.equal((await runtimeApp.inject({ url: endpoint, headers })).statusCode, 200);
+        const response = await runtimeApp.inject({ method: 'POST', url: endpoint, headers, payload: { name: 'Firma runtime' } });
+        assert.equal(response.statusCode, 201);
+        organizationId = response.json().organization.id;
+        assert.equal((await pool.query('SELECT actor_id FROM platform_audit_events WHERE organization_id = $1', [organizationId])).rows[0].actor_id, actorId);
+      } finally {
+        await runtimeApp.close(); await runtimePool.end();
+        if (organizationId) {
+          await pool.query('DELETE FROM platform_audit_events WHERE organization_id = $1', [organizationId]);
+          await pool.query('DELETE FROM organizations WHERE id = $1', [organizationId]);
+        }
+      }
     });
     await t.test('non-administrators cannot read existing companies or create them', async () => {
       const userId = randomUUID();
@@ -140,6 +170,11 @@ test('platform administrator organization management on PostgreSQL', { skip: !pr
     });
   } finally {
     await app.close(); await pool.end();
-    await adminPool.query(`DROP SCHEMA ${schema} CASCADE`); await adminPool.end();
+    await adminPool.query(`DROP SCHEMA ${schema} CASCADE`);
+    if (createdRuntimeRole) {
+      await adminPool.query('DROP OWNED BY sitegrid');
+      await adminPool.query('DROP ROLE sitegrid');
+    }
+    await adminPool.end();
   }
 });

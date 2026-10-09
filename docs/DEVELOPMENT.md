@@ -17,3 +17,5 @@ Frontend: http://localhost:5173. Produkcja: `npm run build`, `NODE_ENV=productio
 Migracje: kolejne `migrations/NNN_nazwa.sql`; suma SHA-256 każdej zapisanej migracji jest weryfikowana. Nie edytuj zastosowanych migracji. Zmiany wykonuje CLI w pojedynczej transakcji, z blokadą PostgreSQL. Serwer nie uruchamia migracji przy starcie i odmawia readiness przy niezgodnym schemacie.
 
 M02A dodaje `003_organizations.sql`; kontrakt `release.json` wymaga schematu 3 i dopuszcza migrację ze schematów 0–3. Test integracyjny sprawdza również przejście z M01 (schemat 2) z zachowaniem kont oraz powtórzenie migracji.
+
+Migracja przyznaje istniejącej roli runtime `sitegrid` odczyt/tworzenie firm i zapis audytu. Test z kontem PostgreSQL superuser sprawdza API z tą rolą; w razie jej braku tworzy tymczasową rolę `NOLOGIN` i usuwa ją po teście. Przy mniej uprzywilejowanej bazie tylko ten dodatkowy scenariusz jest pomijany.
