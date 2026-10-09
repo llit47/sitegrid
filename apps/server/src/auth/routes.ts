@@ -4,10 +4,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest, FastifyError } from
 import type { Pool } from 'pg';
 import type { Config } from '../config.js';
 import { hashPassword, normalizeEmail, verifyPassword } from './password.js';
+import { readSession, type Session } from './session.js';
+import { registerOrganizationRoutes } from '../organization-routes.js';
 
 const token = () => randomBytes(32).toString('base64url');
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-type Session = { token_hash: string; user_id: string | null; csrf_token: string; email: string | null; admin: boolean; };
 
 async function reserve(pool: Pool, key: string, limit: number) {
   const { rows } = await pool.query<{ attempts: number }>(`
@@ -24,16 +25,7 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
   const name = config.production ? '__Host-sitegrid' : 'sitegrid';
   const cookieOptions = { httpOnly: true, secure: config.production, sameSite: 'strict' as const, path: '/' };
   const dummyHash = await hashPassword(token());
-  const session = async (request: FastifyRequest): Promise<Session | undefined> => {
-    const raw = request.cookies[name];
-    if (!raw || !/^[A-Za-z0-9_-]{43}$/.test(raw)) return;
-    const { rows } = await pool.query<Session>(`
-      SELECT s.token_hash, s.user_id, s.csrf_token, u.email,
-        EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id = u.id) AS admin
-      FROM sessions s LEFT JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = $1 AND s.expires_at > now() AND (s.user_id IS NULL OR (u.id IS NOT NULL AND u.blocked_at IS NULL))`, [digest(raw)]);
-    return rows[0];
-  };
+  const session = (request: FastifyRequest) => readSession(pool, request, config);
   const checkCsrf = (request: FastifyRequest, current?: Session) => {
     const supplied = request.headers['x-csrf-token'];
     return current && request.headers.origin === config.origin && typeof supplied === 'string'
@@ -59,8 +51,11 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
   app.setErrorHandler<FastifyError>((error, request, reply) => {
     const status = error.statusCode && error.statusCode >= 400 && error.statusCode < 500 ? error.statusCode : 503;
     if (status === 503) app.log.error({ requestId: request.id }, 'Request failed; check service/database availability');
-    return reply.code(status).send({ error: status === 503 ? 'Usługa jest chwilowo niedostępna.' : 'Nieprawidłowe żądanie.' });
+    const message = status === 503 ? 'Usługa jest chwilowo niedostępna.'
+      : status === 401 ? 'Zaloguj się, aby kontynuować.' : status === 403 ? 'Brak uprawnień.' : 'Nieprawidłowe żądanie.';
+    return reply.code(status).send({ error: message });
   });
+  registerOrganizationRoutes(app, pool, config);
   app.get('/api/auth/session', async (request, reply) => {
     if (!await reserve(pool, `session:${request.ip}`, 120)) return reply.header('Retry-After', '900').code(429).send({ error: 'Spróbuj ponownie później.' });
     await pool.query('DELETE FROM sessions WHERE token_hash IN (SELECT token_hash FROM sessions WHERE expires_at <= now() LIMIT 1000)');

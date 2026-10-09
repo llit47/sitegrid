@@ -29,7 +29,7 @@ test('memberships, composite relations and RLS on PostgreSQL 17', { skip: !proce
   const tenantTables = ['organization_memberships', 'membership_roles'];
   await adminPool.query(`CREATE SCHEMA ${schema}`);
   try {
-    await t.test('schema 3 upgrades to 4 preserving identities, organizations and authentication data', async () => {
+    await t.test('schema 3 upgrades preserving identities, organizations and authentication data', async () => {
       const previous = await mkdtemp(join(tmpdir(), 'sitegrid-m02b-migrations-'));
       try {
         for (const name of ['001_installation.sql', '002_auth.sql', '003_organizations.sql']) {
@@ -47,9 +47,10 @@ test('memberships, composite relations and RLS on PostgreSQL 17', { skip: !proce
         await pool.query("INSERT INTO platform_audit_events(actor_id, organization_id, event) VALUES ($1, $2, 'organization_created')", [sharedUser, organizationA]);
         const preservedTables = ['installation', 'users', 'credentials', 'platform_admins', 'sessions', 'organizations', 'platform_audit_events', 'schema_migrations'];
         const before = await Promise.all(preservedTables.map(table => pool.query(`SELECT * FROM ${table} ORDER BY 1`)));
-        assert.equal(await migrate(pool, 'migrations'), 4);
-        assert.equal(await migrate(pool, 'migrations'), 4);
-        assert.equal(await checkMigrations(pool, 'migrations'), 4);
+        const version = (await migrationFiles('migrations')).length;
+        assert.equal(await migrate(pool, 'migrations'), version);
+        assert.equal(await migrate(pool, 'migrations'), version);
+        assert.equal(await checkMigrations(pool, 'migrations'), version);
         for (const [i, table] of preservedTables.entries()) {
           const after = await pool.query(`SELECT * FROM ${table}${table === 'schema_migrations' ? ' WHERE version <= 3' : ''} ORDER BY 1`);
           assert.deepEqual(after.rows, before[i].rows, `Migration must preserve ${table}`);

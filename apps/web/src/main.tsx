@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
+import { OrganizationSwitcher } from './organization-switcher.js';
 
 type Session = { csrfToken: string; user: { email: string; platformAdmin: boolean } | null };
 type Overview = { email: string; installedAt: string; status: string };
@@ -87,10 +88,11 @@ function App() {
   };
   return <main className="shell"><header className="brand"><span className="brand-mark" aria-hidden="true">S</span> SiteGrid</header>
     {session?.user ? <section className="dashboard">
-      <div className="dashboard-heading"><div><p className="eyebrow">ADMINISTRACJA PLATFORMY</p><h1>Witaj w SiteGrid.</h1><p className="account">{session.user.email}</p></div><button className="secondary" onClick={() => void logout()} disabled={busy}>Wyloguj się</button></div>
+      <div className="dashboard-heading"><div><p className="eyebrow">{session.user.platformAdmin ? 'ADMINISTRACJA PLATFORMY' : 'TWOJE MIEJSCE PRACY'}</p><h1>Witaj w SiteGrid.</h1><p className="account">{session.user.email}</p></div><button className="secondary" onClick={() => void logout()} disabled={busy}>Wyloguj się</button></div>
       {overview ? <div className="tiles"><article className="tile"><span className="indicator" /> <h2>Instalacja jest gotowa</h2><p>Masz dostęp do panelu administratora platformy.</p><dl><dt>Utworzona</dt><dd>{new Date(overview.installedAt).toLocaleDateString('pl-PL')}</dd><dt>Konto</dt><dd>Administrator platformy</dd></dl></article>
-        <article className="tile"><h2>Twoja platforma</h2><p>Zarządzaj firmami w sekcji poniżej.</p></article></div> : !session.user.platformAdmin && <p role="status">Konto nie ma dostępu do administracji platformą.</p>}
+        <article className="tile"><h2>Twoja platforma</h2><p>Zarządzaj firmami w sekcji poniżej.</p></article></div> : null}
       {session.user.platformAdmin && <Organizations csrfToken={session.csrfToken} />}
+      <OrganizationSwitcher key={session.user.email} />
     </section> : <section className="card"><p className="eyebrow">TWOJE MIEJSCE PRACY</p><h1>Zaloguj się.</h1><p>Otwórz panel swojej instalacji SiteGrid.</p>
       <form onSubmit={event => void login(event)}><label htmlFor="email">Email</label><input id="email" name="email" type="email" autoComplete="username" maxLength={254} required disabled={busy} />
         <label htmlFor="password">Hasło</label><input id="password" name="password" type="password" autoComplete="current-password" maxLength={128} required disabled={busy} />

@@ -27,7 +27,7 @@ Migracje wykonuje osobny właściciel. Migracja odmawia działania jako `sitegri
 
 `withOrganization(pool, organizationId, callback)` w `apps/server/src/organization-context.ts` pobiera jedno połączenie, rozpoczyna transakcję i wykonuje parametryzowane `set_config('sitegrid.organization_id', ..., true)`. Ustawienie obowiązuje lokalnie do COMMIT/ROLLBACK; helper zwraca połączenie po zakończeniu transakcji, a przy błędzie rollbacku usuwa je z puli. Callback korzysta wyłącznie z przekazanego klienta i nie zarządza sam transakcją. Nie używać sesyjnego `SET` ani ustawiać kontekstu przez `pool.query`. [Lokalność `set_config`](https://www.postgresql.org/docs/17/functions-admin.html#FUNCTIONS-ADMIN-SET).
 
-Helper wymaga identyfikatora firmy **wcześniej autoryzowanego przez wywołującego**. RLS jest barierą zakresu firmy, nie autoryzacją aktora. Runtime potrafi ustawić kontekst SQL; sam UUID lub rola platformowa nie dowodzi prawa użytkownika do firmy. M03 dopiero doda sprawdzanie aktywnego konta, firmy, członkostwa i ról oraz API wyboru kontekstu. Przechowywanie statusu `inactive` nie zastępuje tych sprawdzeń. Helper nie jest jeszcze podłączony do endpointów.
+Helper wymaga identyfikatora firmy **autoryzowanego przez wywołującego**. RLS jest barierą zakresu firmy, nie autoryzacją aktora. Runtime potrafi ustawić kontekst SQL; sam UUID lub rola platformowa nie dowodzi prawa użytkownika do firmy. [M03](ORGANIZATION_CONTEXT.md) dodaje `withAuthorizedOrganization`, sprawdzanie aktualnej sesji, aktywnego konta, firmy, członkostwa i ról oraz API wyboru kontekstu. Opcjonalny callback autoryzacji `withOrganization` działa w tej samej transakcji przed ustawieniem kontekstu firmy. Przechowywanie statusu `inactive` nie zastępuje tych sprawdzeń.
 
 ## Testy
 
