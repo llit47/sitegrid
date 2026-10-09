@@ -8,7 +8,7 @@ Commity implementacji: CP1 `7ccb040`, CP2 `6c79ed2`, CP3 `3ccd481`, CP4 `3c2d298
 
 **SiteGrid instalujemy TYLKO w istniejącym Debianie 13** (LXC/VM/fizyczny). Operator sam przygotowuje kontener/VM i wkleja **jedno polecenie do powłoki Debiana**. Instalator ma pobrać zweryfikowane wydanie i zainstalować samodzielnie PostgreSQL, nginx, runtime, aplikację i systemd. `ops/install-proxmox.py` usunięto; tworzenie LXC, polecenia `pct/pveam` i testy PVE nie są wymagane.
 
-**Pozostałe wymagania do odbioru M01:** (1) prawdziwy zaufany bootstrap one-line bez wcześniejszego przesyłania artefaktu/ops; (2) uproszczone `sitegrid update` bez wymagania ręcznych flag, z bezpiecznym skonfigurowanym kanałem wydań; (3) regresja P2 po przerwaniu między `STATE.mkdir()` a `write_json(marker)`. Obecne testy dotyczą dotychczasowego instalatora z ręcznym artefaktem, nie potwierdzają docelowego jednolinijkowca. **Nie deklarować, że cel jest już spełniony.** Prywatne GitHub Releases są rekomendacją, nie zatwierdzonym jeszcze wyborem kanału.
+**Pozostałe wymagania do odbioru M01:** (1) prawdziwy zaufany bootstrap one-line bez wcześniejszego przesyłania artefaktu/ops; (2) uproszczone `sitegrid update` bez wymagania ręcznych flag, z bezpiecznym skonfigurowanym kanałem wydań. P2 po przerwaniu między utworzeniem katalogu stanu a zapisem znacznika naprawiony i objęty regresją poniżej. Obecne testy dotyczą dotychczasowego instalatora z ręcznym artefaktem, nie potwierdzają docelowego jednolinijkowca. **Nie deklarować, że cel jest już spełniony.** Prywatne GitHub Releases są rekomendacją, nie zatwierdzonym jeszcze wyborem kanału.
 
 Dalsze wzmianki poniżej o testach Proxmoxa i hostowym skrypcie dokumentują **historyczny, anulowany zakres** sprzed powyższej decyzji; nie są już zadaniami ani blockerami projektu.
 
@@ -19,6 +19,14 @@ Dalsze wzmianki poniżej o testach Proxmoxa i hostowym skrypcie dokumentują **h
 | CP3 — instalator Debiana | Ręczny tryb Debian 13/systemd PASS; docelowy bootstrap one-line W TOKU; skrypt hosta Proxmox usunięty |
 | CP4 — updater i rollback | DONE; testy awarii + realny update/backup/rollback PASS |
 | CP5 — integracja | PASS wcześniejszych testów Debian 13 i przeglądarki; nowy docelowy one-line Debian wymaga testu |
+
+## PR #5 — P2 i bieżący plan Debiana
+
+- Synchronizacja: czysty branch przesunięty fast-forward z `a597b9d` do `7a1df0a` po `git fetch origin`; zachowano sześć zdalnych commitów, w tym usunięcie instalatora hosta Proxmox. Bez reset/clean/force push.
+- **P2 naprawiony:** najpierw prywatny katalog roboczy i utrwalony znacznik, następnie atomowa publikacja `/var/lib/sitegrid` z `RENAME_NOREPLACE` i fsync rodzica. Awaria dokładnie po mkdir, przed write_json nie pozostawia pustego docelowego katalogu i retry dochodzi do `done`. Brak przejmowania/usuwania pozostałości lub obcych katalogów, również pustych i powstałych między preflight a publikacją; stare katalogi bez znacznika nadal wymagają inspekcji.
+- **Testy sekwencyjne: 32/32 Python PASS**, zero pominięć (12 instalatora, 10 lifecycle, 10 wydania), py_compile i git diff --check PASS. Dokładna nowa regresja zawodziła na kodzie sprzed poprawki. Cztery nowe testy: okno mkdir/zapis, obcy pusty/z danymi katalog, symlink i katalog powstały po preflight. Rzeczywiste pliki/fsync/renameat2; APT/systemd/DB są atrapami. Test pakietu używa zachowanego artefaktu, nie nowego builda. Nie uruchamiano ciężkiego builda ani VM.
+- Update/rollback i ich tryb manualny bez zmian; testy lifecycle nadal PASS. Odczytano aktualne M01 w ROADMAP.md i ARCHITECTURE.md po synchronizacji. Instalacja wyłącznie w gotowym Debianie 13; host Proxmoxa poza zakresem.
+- **Dokładny następny krok:** zatwierdzić prywatne GitHub Releases `llit47/sitegrid` albo wskazać serwer HTTPS. Następnie przypiąć bootstrap/SHA-256 i klucz manifestu, opublikować wydanie oraz wdrożyć runner/resolver według planu w INSTALL.md. Token tylko interaktywnie/plik root 0600; wspólne źródło dla jednej komendy instalacji i `sitegrid update` bez flag. Bez decyzji kanał pozostaje niewdrożony. Po wdrożeniu test czystego Debiana bez transferu plików, przerwań, weryfikacji wydań i update/rollback.
 
 ## PR #5 — naprawa retry i decyzja o kanale wydań
 

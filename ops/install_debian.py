@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import argparse
+import ctypes
+import errno
 import json
 import os
 from pathlib import Path
@@ -65,6 +67,27 @@ def origin_prompt():
     origin = input('Adres HTTPS SiteGrid (np. https://sitegrid.example.test): ').strip()
     require(re.fullmatch(r'https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?', origin), 'Podaj origin HTTPS z nazwą DNS, bez ścieżki i portu.')
     return origin
+
+
+def reserve_installation(state):
+    # Publish a complete receipt, never an empty STATE directory. A crash can
+    # leave private staging behind; retries neither claim nor remove it.
+    staging = Path(tempfile.mkdtemp(prefix=f'.{STATE.name}-install-', dir=STATE.parent))
+    write_json(staging / 'installation.json', state)
+    # Debian/Linux renameat2(RENAME_NOREPLACE): even an empty foreign directory
+    # appearing after preflight must not be replaced by our reservation.
+    rename = ctypes.CDLL(None, use_errno=True).renameat2
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    if rename(-100, os.fsencode(staging), -100, os.fsencode(STATE), 1) != 0:
+        error = ctypes.get_errno()
+        require(error != errno.EEXIST, f'Istniejący {STATE}; odmowa nadpisania danych bez znacznika instalacji.')
+        raise OSError(error, os.strerror(error))
+    descriptor = os.open(STATE.parent, os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def configure(origin):
@@ -149,13 +172,7 @@ def install(args):
             # nginx behind. This phase does not claim any SiteGrid DB or role.
             state = previous or {'version': args.version, 'sha256': args.sha256, 'origin': origin, 'phase': 'dependencies'}
             if not previous:
-                STATE.mkdir(mode=0o700)
-                descriptor = os.open(STATE.parent, os.O_DIRECTORY)
-                try:
-                    os.fsync(descriptor)
-                finally:
-                    os.close(descriptor)
-                write_json(marker, state)
+                reserve_installation(state)
             print('Instalacja zależności Debian 13…')
             command(['apt-get', 'update'])
             command(['apt-get', 'install', '-y', 'ca-certificates', 'curl', 'postgresql-17', 'postgresql-client-17', 'nginx-light', 'openssl', 'util-linux'], env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'})

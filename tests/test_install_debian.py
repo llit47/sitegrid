@@ -1,4 +1,4 @@
-"""Exercise the installer state machine with an apt crash; no host mutations."""
+"""Exercise interrupted installer transactions; no host mutations."""
 import argparse
 import contextlib
 import io
@@ -102,6 +102,62 @@ class InstallerRetryTests(unittest.TestCase):
         self.assertTrue(self.nginx)
         self.assertEqual(json.loads(self.marker.read_text())['phase'], 'dependencies')
         self.assertFalse(self.sql_calls)
+
+    def test_retry_after_state_directory_creation_before_receipt(self):
+        self.crash = False
+        interrupted = []
+
+        def interrupt_before_receipt(path, value):
+            self.assertTrue(path.parent.is_dir())  # mkdir completed
+            self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)
+            self.assertFalse(path.exists())  # installation.json not written
+            interrupted.append(path.parent)
+            raise PowerLoss()
+
+        with patch.object(installer, 'write_json', side_effect=interrupt_before_receipt):
+            with self.assertRaises(PowerLoss): self.run_installer()
+        self.assertEqual(len(interrupted), 1)
+        self.assertFalse(self.marker.exists())
+        self.assertFalse(any(c[0] == 'apt-get' for c in self.calls))
+        self.run_installer()
+        self.assertEqual(json.loads(self.marker.read_text())['phase'], 'done')
+        self.assertTrue(self.db and self.role and self.user)
+        self.assertNotEqual(interrupted[0], self.state)
+        self.assertEqual(list(interrupted[0].iterdir()), [])  # leftover was not claimed or removed
+        self.assertEqual(self.state.stat().st_mode & 0o777, 0o700)
+
+    def test_unmarked_state_directory_is_not_adopted(self):
+        self.state.mkdir()
+        for contents in ('empty', 'foreign data'):
+            with self.subTest(contents=contents):
+                if contents != 'empty': (self.state / 'foreign.db').write_text(contents)
+                with self.assertRaisesRegex(SiteGridError, 'odmowa nadpisania'): self.run_installer()
+                self.assertFalse(self.marker.exists())
+                self.assertFalse(any(c[0] == 'apt-get' for c in self.calls))
+                if contents != 'empty': self.assertEqual((self.state / 'foreign.db').read_text(), contents)
+
+    def test_symlink_state_directory_is_not_adopted(self):
+        foreign = self.lab / 'foreign'
+        foreign.mkdir()
+        (foreign / 'data').write_text('keep')
+        self.state.symlink_to(foreign, target_is_directory=True)
+        with self.assertRaisesRegex(SiteGridError, 'Zabroniony symlink'): self.run_installer()
+        self.assertEqual((foreign / 'data').read_text(), 'keep')
+        self.assertFalse(any(c[0] == 'apt-get' for c in self.calls))
+
+    def test_state_publication_does_not_replace_concurrent_foreign_directory(self):
+        write_json = installer.write_json
+
+        def create_foreign_directory(path, value):
+            write_json(path, value)
+            self.state.mkdir()
+            self.foreign_inode = self.state.stat().st_ino
+
+        with patch.object(installer, 'write_json', side_effect=create_foreign_directory):
+            with self.assertRaisesRegex(SiteGridError, 'odmowa nadpisania'): self.run_installer()
+        self.assertEqual(self.state.stat().st_ino, self.foreign_inode)
+        self.assertEqual(list(self.state.iterdir()), [])
+        self.assertFalse(any(c[0] == 'apt-get' for c in self.calls))
 
     def test_retry_after_apt_installs_nginx_before_original_marker_window(self):
         self.interrupt_after_nginx()
