@@ -1,6 +1,6 @@
-# Instalacja M01 — Debian 13 i Proxmox VE 9
+# Instalacja M01 — gotowy Debian 13 (również w LXC)
 
-Status testów znajduje się w [M01_STATUS.md](M01_STATUS.md). Skrypt hostowy Proxmoxa wymaga rzeczywistego testu na odizolowanym PVE przed uznaniem go za zweryfikowany. Nie uruchamiaj go na istniejącym CT ani z danymi produkcyjnymi.
+**Zatwierdzony zakres:** operator sam przygotowuje serwer/VM/LXC Debian 13 i uruchamia w nim jedną komendę instalującą SiteGrid, PostgreSQL, zależności i usługi systemd. SiteGrid NIE tworzy kontenerów ani nie wykonuje poleceń na hoście Proxmoxa. **Docelowy bootstrap one-line nie jest jeszcze napisany; obecny instalator wymaga ręcznego dostarczenia artefaktu.** Status testów: [M01_STATUS.md](M01_STATUS.md). Nie instaluj na systemie z istniejącymi danymi/obcymi usługami bez backupu i weryfikacji.
 
 ## Artefakt dla prywatnego repozytorium
 
@@ -16,7 +16,7 @@ W `artifacts/` powstaje `sitegrid-0.1.0-linux-x64.tar.gz` i SHA-256. Artefakt i 
 
 Nie ma jeszcze opublikowanego tagu/wydania M01; artefakt buduje operator z konkretnego, sprawdzonego commita brancha. Nie instaluj z ruchomego `main`, `latest` ani niesprawdzonego archiwum. Archiwum nie zawiera `.env`, danych, sekretów ani źródeł TypeScript wymagających kompilacji na serwerze. Argon2 używa dostarczonego natywnego modułu; instalator wykonuje jego smoke test.
 
-## Jedno polecenie w istniejącym Debianie 13
+## Obecny tryb instalacji w Debianie 13 — etap przejściowy
 
 Wymagany dedykowany system z działającym systemd, root, Python 3, iproute2, dostęp do repozytoriów Debian, 2 vCPU, co najmniej 2 GiB RAM i 6 GiB wolnego miejsca. Zalecane 4 vCPU/8 GiB/40 GiB. Instalator odmawia przejęcia zastanej instalacji SiteGrid/nginx, konta systemowego, bazy lub zajętych portów.
 
@@ -38,17 +38,13 @@ sudo journalctl -u sitegrid -u sitegrid-proxy --since '10 minutes ago'
 curl --fail http://127.0.0.1:3000/health/ready
 ```
 
-## Jedno polecenie na hoście Proxmox
+## Docelowa instalacja — jedna komenda w Debianie
 
-Wymagany Proxmox VE 9, root, Python 3, dostępne `pct/pvesm/pvesh/pveam`, pobrany oficjalny szablon Debian 13 w storage `vztmpl`, storage `rootdir`, działający bridge i sieć z dostępem kontenera do repozytoriów Debian. Szablon pobierz przez panel Proxmoxa albo `pveam`, sprawdzając dokładną nazwę z `pveam available --section system`.
+Operator samodzielnie przygotowuje **gotowy Debian 13**, loguje się do jego powłoki jako root i wkleja **jedno polecenie** z oficjalnej instrukcji wydania. Bez kopiowania plików `ops/`, archiwum, ręcznego instalowania PostgreSQL lub Node.js. Instalator ma sprawdzić OS, zasoby i istniejące usługi, bezpiecznie pobrać zweryfikowany pakiet z wybranego kanału, zainstalować zależności, PostgreSQL/nginx, SiteGrid i systemd, po czym pokazać adres WWW oraz polecenie lokalnego bootstrapu pierwszego administratora.
 
-```sh
-python3 /root/sitegrid-installer/ops/install-proxmox.py --bundle /root/sitegrid-0.1.0-linux-x64.tar.gz --version 0.1.0 --sha256 ZAUFANA_SUMA_64_ZNAKI
-```
+Jedno polecenie to *wymaganie docelowe*, nie obecnie działający link. Dokładna komenda i endpoint zostaną opublikowane dopiero po wdrożeniu/weryfikacji zaufanego bootstrapu i kanału wydań. W repozytorium i instrukcji NIE podawać fikcyjnego działającego URL. Prywatna dystrybucja może wymagać jednorazowego interaktywnego uwierzytelnienia już po uruchomieniu instalatora, ale nie wolno wkleić tokenu jako części komendy.
 
-Interaktywna konfiguracja sprawdza CT/VM ID w klastrze, storage, wolne miejsce/RAM, CPU, szablon, bridge i IPv4 (DHCP albo CIDR/brama), HTTPS origin oraz potwierdzenie `TAK`. Tworzy **wyłącznie nowy nieuprzywilejowany** CT bez nesting/Dockera i bez domyślnego hasła. Dostarcza zweryfikowany artefakt i uruchamia pełny instalator wewnątrz CT. Pierwszego administratora tworzysz później lokalnie przez `pct enter ID` i `sitegrid bootstrap-admin`.
-
-Przy błędzie nowy CT pozostaje do inspekcji; skrypt niczego nie kasuje i odrzuca każde istniejące ID. Ponów wewnętrzny instalator w utworzonym CT, używając tego samego artefaktu i sumy; nie uruchamiaj tworzenia nowego CT w celu naprawy istniejącego.
+**Host Proxmoxa pozostaje poza zakresem SiteGrid.** Nie używamy `pct`, `pveam` ani automatycznego tworzenia LXC/VM.
 
 ## Układ i ponowienie
 
@@ -69,21 +65,13 @@ Przed `apt-get` instalator zapisuje trwałą fazę `dependencies`, po kontroli �
 
 Alternatywa: `--bundle https://zaufany-serwer/wydania/0.1.0/sitegrid.tar.gz`, zawsze z przypiętym `--version` i niezależnie zaufanym `--sha256`. Prywatny serwer może użyć `--curl-config /root/artifact-curl.conf` (root/0600, autoryzacja w pliku). Nie podawaj tokenów w URL, argumentach, historii powłoki ani logach. Transport nie podąża za przekierowaniami i nie wymaga publicznego GitHuba.
 
-## Prosty update i bootstrap Proxmoxa — decyzja o kanale
+## Prosty updater i zaufane źródło wydań — do dokończenia
 
-**Stan: projekt do zatwierdzenia; automatyczne źródło nie jest zaimplementowane ani skonfigurowane.** Obecnie działa tryb manualny z trzema flagami. PR #5 pozostaje zablokowany przez brak kanału i pierwszego bootstrapu bez transferu plików.
+**Stan:** ręczne `sitegrid update --bundle ... --version ... --sha256 ...` działa; docelowe `sitegrid update` bez flag jeszcze NIE działa. Nie publikowano oficjalnego źródła wydań ani zaufanej komendy one-line.
 
-Rekomendowany wybór: **prywatne GitHub Releases w llit47/sitegrid**, bez nowego serwera artefaktów. Alternatywa: wskazany przez operatora dedykowany serwer HTTPS. Dla GitHuba token wyłącznie do odczytu Contents tego repo trafia przez niewidoczne pytanie do chronionego pliku root/0600; wartość nigdy do argv, URL, historii, środowiska procesów ani logów. Oddzielny prywatny klucz podpisujący wydania pozostaje po stronie wydawcy/CI, a publiczny klucz weryfikacyjny jest przypięty przy bootstrapie. Wybór kanału, punktu publikacji i klucza zaufania wymaga decyzji przed implementacją automatycznego pobierania.
+Preferowany wariant do decyzji: **prywatne GitHub Releases `llit47/sitegrid`** z przypiętym kluczem weryfikacyjnym, podpisanym manifestem stabilnego kanału, wersją, architekturą i SHA-256 artefaktu. Alternatywa: kontrolowany serwer HTTPS z odpowiednio uwierzytelnionymi podpisanymi artefaktami. Prywatne GitHub Releases wymagają czytelnego przepływu tokenu tylko do odczytu, pobieranego interaktywnie i przechowywanego poza historią poleceń, zmiennymi środowiskowymi i logami (root/0600). **Brak wybranego kanału lub ważnego podpisu ma zatrzymywać instalację/aktualizację przed zmianami**, bez automatycznego przejścia na ruchomy `main/latest`.
 
-Kontrakt po zatwierdzeniu: `sitegrid update` czyta źródło, kanał, klucz i ścieżkę autoryzacji z rootowej konfiguracji. Pobiera podpisany manifest kanału (np. stable), sprawdza podpis, termin ważności i rosnący numer publikacji. Manifest wskazuje konkretną wersję, identyfikator wydania/artefaktu, architekturę i SHA-256. Dopiero wtedy aktualizator przekazuje przypięty artefakt do obecnego mechanizmu backup/migracje/readiness. Bez konfiguracji, poprawnego podpisu lub pasującego artefaktu kończy działanie przed zmianami. Automatyczny kanał odrzuca downgrade i odtworzenie starego manifestu; jawny tryb manualny pozostaje. Weryfikacja podpisanego manifestu zastępuje ręczne wpisywanie trzech flag; ruchome latest/main nie stanowią źródła zaufania. Transport musi ograniczać przekierowania i nie przekazywać autoryzacji innemu hostowi; obecny `download()` sam tego kanału GitHub nie implementuje.
-
-Do prawdziwego jednego polecenia na świeżym Proxmoxie potrzebne są jeszcze:
-
-1. Opublikowany bootstrap przypięty do wersji i SHA-256 oraz wydanie z podpisanym manifestem. Pierwszy downloader musi pobrać, zweryfikować i dopiero wykonać bootstrap; zawartość ops już znajduje się w pełnym artefakcie.
-2. Interaktywne uwierzytelnienie do prywatnego kanału bez sekretów w poleceniu/logach oraz bezpieczne przekazanie konfiguracji aktualizacji do nowego LXC. Brak tokena/źródła ma zatrzymać instalację, nie przełączać jej na publiczny main.
-3. Obsługa zależności świeżego hosta oraz automatyczne pobranie dokładnie wybranego oficjalnego szablonu Debian 13 przez pveam po walidacji storage i potwierdzeniu. Obecny skrypt wymaga wcześniej pobranego szablonu.
-4. Podłączenie zweryfikowanego artefaktu do istniejącego tworzenia nowego nieuprzywilejowanego CT, z zachowaniem kontroli ID/storage/sieci/zasobów i odmowy nadpisania.
-5. Rzeczywisty test na odizolowanym PVE 9 bez wcześniejszego transferu ops/archiwum, wraz z brakiem autoryzacji, uszkodzonym pobraniem, zajętym ID i przerwaniem. Dotychczasowe testy Debiana i mocki nie potwierdzają tej bramki.
+Po konfiguracji źródła `sitegrid update` bez argumentów ma sam pobrać i zweryfikować informacje o nowej wersji, wykonać dotychczasowy backup i zgodności migracji, a następnie aktualizację z health check. Ręczny tryb z flagami pozostaje dostępną opcją awaryjną.
 
 ## Powtarzalny test instalacji
 
@@ -93,7 +81,7 @@ Wyłącznie **wewnątrz odizolowanej, jednorazowej VM Debian 13**, po dostarczen
 sudo env SITEGRID_DISPOSABLE_TEST=YES bash tests/debian-install-smoke.sh /root/sitegrid-0.1.0-linux-x64.tar.gz ZAUFANA_SUMA_64_ZNAKI 0.1.0 /root/sitegrid-installer/ops
 ```
 
-Test rzeczywiście instaluje PostgreSQL i jednostki systemd, ponawia instalator, porównuje konfigurację i klucz TLS bez ich logowania, sprawdza prawa plików/rolę runtime, odmowę DDL, peer authentication, restart API i frontend przez HTTPS. Używa lokalnego certyfikatu i jawnie `--insecure` wyłącznie do tego testu. Nie uruchamia `pct` i nie zastępuje testu Proxmoxa.
+Test rzeczywiście instaluje PostgreSQL i jednostki systemd, ponawia instalator, porównuje konfigurację i klucz TLS bez ich logowania, sprawdza prawa plików/rolę runtime, odmowę DDL, peer authentication, restart API i frontend przez HTTPS. Używa lokalnego certyfikatu i jawnie `--insecure` wyłącznie do tego testu. Nie uruchamia `pct`; test hosta Proxmox nie jest wymagany, ponieważ SiteGrid instaluje się tylko w Debianie.
 
 ## Aktualizacja, rollback i stan
 
