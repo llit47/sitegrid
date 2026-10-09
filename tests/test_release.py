@@ -13,6 +13,11 @@ from release import SiteGridError, extract_release, validate_manifest, atomic_li
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_malformed_manifest_fails_closed(self):
+        manifest = json.loads(Path('release.json').read_text())
+        for value in [[], {**manifest, 'version': 1}, {**manifest, 'schema': []}]:
+            with self.subTest(value=value), self.assertRaises(SiteGridError): validate_manifest(value)
+
     def test_manifest_requires_schema_contract(self):
         manifest = json.loads(Path('release.json').read_text())
         validate_manifest(manifest)

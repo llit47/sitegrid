@@ -53,12 +53,14 @@ def download(source, destination, curl_config=None):
 
 
 def validate_manifest(manifest):
+    require(isinstance(manifest, dict), 'Manifest musi być obiektem JSON.')
     require(manifest.get('format') == 1, 'Nieobsługiwany format wydania.')
-    require(re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-z0-9.]+)?', manifest.get('version', '')), 'Nieprawidłowa wersja.')
+    require(isinstance(manifest.get('version'), str) and re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-z0-9.]+)?', manifest['version']), 'Nieprawidłowa wersja.')
     require(manifest.get('platform') == 'linux' and manifest.get('arch') in ('x64', 'arm64'), 'Nieobsługiwana platforma.')
-    require(re.fullmatch(r'24\.\d+\.\d+', manifest.get('node', '')), 'Wydanie wymaga Node 24 LTS.')
+    require(isinstance(manifest.get('node'), str) and re.fullmatch(r'24\.\d+\.\d+', manifest['node']), 'Wydanie wymaga Node 24 LTS.')
     require(manifest.get('postgresMajor') == 17, 'Nieobsługiwana wersja PostgreSQL.')
     schema = manifest.get('schema', {})
+    require(isinstance(schema, dict), 'Kontrakt schematu musi być obiektem JSON.')
     require(all(type(schema.get(key)) is int and schema[key] >= 0 for key in ('target', 'min', 'max', 'upgradeMin', 'upgradeMax')),
             'Brak jawnego kontraktu zgodności schematu.')
     require(0 < schema['min'] <= schema['target'] <= schema['max'] and schema['upgradeMin'] <= schema['upgradeMax'] <= schema['target'],
@@ -117,3 +119,8 @@ def atomic_link(target, link):
     require(not temporary.exists() and not temporary.is_symlink(), 'Pozostał symlink .next; sprawdź przerwane wdrożenie.')
     temporary.symlink_to(target)
     os.replace(temporary, link)
+    descriptor = os.open(link.parent, os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)

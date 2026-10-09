@@ -76,3 +76,25 @@ sudo env SITEGRID_DISPOSABLE_TEST=YES bash tests/debian-install-smoke.sh /root/s
 ```
 
 Test rzeczywiście instaluje PostgreSQL i jednostki systemd, ponawia instalator, porównuje konfigurację i klucz TLS bez ich logowania, sprawdza prawa plików/rolę runtime, odmowę DDL, peer authentication, restart API i frontend przez HTTPS. Używa lokalnego certyfikatu i jawnie `--insecure` wyłącznie do tego testu. Nie uruchamia `pct` i nie zastępuje testu Proxmoxa.
+
+## Aktualizacja, rollback i stan
+
+Dostarcz przypięty artefakt oraz niezależnie zaufaną SHA-256, tak samo jak przy instalacji:
+
+```sh
+sudo sitegrid status
+sudo sitegrid update --bundle /root/sitegrid-0.1.1-linux-x64.tar.gz --version 0.1.1 --sha256 ZAUFANA_SUMA_64_ZNAKI
+sudo sitegrid rollback
+# wcześniejsza, już pomyślnie wdrożona wersja:
+sudo sitegrid rollback --version 0.1.0
+```
+
+Update pyta o `TAK`; `--yes` jest jawnym potwierdzeniem automatyzacji. Obsługuje też HTTPS i `--curl-config`, z tymi samymi ograniczeniami transportu co instalator. Sprawdza manifest, architekturę, PostgreSQL i sumy wszystkich już wykonanych migracji przed zatrzymaniem aplikacji. Nie nadpisuje istniejącego wydania o innej sumie. Zatrzymuje API, tworzy chroniony backup `pg_dump` w `/var/lib/sitegrid/backups` (root/0600), sprawdza jego format, wykonuje transakcyjne migracje i granty, atomowo przełącza kod, restartuje systemd i czeka na readiness właściwej wersji. Konfiguracja, TLS i baza pozostają poza release.
+
+Rollback dotyczy kodu, zachowuje obecną DB i nie uruchamia migracji ani restore. Domyślnie wybiera wydanie aktywne bezpośrednio przed aktualizacją. Przy niezgodności historii/schematu odmawia **przed zatrzymaniem działającej usługi**. Obecna aplikacja wymaga dokładnej zgodności historii migracji; szerszy zakres w manifeście sam w sobie nie uzasadnia rollbacku do starego kodu.
+
+Stan operacji jest atomowo zapisywany w `/var/lib/sitegrid/deployment.json`; blokada zapobiega równoległym instalacjom/update/rollback. `sitegrid status` można odczytać także podczas wdrożenia: wskazuje current, rzeczywisty stan systemd, readiness, schemat i journal. Jeśli nowe wydanie zawiedzie, kontroler uruchamia poprzedni kod wyłącznie przy zgodności z rzeczywistą DB; w przeciwnym razie raportuje stan usługi i backup potrzebny do kontrolowanego odzyskania. Nigdy automatycznie nie przywraca DB i nie wykonuje downgrade schematu.
+
+Po awaryjnym restarcie niezakończony journal blokuje kolejne zmiany. Operator sprawdza `sitegrid status`, `journalctl -u sitegrid`, backup i historię migracji, wstrzymuje zapisy i uzgadnia kontrolowany restore (jeśli potrzebny). Po zweryfikowanym odzyskaniu zachowuje kopię journal poza repo i dopiero oznacza jego fazę `recovered`. Nie usuwa w ciemno journal, `.incoming`, `.next` ani `.tmp`. Sam powrót symlinku nie odtwarza danych. Backupy mogą zawierać dane uwierzytelniania; przechowuj je poza repo, ogranicz dostęp i eksportuj do chronionej kopii poza hostem.
+
+Test cyklu w **jednorazowej VM**: `SITEGRID_DISPOSABLE_TEST=YES bash tests/debian-lifecycle-smoke.sh BUNDLE SHA256 NOWA_WERSJA`. Tworzy konto syntetyczne i porównuje jego zachowanie, odrzuca uszkodzony artefakt, wykonuje prawdziwy backup/update/rollback i sprawdza konfigurację. Przy testowaniu kontrolera CP4 na wcześniejszym roboczym CP3 można podać czwarty argument: zaufany katalog nowych `ops`; finalna instalacja M01 używa CLI z aktywnego wydania.

@@ -168,7 +168,7 @@ def install(args):
             library = Path('/usr/local/lib/sitegrid')
             library.mkdir(mode=0o755, parents=True, exist_ok=True)
             library.chmod(0o755)
-            for name in ('release.py', 'system.py', 'manage.py'):
+            for name in ('release.py', 'system.py', 'manage.py', 'lifecycle.py'):
                 shutil.copyfile(target / 'ops' / name, library / name)
             shutil.copyfile(target / 'ops/sitegrid', '/usr/local/bin/sitegrid')
             Path('/usr/local/bin/sitegrid').chmod(0o755)

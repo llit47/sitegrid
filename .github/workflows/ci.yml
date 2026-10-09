@@ -29,7 +29,8 @@ jobs:
       - run: npm run check
       - run: node scripts/package-release.mjs 0.1.0
       - run: SITEGRID_TEST_BUNDLE="$PWD/artifacts/sitegrid-0.1.0-linux-x64.tar.gz" python3 -m unittest discover -s tests -p 'test_*.py' -v
-      - run: bash -n ops/install-sitegrid.sh ops/sitegrid
+      - run: bash -n ops/install-sitegrid.sh ops/sitegrid tests/*.sh
+      - run: python3 -m py_compile ops/*.py
       - uses: actions/upload-artifact@v4
         with:
           name: sitegrid-m01-linux-x64
