@@ -2,13 +2,13 @@
 
 Branch: `feat/m01-working-foundation`, historyczna baza `59b2fb2`.
 Audyt odzyskiwania 2026-10-09: wykonano `git fetch origin`; zatwierdzone wymagania odczytano z `origin/main` = `2a298b5` (PR #4), pliki `docs/audit/ROADMAP.md` i `docs/audit/ARCHITECTURE.md`. Bez pull/reset/clean/rebase/merge.
-Ostatni commit implementacyjny: `6c79ed2` (CP2); CP1: `7ccb040`.
+Ostatni commit CP3: `3ccd481`; CP2: `6c79ed2`; CP1: `7ccb040`.
 
 | Checkpoint | Status |
 |---|---|
 | CP1 — fundament aplikacji | DONE |
 | CP2 — prawdziwe uwierzytelnianie | DONE |
-| CP3 — instalatory | KOD ODZYSKANY, FINALNA WALIDACJA NIEDOKOŃCZONA |
+| CP3 — instalatory | KOD DONE; Debian 13/systemd PASS; Proxmox NIEZWERYFIKOWANY |
 | CP4 — updater i rollback | NOT STARTED |
 | CP5 — integracja | NOT STARTED |
 
@@ -33,7 +33,15 @@ React/TypeScript z responsywnym logowaniem i panelem administratora, Fastify/Typ
 
 Globalne konta i credentials, Argon2id (64 MiB/3/1), sesje PostgreSQL z hashem identyfikatora i rotacją przy logowaniu. CSRF + Origin, trwałe atomowe limity IP/konta, bezpieczne komunikaty, wylogowanie z unieważnieniem sesji. Cookie HttpOnly/SameSite Strict; Secure i __Host w produkcji. Lokalny interaktywny jednorazowy bootstrap (również ochrona wyścigu), niewidoczne hasło, brak rejestracji i haseł domyślnych. Osobne uprawnienie platformowe przygotowuje model pod M02–M04.
 
-## Testy i wyniki
+## Walidacja odzyskanego CP3 (2026-10-09)
+
+- `npm run typecheck` i build PASS; `npm test` na nowym PostgreSQL 17.11: **15/15 PASS**, zero pominięć. Pierwszy test po odtworzeniu PG zgłosił brak bazy testowej; baza została utworzona, testy ponowiono, bez zmian kodu.
+- Odbudowany artefakt 0.1.0: SHA-256 `9e15d5b1f3784f3b3ad16e8f91a226432be629403cbad431235221f0303979ce`; różnica zachowanego artefaktu była tylko komunikatem instalatora. **9/9 testów release PASS**, zero pominięć; shell syntax i git diff --check PASS.
+- Jedna świeża VM Debian 13, oficjalny obraz sprawdzony SHA-512, QEMU TCG 2 vCPU/2 GiB, dysk poza repo. `tests/debian-install-smoke.sh`: **PASS** — rzeczywista instalacja PostgreSQL 17/systemd, retry, niezmieniona konfiguracja/TLS, prawa katalogów/sekretów, peer auth, brak superuser/DDL dla runtime, restart systemd i frontend HTTPS.
+- Testowy Proxmox niedostępny: nie wykonywano pct; gotowość hostowego instalatora nadal niepotwierdzona. Bramka pełnego M01 pozostaje otwarta.
+- Audyt odzyskiwania zapisany i wypchnięty: `de3d63a`.
+
+## Testy i wyniki poprzedniej sesji
 
 - Debian 13 w środowisku roboczym, Node 24.21.0, odizolowany PostgreSQL 17.11 pobrany i rozpakowany w `/tmp/sitegrid-pg`; bez zmian usług systemowych.
 - `TEST_DATABASE_URL=postgresql://codex@127.0.0.1:55432/sitegrid_test npm run check`: typy, oba buildy i **3/3 testy PASS**, zero pominiętych. Konfiguracja produkcyjna; niedostępna baza; ponowienie migracji; odmowa readiness i migracji przy naruszonej historii.
@@ -41,14 +49,14 @@ Globalne konta i credentials, Argon2id (64 MiB/3/1), sesje PostgreSQL z hashem i
 - CI CP1: **SUCCESS**, run `37935068323`.
 - CP2: typy i build obu aplikacji PASS; testy z prawdziwym PostgreSQL **15/15 PASS**, zero pominiętych. Udane logowanie, błędne hasło/nieznany email, 401 bez sesji, CSRF/obcy Origin, rotacja, cookie HTTPS, logout, równoległy bootstrap i próby logowania, ponowne utworzenie serwera/puli i dwa rzeczywiste starty skompilowanego procesu API z zachowaną sesją.
 - Rzeczywiste CLI przez PTY: pierwsze utworzenie konta PASS, ponowienie odrzucone, hasło niewyświetlane; uruchomienie bez lokalnego terminala odrzucone.
-- CP2 `npm audit --omit=dev`: **0 podatności**. Zdalne CI CP2 sprawdzić po push.
+- CP2 `npm audit --omit=dev`: **0 podatności**. CI CP2 SUCCESS: `37936233716`; statusu CP2: `37936315231`.
 
 ## Niezweryfikowane i blokery
 
-Brak Proxmoxa i systemd jako PID 1. Instalacja czystego Debiana/systemd i hostowy instalator Proxmoxa nie zostały uruchomione. Restart rzeczywistego procesu API zweryfikowany; restart jednostki systemd i przeglądarka/HTTPS pozostają do CP5. Nie ma obecnie blokera implementacji CP3. Sandboxing wymaga podniesienia uprawnień narzędzia dla zapisu `.git`, sieci oraz wiarygodnych testów z subprocessami/połączeniem PostgreSQL; te działania są objęte poleceniem użytkownika.
+Brak testowego Proxmoxa. Sandbox nie ma systemd jako PID 1; test instalatora wykonywany wyłącznie w odizolowanej VM z systemd. Poprzednia sesja potwierdziła pierwszą instalację; odzyskana sesja potwierdziła końcowy artefakt na świeżej VM Debian 13/systemd. Przeglądarka/HTTPS pozostają do CP5. Nie ma obecnie blokera implementacji CP3. Sandboxing wymaga podniesienia uprawnień narzędzia dla zapisu `.git`, sieci oraz wiarygodnych testów z subprocessami/połączeniem PostgreSQL; te działania są objęte poleceniem użytkownika.
 
 ## Dokładny następny krok
 
-CP3: sprawdzić integralność zachowanego artefaktu 0.1.0 i wszystkie testy release (bez skip), odtworzyć pojedynczą VM Debian 13 z 2 GiB RAM i uruchomić tests/debian-install-smoke.sh na odzyskanym kodzie. DB do testów aplikacji także odizolowana; buildy/testy kolejno. Dopiero po wynikach commit/push CP3 i statusu. Następnie CP4: dodać update/rollback/status do istniejącego kontrolera, z backupem DB przed migracją, kontrolą zgodności, raportem aktywnego release i przerwanego wdrożenia. Proxmox pozostawić jawnie niezweryfikowany.
+CP4: rozszerzyć istniejący kontroler o update/rollback/status. Przypięty artefakt, kontrola zgodności historii migracji, backup przed migracją, trwały journal etapów, atomowy symlink i readiness; błędne wydanie odzyskuje wcześniejszy kod tylko jeśli rzeczywista DB jest zgodna. Brak automatycznego downgrade/restore DB. Testy awarii i integracja na tej samej izolowanej VM, kolejno; po wynikach commit/push CP4 oraz statusu. Następnie CP5: pełny cykl z kontem/sesją i przeglądarką. Proxmox pozostaje niezweryfikowany.
 
-W nowej sesji najpierw przeczytaj ten plik, git status i commity; nie powtarzaj CP1/CP2. Nie merguj, nie uruchamiaj Codex Review ani rzeczywistego pct.
+W nowej sesji najpierw ten plik, git status i commity; nie powtarzaj CP1/CP2/CP3. Nie merguj, nie uruchamiaj Codex Review ani rzeczywistego pct. Testy wykonywać wyłącznie w izolacji; nigdy instalator na roboczym LXC/hoście.
