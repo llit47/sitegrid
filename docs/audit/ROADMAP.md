@@ -8,15 +8,32 @@ MVP: wiele firm, provisioning przez platformę, administracja kontami i pracowni
 
 Bez magazynu, zakupów, kalendarza, czatu, PDF/zdjęć, kosztów, pełnych brygad i rozbudowanego raportowania. Rezygnacja z tych modułów zmniejsza MVP, nie odkłada niezawodności. Administracja, przygotowanie urządzenia i odbiór robót pozostają online zgodnie z macierzą.
 
+## Pierwszy działający przyrost — M01 (najbliższy PR implementacyjny)
+
+**Zatwierdzona granica instalacji (2026-10-09):** SiteGrid instaluje się wyłącznie WEWNĄTRZ przygotowanego Debiana 13. Provisioning LXC/VM na hoście Proxmox jest poza zakresem projektu i skrypt `ops/install-proxmox.py` należy usunąć.
+
+**Obowiązkowy rezultat M01: instalowalny i uruchamialny SiteGrid z prawdziwym logowaniem**, a nie sam szkielet z atrapą konta. Instalacja, aktualizacja i rollback są kontraktem projektu od pierwszej wersji, nawet jeśli początkowo obsługują tylko podstawową aplikację.
+
+- **Minimalna aplikacja:** React/TypeScript, Fastify, PostgreSQL z migracjami; strona logowania, panel dostępny dopiero po zalogowaniu, wylogowanie, `/health/live` i `/health/ready`. Brak publicznego endpointu rejestracji.
+- **Pierwszy administrator platformy:** jednorazowy interaktywny bootstrap z CLI działającego lokalnie na serwerze, nie przez endpoint WWW; hasło Argon2id, sesja po stronie serwera w bezpiecznym cookie, unieważnianie przy wylogowaniu, limity prób logowania i ochrona żądań zmieniających stan. Żadnego stałego hasła demonstracyjnego ani sekretów w repo lub logach.
+- **One-line installer na GOTOWYM Debianie 13:** operator najpierw sam tworzy LXC/VM/serwer z Debianem 13, a następnie wkleja jedno polecenie do jego powłoki. Instalator automatycznie pobiera zweryfikowane, wersjonowane wydanie, instaluje zależności, PostgreSQL, nginx, SiteGrid oraz systemd i prowadzi przez krótką konfigurację. Nie tworzy kontenerów/VM, nie uruchamia się na hoście Proxmoxa, nie wymaga wcześniejszego kopiowania `ops/` ani archiwów. Skrypt uruchamiany jako root musi pochodzić z zaufanego/podpisanego, przypiętego źródła; nie wykonywać niezweryfikowanego `curl main | bash` i nie nadpisywać istniejących danych.
+- **Updater od dnia pierwszego:** `sitegrid update` pobiera określone wydanie, sprawdza integralność i zgodność, zachowuje konfigurację i DB, wykonuje backup przed migracją, uruchamia nowy release i weryfikuje gotowość usługi. W razie błędu zatrzymuje wdrożenie i raportuje, co pozostało aktywne.
+- **Rollback od dnia pierwszego:** `sitegrid rollback` przełącza na wcześniejszy kompletny release tylko wtedy, gdy jest zgodny z obecną bazą. Nie wykonuje ślepego downgrade schematu; przy niezgodności blokuje komendę i wskazuje kontrolowany restore DB z backupu. Zachować dane w katalogu trwałym poza release.
+- **Struktura:** `/opt/sitegrid/releases/<wersja>`, `/opt/sitegrid/current`, `/etc/sitegrid/` (sekrety; prawa dostępu), dane PostgreSQL poza release, usługi `systemd`. Całe wdrożenie i zarządzanie odbywają się WEWNĄTRZ istniejącego Debiana 13, bez żadnych operacji na hoście wirtualizacji.
+- **Weryfikacja:** build, test logowania i odmowy bez sesji, odtwarzalna instalacja z JEDNEGO polecenia na czystym Debianie 13, test ponownego uruchomienia instalatora i wznowienia po przerwaniu, aktualizacji między dwiema testowymi wersjami, uszkodzonego wydania i rollbacku bez utraty konta. Testy na odizolowanym Debianie 13/systemd; nie wymaga się testów `pct` ani hosta Proxmox.
+- **Brama akceptacji M01:** użytkownik wchodzi do już działającego, świeżego Debiana 13, wkleja jedno polecenie (bez wcześniejszego ręcznego transferu plików) i otrzymuje działającą usługę. Tworzy pierwszego administratora lokalnym CLI, loguje się z przeglądarki, wylogowuje, wykonuje prosty `sitegrid update` i bezpieczny `sitegrid rollback`. Kod i testy nie mogą zależeć od dostępu do API Proxmoxa. Przy prywatnym kanale dystrybucji token może być pobrany interaktywnie, ale nie może być wymagany w wklejanej komendzie ani wpisywany w logach.
+
+To **wąski pierwszy przyrost**, nie ukończone MVP. Obsługa wielu firm, zaproszenia, zaawansowane role i pełne offline-first pozostają w M02–M14. Nie wolno na podstawie działającego logowania ogłaszać gotowości do pilotażu z danymi prawdziwych firm.
+
 ## Małe PR-y implementacyjne po zatwierdzeniu
 
 Identyfikatory M01–M15 są pozycjami planu, nie numerami GitHuba. Każdy PR ma jeden ocenialny rezultat; większy zakres dzielić dalej. Żaden z nich nie jest wykonywany w PR #2.
 
 | ID | Zakres | Zależność | Kryterium zakończenia |
 |---|---|---|---|
-| M01 | Szkielet React/TS + Fastify, kontrakty, CI i konfiguracja instalacji | Zatwierdzony PR #2 | Build i health check; bez Supabase i danych firmy w `.env`. |
-| M02 | PostgreSQL: tożsamości, firmy, członkostwa, role i izolacja | M01 | Dwa tenanty, wspólny użytkownik, klucze złożone/RLS; izolacja puli połączeń. |
-| M03 | Sesje, logowanie/wylogowanie i bootstrap platformy | M02 | Brak publicznej rejestracji; kontrolowany bootstrap; odwoływalne sesje, CSRF i ograniczenie prób. |
+| M01 | **Działający fundament:** React/TS + Fastify + PostgreSQL, rzeczywiste logowanie administratora oraz od początku instalator jedno-poleceniowy na gotowy Debian 13 (także LXC), `sitegrid update`, `sitegrid rollback`, CI | Architektura PR #2 i rebranding PR #3 | Zalogowanie/wylogowanie, świeża instalacja, test aktualizacji i bezpiecznego rollbacku; wymagania szczegółowe wyżej. |
+| M02 | Rozszerzenie minimalnego modelu PostgreSQL o firmy, członkostwa, role i izolację | M01 | Dwa tenanty, wspólny użytkownik, klucze złożone/RLS; izolacja puli połączeń. |
+| M03 | Rozszerzenie zarządzania sesjami i uprawnieniami na kontekst wielu firm oraz odzyskiwanie dostępu | M02 | Zachowane bezpieczne logowanie z M01; odwołanie dostępu dla jednej firmy, brak przejęcia kontekstu innej firmy, testy sesji. |
 | M04 | Firma i zaproszenie pierwszego administratora, aktywacja | M03 | Transakcja zużycia tokenu, wygaśnięcie, ponowne zaproszenie, GET bez skutku; test poczty bez produkcyjnych odbiorców. |
 | M05 | Panel administratora firmy, pracownicy, role, dezaktywacja | M04 | Konto A+B i zaproszenie istniejącego konta; dezaktywacja tylko A; ochrona ostatniego administratora. |
 | M06 | Branding i przełącznik firm | M05 | Nazwa, ustawienia i ograniczone logo `bytea` w DB; autoryzowany odczyt i brak mieszania kontekstów kart. |
@@ -28,9 +45,9 @@ Identyfikatory M01–M15 są pozycjami planu, nie numerami GitHuba. Każdy PR ma
 | M12 | Konflikty, utrata dostępu i zmiana konta | M11 | Dwa urządzenia, brak cichego nadpisania, 401/403, kolejki A+B, lokalne wylogowanie i aktualizacja IndexedDB bez utraty pracy. |
 | M13 | Własny wpis pracy i przeszkoda przez istniejącą kolejkę | M12 | Tworzenie/korekta offline, walidacja czasu, własność wpisu; brak duplikacji i cudzych edycji. |
 | M14 | Odbiór/zwrot online i mobilna „moja praca” | M12–M13 | Kierownik nie odbiera własnych robót; filtry, kontekst, stan synchronizacji i podstawowe akcje dotykowe. |
-| M15 | Testowy LXC Debian 13, systemd, backup i monitoring | M06; finalna weryfikacja po M14 | Poprawne mount pointy/UID/GID; DB odtworzona z logo w nowym LXC, zmierzony RPO/RTO, alert kopii/dysku. |
+| M15 | Utrwalenie operacyjne: test odtworzenia, monitoring, obsługa migracji pełnego MVP i ponowna walidacja instalatora/updatera/rollbacku | M01 oraz M06; finalna weryfikacja po M14 | Gotowa procedura odtworzenia firm, logo, audytu i kolejki serwera na nowym LXC; zmierzony RPO/RTO, alert kopii/dysku, ponowne testy wydania. |
 
-M09–M12 są fundamentem produktu i częścią tej samej bramki MVP co konta oraz zadania. M07/M08 nie uzasadniają wcześniejszego pilotażu „tylko online”. M15 opisuje przygotowanie i odtworzenie testowe; uruchomienie docelowej produkcji wymaga osobnego zadania wdrożeniowego.
+**Zasada stała od M01:** każdy kolejny PR implementacyjny musi dać się dostarczyć mechanizmem wydania, aktualizacji i rollbacku; schemat bazy ma jawnie oznaczoną zgodność wsteczną, a test regresji nie może zgubić kont i konfiguracji. M09–M12 są fundamentem produktu i częścią tej samej bramki MVP co konta oraz zadania. M07/M08 nie uzasadniają wcześniejszego pilotażu „tylko online”. M15 rozszerza istniejący już mechanizm instalacji i odtwarzania na pełne dane MVP; uruchomienie docelowej produkcji wymaga osobnego zadania wdrożeniowego.
 
 ## Obowiązkowy odbiór MVP
 
