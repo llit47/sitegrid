@@ -23,6 +23,7 @@ jobs:
         run: |
           [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          node -e 'const fs = require("fs"); const version = process.env.RELEASE_TAG.slice(1); for (const file of ["package.json", "release.json"]) { if (JSON.parse(fs.readFileSync(file)).version !== version) process.exit(1); }'
           echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
   ci:
     needs: tag

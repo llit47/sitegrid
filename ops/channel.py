@@ -44,8 +44,10 @@ def fetch(url, destination, limit=1024 ** 3):
             length = response.headers.get('Content-Length')
             require(not length or int(length) <= limit, 'Przekroczony limit pobrania.')
             total = 0
+            deadline = time.monotonic() + 600
             while chunk := response.read(min(1024 * 1024, limit + 1)):
                 total += len(chunk)
+                require(time.monotonic() < deadline, 'Przekroczony czas pobrania.')
                 require(total <= limit, 'Przekroczony limit pobrania.')
                 output.write(chunk)
     except HTTPError as error:
@@ -115,16 +117,30 @@ def download_bundle(manifest, directory, *, fetcher=None):
     return archive, artifact['sha256']
 
 
-def automatic_update(args, state, *, key=None, fetcher=None):
-    import lifecycle
-    from system import write_json
-    current, _ = lifecycle.installed()
-    lifecycle.no_pending(lifecycle.journal())
+def seen_version(state):
     receipt = Path(state) / 'channel.json'
     require(not receipt.is_symlink(), 'Niedozwolony symlink stanu kanału.')
-    seen = json.loads(receipt.read_text()) if receipt.exists() else {}
-    require(isinstance(seen, dict), 'Nieprawidłowy stan kanału wydań.')
-    floor = max(version_tuple(current.name), version_tuple(seen.get('version', current.name)))
+    if not receipt.exists(): return None
+    seen = json.loads(receipt.read_text())
+    require(isinstance(seen, dict) and 'version' in seen, 'Nieprawidłowy stan kanału wydań.')
+    version_tuple(seen['version'])
+    return seen['version']
+
+
+def remember(version, state):
+    # Call under the installation/deployment lock. Re-running an older pinned
+    # bootstrap after rollback must never lower the trusted channel floor.
+    from system import write_json
+    previous = seen_version(state)
+    if previous is None or version_tuple(version) > version_tuple(previous):
+        write_json(Path(state) / 'channel.json', {'version': version})
+
+
+def automatic_update(args, state, *, key=None, fetcher=None):
+    import lifecycle
+    current, _ = lifecycle.installed()
+    lifecycle.no_pending(lifecycle.journal())
+    floor = max(version_tuple(current.name), version_tuple(seen_version(state) or current.name))
     with tempfile.TemporaryDirectory(prefix='sitegrid-channel-') as directory:
         manifest = resolve(directory, key=key, fetcher=fetcher)
         candidate = version_tuple(manifest['version'])
@@ -137,4 +153,4 @@ def automatic_update(args, state, *, key=None, fetcher=None):
         archive, sha = download_bundle(manifest, directory, fetcher=fetcher)
         from argparse import Namespace
         lifecycle.update(Namespace(bundle=str(archive), version=manifest['version'], sha256=sha, curl_config=None, yes=True))
-        write_json(receipt, {'version': manifest['version']})
+        remember(manifest['version'], state)

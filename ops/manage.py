@@ -2,6 +2,7 @@
 import argparse
 import os
 import sys
+from pathlib import Path
 from release import SiteGridError, require
 from system import ROOT, STATE, lock, app_cli
 import lifecycle
@@ -36,7 +37,7 @@ def main():
                     require(all((args.bundle, args.sha256, args.version)), 'Tryb manualny wymaga --bundle, --version i --sha256.')
                     lifecycle.update(args)
                 else:
-                    channel.automatic_update(args, STATE)
+                    channel.automatic_update(args, STATE, key=Path('/usr/local/lib/sitegrid/release-public.pem'))
             elif args.command == 'rollback': lifecycle.rollback(args)
             else:
                 require(sys.stdin.isatty() and sys.stdout.isatty(), 'Bootstrap wymaga lokalnego terminala.')

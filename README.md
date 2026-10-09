@@ -2,7 +2,7 @@
 
 Self-hosted platforma projektów budowlanych i pracy wielu firm. React/TypeScript, Fastify i PostgreSQL; pełne MVP obejmie PWA i podstawową pracę offline. M01 dostarcza działające logowanie administratora oraz mechanizm instalacji, aktualizacji i rollbacku. Instalacja wyłącznie **w gotowym Debianie 13 z systemd**, również w LXC.
 
-**PR #5 pozostaje roboczy. Pierwszy oficjalny Release nie został opublikowany.** Kod bootstrapu i publicznego kanału wydań jest przygotowywany/testowany; URL poniżej jest wzorcem przyszłej instrukcji, nie działającym wydaniem. Status i ograniczenia: [M01_STATUS.md](docs/M01_STATUS.md).
+**PR #5 pozostaje roboczy. Pierwszy oficjalny Release nie został opublikowany.** Bootstrap i publiczny kanał przetestowano na lokalnych podpisanych fixture w świeżym Debianie 13; URL poniżej jest wzorcem przyszłej instrukcji, nie działającym wydaniem. Status i ograniczenia: [M01_STATUS.md](docs/M01_STATUS.md).
 
 Po zatwierdzeniu pierwszego Release operator jako root wklei jedno polecenie wygenerowane w `INSTALL_COMMAND.txt`. Docelowy wzorzec (placeholdery zastępuje builder, bez ręcznego kopiowania `ops/` lub paczki):
 

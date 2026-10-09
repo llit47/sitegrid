@@ -5,6 +5,7 @@ import hashlib
 import io
 from pathlib import Path
 import re
+import shlex
 import zipfile
 
 p = argparse.ArgumentParser()
@@ -54,7 +55,8 @@ bootstrap.write_text(script)
 bootstrap.chmod(0o755)
 sha = hashlib.sha256(bootstrap.read_bytes()).hexdigest()
 # The command itself is the initial trust anchor and must be copied from a trusted instruction.
-command = f'''bash -c 'set -euo pipefail; test "$(id -u)" = 0; . /etc/os-release; test "$ID:$VERSION_ID" = debian:13; apt-get update; apt-get install -y ca-certificates curl; f=$(mktemp); trap '\''rm -f -- "$f"'\'' EXIT; curl --disable --fail --silent --show-error --location --proto =https --proto-redir =https --connect-timeout 15 --max-time 120 --max-filesize 1048576 https://github.com/llit47/sitegrid/releases/download/v{a.version}/{bootstrap.name} -o "$f"; echo "{sha}  $f" | sha256sum --check --status; bash "$f"' '''.strip()
+runner = f'''set -euo pipefail; test "$(id -u)" = 0; . /etc/os-release; test "$ID:$VERSION_ID" = debian:13; apt-get update; apt-get install -y ca-certificates curl; f=$(mktemp); trap 'rm -f -- "$f"' EXIT; curl --disable --fail --silent --show-error --location --proto =https --proto-redir =https --connect-timeout 15 --max-time 120 --max-filesize 1048576 https://github.com/llit47/sitegrid/releases/download/v{a.version}/{bootstrap.name} -o "$f"; echo "{sha}  $f" | sha256sum --check --status; bash "$f"'''
+command = 'bash -c ' + shlex.quote(runner)
 (output / 'INSTALL_COMMAND.txt').write_text(command + '\n')
 (output / (bootstrap.name + '.sha256')).write_text(sha + '  ' + bootstrap.name + '\n')
 print(bootstrap, sha)

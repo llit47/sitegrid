@@ -1,32 +1,34 @@
 # SiteGrid M01 — status PR #5
 
-Branch: `feat/m01-working-foundation`. Repozytorium `llit47/sitegrid` i planowane Releases są **publiczne**. Instalacja wyłącznie w gotowym Debianie 13/systemd, również LXC; bez tworzenia maszyn i operacji na hoście wirtualizacji. Pierwszego Release nie opublikowano.
+Branch: `feat/m01-working-foundation`. Repozytorium `llit47/sitegrid` i planowane Releases są **publiczne**. Instalacja wyłącznie w gotowym Debianie 13/systemd, również LXC. Pierwszego Release nie opublikowano.
 
-## Zachowana implementacja
+## Zachowana implementacja i odzyskiwanie
 
-CP1 React/Fastify/PostgreSQL i CP2 prawdziwe logowanie/sesje są ukończone. Istniejący instalator i lifecycle zachowane; P1 `071374e` utrwala rezerwację przed nginx, P2 `f707e35` publikuje katalog ze znacznikiem atomowo i nie zastępuje obcych katalogów. Historyczna walidacja CP5 `17e9d0c`: 15 testów Node, wcześniejsze testy Python i Debian/systemd, HTTPS/logowanie w przeglądarce, update/rollback/backup/restore. Te wyniki nie zastępują nowej walidacji publicznego bootstrapu.
+CP1 React/Fastify/PostgreSQL i CP2 logowanie/sesje są ukończone. CP3/CP4 zachowują instalator i lifecycle: P1 `071374e` utrwala rezerwację przed nginx; P2 `f707e35` publikuje kompletny katalog ze znacznikiem atomowo przez renameat2 NOREPLACE/fsync, bez przejmowania obcych katalogów. Nie zaczynano od nowa i nie utracono zmian. Historyczna walidacja CP5 `17e9d0c`: testy Node/Python, Debian/systemd, przeglądarka/HTTPS, update/rollback/backup/restore. Szczegółowy audyt odzyskiwania zachowany w historii (`a597b9d`, `f707e35`) i ignorowanych kopiach `.recovery/`.
 
-## Checkpoint A — podpisany kanał i bootstrap
+## Checkpoint A — podpisany kanał i one-line bootstrap
 
-- `ops/channel.py`: publiczny GitHub, HTTPS i kontrolowane przekierowania/limity; Ed25519 z lokalnie przypiętym kluczem; repo/tag/architektura/nazwy/SHA-256/daty; ochrona przed cofnięciem zaufanej wersji po rollbacku. API latest jest tylko niezaufanym lokalizatorem. Brak Release i złe podpisy zatrzymują operację.
-- `scripts/build-bootstrap.py`: deterministyczny samodzielny bootstrap z przypiętą wersją/kluczem oraz pełna komenda z przypiętą SHA-256, sprawdzana przed wykonaniem. Bootstrap zawiera istniejący instalator, pobiera zweryfikowaną paczkę i instaluje zależności; bez kopiowania ops/archiwum. Pyta o origin/potwierdzenie i kończy readiness.
-- `sitegrid update` bez flag pokazuje wersje i wymaga TAK przed pobraniem pakietu/wdrożeniem; zachowuje dotychczasową blokadę, backup, kontrolę migracji/readiness/rollback. Manualny komplet flag zachowany; częściowy zestaw odrzucany. Bez aktualizacji w tle.
-- **49/49 testów Python PASS**, bez pominięć, z aktualnie zbudowanym pakietem fixture 0.1.0; 17 nowych testów podpisów/transportu/CLI/instalacji i retry P1/P2/potwierdzenia/update/rollback. Podpisy i pliki rzeczywiste, granice APT/systemd/DB mockowane. Build paczki/runtime PASS; bootstrap powtarzalny; py_compile/bash -n/git diff --check PASS. Testowy klucz prywatny i artefakty wyłącznie w `/tmp/sitegrid-public-lab`, nie w git.
+Implementacja `cc265a9` została wypchnięta; [CI PASS](https://github.com/llit47/sitegrid/actions/runs/37965994512) obejmuje 15 testów Node, typecheck/build/pakiet i wcześniejsze 49 testów Python.
 
-## Checkpoint B — przygotowanie wydania
+- Publiczny GitHub przez HTTPS z kontrolą przekierowań/limitów; manifest Ed25519, przypięty klucz, repo/tag/architektura/nazwy/SHA-256/daty. API latest jest niezaufanym lokalizatorem; brak Release/zły podpis zatrzymuje operację.
+- Samodzielny deterministyczny bootstrap z przypiętą wersją/kluczem i wygenerowana pełna komenda z SHA-256 sprawdzaną **przed wykonaniem** bootstrapu. Bez kopiowania ops/archiwum, bez kodu z main i bez poświadczeń klienta. Pytania origin/potwierdzenie, PostgreSQL 17/nginx/Node/SiteGrid/systemd, readiness.
+- `sitegrid update` bez flag wymaga TAK przed pobraniem pakietu/wdrożeniem. Zachowuje blokadę, backup, migracje, readiness i rollback oraz manualny komplet flag. Bez aktualizacji w tle. Kotwica `/usr/local/lib/sitegrid/release-public.pem` pozostaje od instalacji; kanał nie podmienia jej kluczem z nowego wydania. Monotoniczny stan wersji przetrwa rollback i retry starszego bootstrapu.
 
-Workflow tagu `vX.Y.Z` wymaga historii main i sukcesu reusable CI, następnie podpisuje ten sam przetestowany artefakt i tworzy **wyłącznie Draft**. Środowisko `release-signing` i dopasowany sekret klucza; publikacja przez operatora po odrębnym zatwierdzeniu. Procedura: RELEASES.md. Branch CI może użyć efemerycznego klucza fixture, tag nie może.
+## Checkpoint B — klucz i przygotowanie wydania
 
-**Klucz wydawcy czeka na decyzję:** wygenerować nowy poza repozytorium czy przypiąć dostarczoną publiczną część istniejącego klucza. Nie dodano klucza fixture jako produkcyjnego. Do czasu wyboru produkcyjny bootstrap/Release nie jest gotowy do publikacji.
+Po zgodzie użytkownika wygenerowano nowy Ed25519. Publiczny klucz: `ops/release-public.pem`; SHA-256 pliku PEM `3a6e17d95f6db366e851e530f1029669cd72cba3cf7e5baea024af6bec4c7094`. Prywatny: `/home/codex/.local/share/sitegrid-release-signing/ed25519.pem`, prawa 0600/katalog 0700; nigdy nie kopiowany do repo ani logów. Kopia poza LXC i sekret GitHub **nie są jeszcze skonfigurowane**.
 
-## Checkpoint C — integracja i konflikt
+Workflow tagu vX.Y.Z wymaga historii main, zgodności package.json/release.json/tagu i sukcesu reusable CI. Podpisuje ten sam przetestowany artefakt, sprawdza również jego klucz i tworzy **wyłącznie Draft**. Środowisko `release-signing` wymaga konfiguracji operatora; publikacja dopiero po osobnym zatwierdzeniu użytkownika. Workflow publikacyjny nie był jeszcze uruchomiony. Procedura: RELEASES.md. Obecny build wspiera Linux x64; arm64 wymaga osobnej przetestowanej paczki.
 
-Test świeżego Debiana/systemd z lokalnymi podpisanymi fixture planowany sekwencyjnie, bez zmiany/usuwania zachowanych VM. LXC: 4 GiB RAM, ~3.7 GiB dostępne, dysk ~2.3 GiB; najwyżej jedna testowa VM i brak równoległego builda.
+## Checkpoint C — końcowe testy i konflikt
 
-main `2a298b5` zawiera starszy zakres instalacji; branch zachowuje późniejszą decyzję Debian-only. **Automatyczna kontrola odrzuciła lokalne git merge origin/main z powodu zakazu NIE MERGUJ; nic nie wykonano.** Pytanie o zgodę na włączenie main wyłącznie do brancha PR jest w toku. Konflikt PR nie jest jeszcze rozwiązany; nie wolno obchodzić odmowy.
+- **51/51 Python PASS**, bez pominięć: 12 instalator, 10 lifecycle, 10 pakiet, 19 kanał. Rzeczywiste pliki/podpisy/fsync/rename, granice APT/systemd/DB mockowane. Dokładne regresje przerwania po nginx (P1), po mkdir przed znacznikiem (P2), obce katalogi/symlinki/DB/konfiguracja, brak Release, zły podpis/SHA, wygasły/cofnięty manifest, potwierdzenie, manualny CLI i rollback.
+- Końcowy pakiet z przypiętym kluczem: build/runtime/native PASS; typecheck, py_compile, bash -n, deterministyczny bootstrap/wykonanie komendy z kontrolą SHA i git diff --check PASS. Lokalny podpisujący CLI sprawdzany tylko kluczem fixture; nie podpisano oficjalnego wydania.
+- **Rzeczywisty świeży Debian 13/systemd:** pojedyncza wygenerowana komenda → instalacja → readiness 0.1.0 → ponowienie → administrator CLI bez echa hasła → logowanie HTTPS → update 0.1.1 po TAK i backupie → readiness → rollback 0.1.0 → logowanie. Konfiguracja i klucz TLS zachowane (porównanie hashy), konto zachowane. HTTP 404/brak Release, uszkodzony podpis i uszkodzony pakiet odrzucone przed zmianą deploymentu; cofnięty podpisany kanał po rollbacku również odrzucony.
+- Integracja używa lokalnych podpisanych fixture, lokalnego serwera HTTPS/testowej CA oraz mapowania hostów GitHub. Do VM przed instalacją nie kopiowano ops ani archiwum. Nie dowodzi jeszcze dostępności oficjalnych assetów. Dysk nowej VM zachowany, VM wyłączona po testach; stare VM/dane nietknięte. LXC: 4 GiB RAM/~2.3 GiB wolnego dysku na początku. Najwyżej jedna VM, buildy/testy sekwencyjne.
 
-## Następny krok / pierwsze wydanie
+origin/main `2a298b5` zawiera starszy zakres Proxmox. Automatyczna kontrola początkowo odrzuciła lokalny merge; użytkownik następnie wyraźnie zgodził się na włączenie main wyłącznie do brancha PR. Bieżące zmiany są zabezpieczane commitem przed tą operacją; decyzja Debian-only/publiczny kanał zostaje zachowana.
 
-Dokończyć sekwencyjny test czystego Debiana z fixture, po odpowiedziach przypiąć klucz i rozwiązać konflikt w dwóch dokumentach. Ustawić chronione środowisko signing/sekret i kopię klucza poza LXC, sprawdzić CI końcowego commita, uzyskać ocenę użytkownika. Dopiero po zatwierdzeniu: tag sprawdzonego commita main, Draft i zatwierdzona publikacja pierwszego Release z pełną komendą instalacji. Nie utworzono tagu/Release, nie scalono PR i nie uruchomiono Codex Review.
+## Dokładny następny krok / pierwsze wydanie
 
-Wcześniejszy szczegółowy audyt odzyskiwania jest zachowany w historii (`a597b9d`, `f707e35`) oraz ignorowanych kopiach `.recovery/`; nie usuwano danych, sekretów ani testowych dysków.
+Dokończyć zatwierdzone włączenie main do brancha PR, wypchnąć i uaktualnić PR #5 oraz sprawdzić końcowe CI. Następnie czekać na ocenę użytkownika. Przed pierwszym Release operator musi wykonać kopię klucza poza LXC, skonfigurować chronione środowisko signing/sekret, zaakceptować i zintegrować PR, wskazać przetestowany commit main/tag, uruchomić pipeline Draft i sprawdzić assety/komendę. Pierwsza publikacja wymaga odrębnego zatwierdzenia; dopiero wtedy README otrzyma konkretną działającą komendę. Nie utworzono tagu/Release, nie scalono PR i nie uruchomiono Codex Review.

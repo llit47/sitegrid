@@ -13,6 +13,7 @@ import sys
 import tempfile
 from release import SiteGridError, require, command, download, extract_release, atomic_link, read_manifest
 from system import ROOT, CONFIG, STATE, RUNTIME_DB_URL, lock, write_json, sql, app_cli, grant_runtime, health
+from channel import remember
 
 
 def preflight(managed, dependencies=False):
@@ -164,7 +165,7 @@ def install(args):
                 require(read_manifest(ROOT / 'current')['version'] == args.version, 'Aktywne wydanie jest inne; instalator nie wykona downgrade.')
                 require(health(args.version, 1), 'Instalacja istnieje, lecz readiness nie działa. Sprawdź journalctl -u sitegrid.')
                 if getattr(args, 'signed_version', None) == args.version:
-                    write_json(STATE / 'channel.json', {'version': args.version})
+                    remember(args.version, STATE)
                 print('Instalacja już ukończona; dane i konfiguracja zachowane.')
                 return
             origin = previous['origin'] if previous else (args.origin or origin_prompt())
@@ -229,7 +230,7 @@ def install(args):
             state['phase'] = 'done'
             write_json(marker, state)
             if getattr(args, 'signed_version', None) == args.version:
-                write_json(STATE / 'channel.json', {'version': args.version})
+                remember(args.version, STATE)
             print(f'Gotowe: {origin}\nUtwórz administratora lokalnie: sudo sitegrid bootstrap-admin\nTLS: /etc/sitegrid/tls. Trwałe dane: PostgreSQL; konfiguracja: /etc/sitegrid.')
 
 

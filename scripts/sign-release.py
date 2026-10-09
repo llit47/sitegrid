@@ -8,7 +8,7 @@ import sys
 import tarfile
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ops'))
-from release import require, command
+from release import require, command, validate_manifest
 from channel import REPOSITORY, version_tuple, verify_manifest
 
 p = argparse.ArgumentParser()
@@ -28,6 +28,8 @@ artifacts = {}
 for archive in sorted(directory.glob(f'sitegrid-{a.version}-linux-*.tar.gz')):
     with tarfile.open(archive, 'r:gz') as tar:
         manifest = json.load(tar.extractfile('./release.json'))
+        require(tar.extractfile('./ops/release-public.pem').read().strip() == public.read_bytes().strip(), 'Bundle trust anchor differs from the signing key.')
+    validate_manifest(manifest)
     arch = manifest['arch']
     require(manifest['version'] == a.version and arch in ('x64', 'arm64') and archive.name == f'sitegrid-{a.version}-linux-{arch}.tar.gz', 'Bundle does not match the tag/platform.')
     artifacts[arch] = {'name': archive.name, 'sha256': hashlib.sha256(archive.read_bytes()).hexdigest()}

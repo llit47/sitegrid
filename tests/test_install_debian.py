@@ -92,7 +92,10 @@ class InstallerRetryTests(unittest.TestCase):
         (staging / 'ops').mkdir(parents=True)
         for name in ('release.py', 'system.py', 'manage.py', 'lifecycle.py', 'channel.py', 'release-public.pem', 'sitegrid', 'sitegrid.service', 'sitegrid-proxy.service'):
             (staging / 'ops' / name).write_text('test fixture')
-        return {'version': version}
+        manifest = json.loads(Path('release.json').read_text())
+        manifest['version'] = version
+        (staging / 'release.json').write_text(json.dumps(manifest))
+        return manifest
 
     def run_installer(self):
         with contextlib.redirect_stdout(io.StringIO()): installer.install(self.args)

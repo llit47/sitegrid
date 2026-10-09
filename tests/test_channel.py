@@ -4,8 +4,10 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
+import shlex
 import sys
 import tempfile
 import time
@@ -194,6 +196,24 @@ class ChannelTests(unittest.TestCase):
         self.assertFalse(case.state.exists())
         self.assertFalse(case.calls)
 
+    def test_old_pinned_bootstrap_retry_never_lowers_seen_version(self):
+        case = self.installer_case()
+        case.crash = False
+        self.run_bootstrap(case)
+        channel.remember('0.1.1', case.state)
+        self.run_bootstrap(case)
+        self.assertEqual(channel.seen_version(case.state), '0.1.1')
+        self.assertEqual(json.loads(case.marker.read_text())['phase'], 'done')
+
+    def test_no_release_bootstrap_never_claims_state(self):
+        case = self.installer_case()
+        def absent(*args): raise SiteGridError('Brak opublikowanego Release/assetu (HTTP 404).')
+        with patch.object(channel, 'KEY', self.public), patch.object(channel, 'fetch', absent), patch.object(bootstrap, 'VERSION', '0.1.0'):
+            with self.assertRaisesRegex(SiteGridError, 'Brak opublikowanego'):
+                bootstrap.install(argparse.Namespace(origin=case.args.origin, yes=True))
+        self.assertFalse(case.state.exists())
+        self.assertFalse(case.calls)
+
     def test_signed_bootstrap_refuses_foreign_state(self):
         case = self.installer_case()
         case.state.mkdir()
@@ -209,6 +229,7 @@ class ChannelTests(unittest.TestCase):
         with patch.object(manage, 'STATE', state), patch.object(manage, 'lock', contextlib.nullcontext), patch.object(manage.os, 'geteuid', return_value=0), patch.object(lifecycle, 'update') as manual, patch.object(channel, 'automatic_update') as automatic:
             with patch.object(sys, 'argv', ['sitegrid', 'update']): self.assertEqual(manage.main(), 0)
             automatic.assert_called_once()
+            self.assertEqual(automatic.call_args.kwargs['key'], Path('/usr/local/lib/sitegrid/release-public.pem'))
             with patch.object(sys, 'argv', ['sitegrid', 'update', '--bundle', 'local', '--version', '0.1.1', '--sha256', 'a' * 64]): self.assertEqual(manage.main(), 0)
             manual.assert_called_once()
             with patch.object(sys, 'argv', ['sitegrid', 'update', '--version', '0.1.1']), contextlib.redirect_stderr(io.StringIO()): self.assertEqual(manage.main(), 1)
@@ -222,8 +243,33 @@ class ChannelTests(unittest.TestCase):
             subprocess.run(['bash', '-n', str(output / 'INSTALL_COMMAND.txt')], check=True, capture_output=True)
         self.assertEqual((first / 'sitegrid-install-0.1.0.sh').read_bytes(), (second / 'sitegrid-install-0.1.0.sh').read_bytes())
         command = (first / 'INSTALL_COMMAND.txt').read_text()
+        parts = shlex.split(command)
+        self.assertEqual(len(parts), 3)  # one shell program, including its quoted cleanup trap
         self.assertIn(hashlib.sha256((first / 'sitegrid-install-0.1.0.sh').read_bytes()).hexdigest(), command)
         self.assertNotIn('/main/', command)
+        # Execute the runner with harmless host-boundary stubs; checksum is real.
+        tools = self.root / 'tools'
+        tools.mkdir()
+        for name, body in {
+            'id': 'echo 0', 'apt-get': 'exit 0',
+            'curl': 'for arg; do destination="$arg"; done; cp "$BOOTSTRAP_SOURCE" "$destination"',
+            'bash': 'echo verified > "$RUNNER_MARKER"',
+        }.items():
+            path = tools / name
+            path.write_text('#!/bin/sh\n' + body + '\n')
+            path.chmod(0o755)
+        os_release = self.root / 'os-release'
+        os_release.write_text('ID=debian\nVERSION_ID=13\n')
+        runner = parts[2].replace('/etc/os-release', str(os_release))
+        marker = self.root / 'executed'
+        env = {**os.environ, 'PATH': str(tools) + ':' + os.environ['PATH'], 'BOOTSTRAP_SOURCE': str(first / 'sitegrid-install-0.1.0.sh'), 'RUNNER_MARKER': str(marker)}
+        subprocess.run(['/bin/bash', '-c', runner], env=env, capture_output=True, check=True)
+        self.assertTrue(marker.exists())
+        marker.unlink()
+        (first / 'sitegrid-install-0.1.0.sh').write_text('tampered bootstrap')
+        result = subprocess.run(['/bin/bash', '-c', runner], env=env, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(marker.exists())
 
 
 if __name__ == '__main__': unittest.main()

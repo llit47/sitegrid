@@ -10,7 +10,7 @@ Bez magazynu, zakupów, kalendarza, czatu, PDF/zdjęć, kosztów, pełnych bryga
 
 ## Pierwszy działający przyrost — M01 (najbliższy PR implementacyjny)
 
-**Zatwierdzona granica instalacji (2026-10-09):** SiteGrid instaluje się wyłącznie WEWNĄTRZ przygotowanego Debiana 13. Provisioning LXC/VM na hoście Proxmox jest poza zakresem projektu i skrypt `ops/install-proxmox.py` należy usunąć.
+**Zatwierdzona granica instalacji (2026-10-09):** SiteGrid instaluje się wyłącznie WEWNĄTRZ przygotowanego Debiana 13. Provisioning LXC/VM na hoście Proxmox jest poza zakresem projektu.
 
 **Obowiązkowy rezultat M01: instalowalny i uruchamialny SiteGrid z prawdziwym logowaniem**, a nie sam szkielet z atrapą konta. Instalacja, aktualizacja i rollback są kontraktem projektu od pierwszej wersji, nawet jeśli początkowo obsługują tylko podstawową aplikację.
 
@@ -21,7 +21,7 @@ Bez magazynu, zakupów, kalendarza, czatu, PDF/zdjęć, kosztów, pełnych bryga
 - **Rollback od dnia pierwszego:** `sitegrid rollback` przełącza na wcześniejszy kompletny release tylko wtedy, gdy jest zgodny z obecną bazą. Nie wykonuje ślepego downgrade schematu; przy niezgodności blokuje komendę i wskazuje kontrolowany restore DB z backupu. Zachować dane w katalogu trwałym poza release.
 - **Struktura:** `/opt/sitegrid/releases/<wersja>`, `/opt/sitegrid/current`, `/etc/sitegrid/` (sekrety; prawa dostępu), dane PostgreSQL poza release, usługi `systemd`. Całe wdrożenie i zarządzanie odbywają się WEWNĄTRZ istniejącego Debiana 13, bez żadnych operacji na hoście wirtualizacji.
 - **Weryfikacja:** build, test logowania i odmowy bez sesji, odtwarzalna instalacja z JEDNEGO polecenia na czystym Debianie 13, test ponownego uruchomienia instalatora i wznowienia po przerwaniu, aktualizacji między dwiema testowymi wersjami, uszkodzonego wydania i rollbacku bez utraty konta. Testy na odizolowanym Debianie 13/systemd; nie wymaga się testów `pct` ani hosta Proxmox.
-- **Brama akceptacji M01:** użytkownik wchodzi do już działającego, świeżego Debiana 13, wkleja jedno polecenie (bez wcześniejszego ręcznego transferu plików) i otrzymuje działającą usługę. Tworzy pierwszego administratora lokalnym CLI, loguje się z przeglądarki, wylogowuje, wykonuje prosty `sitegrid update` i bezpieczny `sitegrid rollback`. Kod i testy nie mogą zależeć od dostępu do API Proxmoxa. Przy prywatnym kanale dystrybucji token może być pobrany interaktywnie, ale nie może być wymagany w wklejanej komendzie ani wpisywany w logach.
+- **Brama akceptacji M01:** użytkownik wchodzi do już działającego, świeżego Debiana 13, wkleja jedno polecenie (bez wcześniejszego ręcznego transferu plików) i otrzymuje działającą usługę. Tworzy pierwszego administratora lokalnym CLI, loguje się z przeglądarki, wylogowuje, wykonuje prosty `sitegrid update` i bezpieczny `sitegrid rollback`. Kod i testy nie mogą zależeć od dostępu do API Proxmoxa. Publiczne GitHub Releases llit47/sitegrid dostarczają podpisany manifest i paczki bez uwierzytelnienia klienta; bootstrap/klucz są przypięte, a pierwsza publikacja wymaga zatwierdzenia użytkownika.
 
 To **wąski pierwszy przyrost**, nie ukończone MVP. Obsługa wielu firm, zaproszenia, zaawansowane role i pełne offline-first pozostają w M02–M14. Nie wolno na podstawie działającego logowania ogłaszać gotowości do pilotażu z danymi prawdziwych firm.
 
