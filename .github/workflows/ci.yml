@@ -1,0 +1,57 @@
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+    inputs:
+      release-version:
+        type: string
+        default: '0.1.0'
+permissions:
+  contents: read
+jobs:
+  application:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: sitegrid_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: sitegrid_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://sitegrid_test@127.0.0.1:5432/sitegrid_test
+      SITEGRID_TEST_VERSION: ${{ inputs.release-version || '0.1.0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Select pinned key (ephemeral fixture only for branch CI)
+        run: |
+          if [ -f ops/release-public.pem ]; then
+            echo 'SITEGRID_BUILD_KEY=ops/release-public.pem' >> "$GITHUB_ENV"
+          else
+            test "$GITHUB_REF_TYPE" != tag
+            umask 077
+            openssl genpkey -algorithm ED25519 -out "$RUNNER_TEMP/sitegrid-fixture.pem"
+            openssl pkey -in "$RUNNER_TEMP/sitegrid-fixture.pem" -pubout -out "$RUNNER_TEMP/sitegrid-fixture-public.pem"
+            echo "SITEGRID_BUILD_KEY=$RUNNER_TEMP/sitegrid-fixture-public.pem" >> "$GITHUB_ENV"
+          fi
+      - run: node scripts/package-release.mjs "$SITEGRID_TEST_VERSION" --public-key "$SITEGRID_BUILD_KEY"
+      - run: SITEGRID_TEST_BUNDLE="$PWD/artifacts/sitegrid-$SITEGRID_TEST_VERSION-linux-x64.tar.gz" python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - run: bash -n ops/install-sitegrid.sh ops/sitegrid tests/*.sh
+      - run: python3 -m py_compile ops/*.py tests/*.py
+      - run: node --check tests/deployed-browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sitegrid-m01-linux-x64
+          path: artifacts/*
+          retention-days: 7

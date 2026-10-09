@@ -1,0 +1,30 @@
+[Unit]
+Description=SiteGrid application
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=sitegrid
+Group=sitegrid
+WorkingDirectory=/opt/sitegrid/current
+EnvironmentFile=/etc/sitegrid/sitegrid.env
+ExecStart=/opt/sitegrid/current/runtime/bin/node /opt/sitegrid/current/dist/server/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/sitegrid
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

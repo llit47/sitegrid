@@ -1,0 +1,89 @@
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import sys
+import tarfile
+import tempfile
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ops'))
+from release import SiteGridError, extract_release, validate_manifest, atomic_link, download
+
+
+class ReleaseTests(unittest.TestCase):
+    def test_malformed_manifest_fails_closed(self):
+        manifest = json.loads(Path('release.json').read_text())
+        for value in [[], {**manifest, 'version': 1}, {**manifest, 'schema': []}]:
+            with self.subTest(value=value), self.assertRaises(SiteGridError): validate_manifest(value)
+
+    def test_manifest_requires_schema_contract(self):
+        manifest = json.loads(Path('release.json').read_text())
+        validate_manifest(manifest)
+        del manifest['schema']['min']
+        with self.assertRaises(SiteGridError): validate_manifest(manifest)
+
+    def malicious_archive(self, name, link=False):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / 'release.tar.gz'
+            with tarfile.open(archive, 'w:gz') as tar:
+                member = tarfile.TarInfo(name)
+                if link:
+                    member.type = tarfile.SYMTYPE
+                    member.linkname = '/etc/passwd'
+                    tar.addfile(member)
+                else:
+                    member.size = 1
+                    tar.addfile(member, io.BytesIO(b'x'))
+            sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(SiteGridError, 'Niebezpieczna'):
+                extract_release(archive, Path(directory) / 'out', sha, '0.1.0')
+
+    def test_parent_traversal_rejected(self): self.malicious_archive('../outside')
+    def test_absolute_path_rejected(self): self.malicious_archive('/outside')
+    def test_symlink_rejected(self): self.malicious_archive('link', True)
+
+    def test_untrusted_checksum_rejected_before_extraction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / 'invalid.tar.gz'
+            archive.write_bytes(b'corrupt')
+            destination = Path(directory) / 'out'
+            with self.assertRaisesRegex(SiteGridError, 'SHA-256'):
+                extract_release(archive, destination, '0' * 64, '0.1.0')
+            self.assertFalse(destination.exists())
+
+    def test_pinned_version_required(self):
+        with self.assertRaises(SiteGridError): extract_release('/missing', '/missing', '0' * 64, 'main')
+
+    def test_atomic_switch_and_recovery_guard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            current = Path(directory) / 'current'
+            atomic_link('/one', current)
+            atomic_link('/two', current)
+            self.assertEqual(os.readlink(current), '/two')
+            current.with_name('current.next').symlink_to('/interrupted')
+            with self.assertRaises(SiteGridError): atomic_link('/three', current)
+            self.assertEqual(os.readlink(current), '/two')
+
+    def test_missing_download_preserves_existing_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / 'file'
+            destination.write_text('old')
+            with self.assertRaises(SiteGridError): download('/missing-sitegrid-artifact', destination)
+            self.assertEqual(destination.read_text(), 'old')
+
+    @unittest.skipUnless(os.environ.get('SITEGRID_TEST_BUNDLE'), 'Run packaging test with SITEGRID_TEST_BUNDLE')
+    def test_actual_built_bundle(self):
+        archive = Path(os.environ['SITEGRID_TEST_BUNDLE'])
+        version = os.environ.get('SITEGRID_TEST_VERSION', '0.1.0')
+        sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = extract_release(archive, Path(directory) / 'release', sha, version)
+            self.assertEqual(manifest['schema']['target'], 2)
+            self.assertEqual((Path(directory) / 'release').stat().st_mode & 0o777, 0o755)
+            wrong = '9999.9999.9999' if version != '9999.9999.9999' else '0.0.0'
+            with self.assertRaises(SiteGridError): extract_release(archive, Path(directory) / 'wrong', sha, wrong)
+
+
+if __name__ == '__main__': unittest.main()
