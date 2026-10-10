@@ -74,7 +74,7 @@ export function CompanyBranding({ branding, csrfToken, onSaved, onAccessChanged 
     setBusy(true); setError(''); setNotice('');
     try {
       const data = await brandingRequest<{ branding: Branding }>(path, controller.current.signal);
-      if (!controller.current.signal.aborted) { onSaved(data.branding); setConflict(false); setNotice('Pobrano aktualne ustawienia. Sprawdź dane przed zapisem.'); }
+      if (!controller.current.signal.aborted) { onSaved(data.branding); setFile(null); setConflict(false); setNotice('Pobrano aktualne ustawienia. Sprawdź dane przed zapisem.'); }
     } catch (e) { fail(e); }
     finally { if (!controller.current.signal.aborted) setBusy(false); }
   };

@@ -32,7 +32,17 @@ export function OrganizationSwitcher({ csrfToken }: { csrfToken: string }) {
         setOrganizations(data.organizations);
         const results = await Promise.allSettled(data.organizations.map(async organization =>
           (await brandingRequest<{ branding: Branding }>(`/api/organizations/${encodeURIComponent(organization.id)}/branding`, controller.signal)).branding));
-        if (!controller.signal.aborted) setBrands(Object.fromEntries(results.flatMap(result => result.status === 'fulfilled' ? [[result.value.organizationId, result.value]] : [])));
+        if (!controller.signal.aborted) setBrands(current => {
+          const next = { ...current };
+          for (const result of results) {
+            if (result.status !== 'fulfilled') continue;
+            const incoming = result.value;
+            if (!next[incoming.organizationId] || incoming.version > next[incoming.organizationId].version) {
+              next[incoming.organizationId] = incoming;
+            }
+          }
+          return next;
+        });
       })
       .catch(e => { if (!controller.signal.aborted) setListError(e.message); });
     return () => controller.abort();

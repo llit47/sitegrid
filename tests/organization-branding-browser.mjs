@@ -47,9 +47,21 @@ try {
   const page = await context.newPage(), errors = [], cspErrors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', msg => { if (msg.text().includes('Content Security Policy')) cspErrors.push(msg.text()); });
+  // Hold the initial list's A branding snapshot while the selected company is saved.
+  let releaseInitial, initialStarted, initialHeld = false;
+  const initialGate = new Promise(resolve => { releaseInitial = resolve; });
+  const initialFetched = new Promise(resolve => { initialStarted = resolve; });
+  const initialPath = `${config.origin}/api/organizations/${companyA}/branding`;
+  await page.route(initialPath, async route => {
+    if (initialHeld || route.request().method() !== 'GET') return route.continue();
+    initialHeld = true;
+    const response = await route.fetch(); initialStarted(); await initialGate;
+    await route.fulfill({ response });
+  });
   await page.goto(config.origin);
   await page.locator('#email').fill('shared@example.test'); await page.locator('#password').fill(password);
   await page.getByRole('button', { name: 'Zaloguj się', exact: true }).click();
+  await initialFetched;
   await page.locator('#active-organization').selectOption(companyA);
   const settings = page.locator('.company-branding'), header = page.locator('.company-header');
   await settings.getByRole('heading', { name: 'Ustawienia firmy' }).waitFor();
@@ -66,6 +78,18 @@ try {
     await page.waitForFunction(mime => document.querySelector('.company-header img')?.naturalWidth > 0 && document.querySelector('.company-branding input[type=file]')?.value === '' && mime,
       mimeType);
     assert.equal((await owner.query('SELECT mime_type FROM organization_logos WHERE organization_id = $1', [companyA])).rows[0].mime_type, mimeType);
+    if (name === 'logo.png') {
+      const savedLogo = await header.locator('img').getAttribute('src');
+      releaseInitial();
+      // B's logo appears only after the initial batch has merged into the switcher.
+      await page.waitForFunction(id => document.querySelector(`.company-choice img[src*="${id}"]`)?.naturalWidth > 0, companyB);
+      const selectedChoice = page.locator('.company-choice[aria-pressed="true"]');
+      assert.equal(await selectedChoice.locator('span').last().textContent(), 'Żółć Browser A', 'Delayed initial branding must retain the saved name');
+      assert.equal(await selectedChoice.locator('img').getAttribute('src'), savedLogo, 'Delayed initial branding must retain the saved logo version');
+      assert.equal(await header.locator('h3').textContent(), 'Żółć Browser A');
+      await page.unroute(initialPath);
+      console.log('PASS regression: delayed initial branding cannot replace a newer saved name/logo');
+    }
   }
   await settings.getByRole('button', { name: 'Usuń logo', exact: true }).click();
   await settings.getByRole('button', { name: 'Dodaj logo', exact: true }).waitFor();
@@ -76,6 +100,7 @@ try {
   await settings.getByLabel('Logo firmy', { exact: true }).setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png });
   await settings.getByRole('button', { name: 'Dodaj logo', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('.company-header img')?.naturalWidth > 0);
+  await settings.getByLabel('Logo firmy', { exact: true }).setInputFiles({ name: 'retained.jpg', mimeType: 'image/jpeg', buffer: jpeg });
   // A second tab/API changes the server version while the visible form retains a draft.
   const external = await page.evaluate(async id => {
     const session = await (await fetch('/api/auth/session')).json();
@@ -90,9 +115,22 @@ try {
   await settings.getByRole('alert').filter({ hasText: 'Dane firmy zmieniły się' }).waitFor();
   assert.equal(await settings.getByLabel('Nazwa firmy', { exact: true }).inputValue(), 'Lokalna propozycja');
   assert(await settings.getByRole('button', { name: 'Zapisz ustawienia', exact: true }).isDisabled());
+  assert.equal(await settings.getByLabel('Logo firmy', { exact: true }).evaluate(input => input.files.length), 1);
   await settings.getByRole('button', { name: 'Odśwież ustawienia', exact: true }).click();
   await header.getByRole('heading', { name: 'Zmiana z innej karty', exact: true }).waitFor();
   assert.equal(await settings.getByLabel('Nazwa firmy', { exact: true }).inputValue(), 'Zmiana z innej karty');
+  const fileInput = settings.getByLabel('Logo firmy', { exact: true });
+  assert.equal(await fileInput.inputValue(), '');
+  assert.equal(await fileInput.evaluate(input => input.files.length), 0);
+  assert(await settings.getByRole('button', { name: 'Zastąp logo', exact: true }).isDisabled(), 'Refresh must discard retained File state along with the empty file input');
+  // Choosing a new file after refresh must upload that file, using the refreshed version.
+  await fileInput.setInputFiles({ name: 'fresh.png', mimeType: 'image/png', buffer: png });
+  const freshUpload = page.waitForRequest(request => request.method() === 'POST' && request.url() === `${config.origin}/api/organizations/${companyA}/branding/logo`);
+  await settings.getByRole('button', { name: 'Zastąp logo', exact: true }).click();
+  assert.equal((await freshUpload).postDataJSON().data, png.toString('base64'));
+  await page.waitForFunction(() => document.querySelector('.company-branding input[type=file]')?.value === '' && !document.querySelector('.company-branding button')?.disabled);
+  assert(await settings.getByRole('button', { name: 'Zastąp logo', exact: true }).isDisabled());
+  console.log('PASS regression: conflict → refresh clears the invisible retained file and requires a fresh selection');
   await page.locator('#active-organization').selectOption(companyB);
   await header.getByRole('heading', { name: 'Firma Browser B', exact: true }).waitFor();
   assert.equal(await settings.count(), 0);
