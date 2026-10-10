@@ -1,7 +1,8 @@
+import { TaskProgress } from './task-progress.js';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 type Project = { id: string; name: string; description: string; status: string; version: number; createdAt: string; updatedAt: string };
-type Task = { id: string; title: string; description: string; assigneeMembershipId: string; assigneeName?: string; status: string; version: number };
+type Task = { id: string; title: string; description: string; assigneeMembershipId: string; assigneeName?: string; canProgress?: boolean; status: string; version: number };
 type Member = { membershipId: string; displayName: string; companyStatus: string; accountActive: boolean; status: string | null; version: number };
 type Details = { project: Project; permissions: { administer: boolean; readTasks: boolean; manageTasks: boolean } };
 async function request<T>(path: string, signal: AbortSignal, csrfToken?: string, payload?: unknown): Promise<T> {
@@ -166,7 +167,10 @@ function ProjectDetails({ path, csrfToken, onSaved, onGone, onAccessChanged }: {
       {details.permissions.readTasks ? <section aria-label="Zadania projektu"><h4>Zadania</h4>
         {!tasks.length && <p role="status">Brak zadań w Twoim zakresie.</p>}
         <div className="task-list">{tasks.map(task => <article className="task-row" key={task.id}>
-          <div><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p><small>{stateName(task.status)} · {task.assigneeName} · Wersja {task.version}</small></div>
+          <div><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p><small>{task.assigneeName}</small></div>
+          <TaskProgress task={task} path={`${path}/tasks/${encodeURIComponent(task.id)}`} csrfToken={csrfToken}
+            writable={details.project.status === 'active'} disabled={busy} onAccessChanged={onAccessChanged} onGone={onGone}
+            onConfirmed={confirmed => setTasks(current => current.map(item => item.id === confirmed.id && item.version <= confirmed.version ? { ...item, ...confirmed } : item))} />
           {details.permissions.manageTasks && details.project.status === 'active' && <button className="secondary" disabled={busy} onClick={() => setEditing(task)}>Edytuj zadanie</button>}
         </article>)}</div>
         {details.permissions.manageTasks && details.project.status === 'active' && <TaskForm key={`${revision}-${editing?.id ?? 'new'}`} task={editing} members={members} busy={busy} cancel={() => setEditing(null)}

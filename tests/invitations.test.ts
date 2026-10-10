@@ -1,3 +1,4 @@
+import { lockOrganization } from '../apps/server/src/common/organization-lock.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -12,7 +13,7 @@ import { createPool } from '../apps/server/src/db.js';
 import { buildApp } from '../apps/server/src/app.js';
 import { bootstrapAdmin } from '../apps/server/src/auth/bootstrap.js';
 import { migrate, migrationFiles } from '../apps/server/src/migrations.js';
-import { invitationHash, deliverInvitation, lockInvitationCompany } from '../apps/server/src/invitations.js';
+import { invitationHash, deliverInvitation } from '../apps/server/src/invitations.js';
 import { withTransaction, withOrganization } from '../apps/server/src/organization-context.js';
 
 // A local SMTP protocol fixture exercises Nodemailer without sending external mail.
@@ -304,7 +305,7 @@ test('email invitations and first administrator activation under runtime RLS', {
       const invitation = await invite(organizationA, companyAdmin, 'wait-expiry@example.test');
       const blocker = await owner.connect();
       try {
-        await blocker.query('BEGIN'); await lockInvitationCompany(blocker, organizationA);
+        await blocker.query('BEGIN'); await lockOrganization(blocker, organizationA);
         await owner.query("UPDATE organization_invitations SET created_at = now() - interval '1 minute', expires_at = now() + interval '100 milliseconds' WHERE id = $1", [invitation.invitation.id]);
         const waiting = accept(tokenOf(invitation), anon, { email: 'wait-expiry@example.test', password });
         await blocker.query('SELECT pg_sleep(0.2)'); await blocker.query('COMMIT');

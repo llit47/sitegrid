@@ -84,3 +84,8 @@ dl { font-size: 14px; line-height: 1.8; } dt { color: #59716b; } dd { margin: 0 
 .project-member button, .task-row button { flex-shrink: 0; margin: 0; }
 .task-row p { font-size: 14px; margin: 8px 0; }
 @media (max-width: 700px) { .project-member, .task-row { align-items: stretch; flex-direction: column; } .project-details { padding: 12px; } }
+
+.task-progress { display: grid; gap: .5rem; min-width: 0; }
+.task-progress p { margin: 0; }
+.task-progress button { min-height: 44px; }
+@media (max-width: 600px) { .task-progress { width: 100%; } }

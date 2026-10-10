@@ -1,15 +1,16 @@
+import { lockOrganization } from './common/organization-lock.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
+import { writeOrganizationAudit as audit } from './common/audit.js';
 import type { Config } from './config.js';
 import { readSession, type Session } from './auth/session.js';
 import { withAuthorizedOrganization } from './organization-access.js';
-import { lockInvitationCompany } from './invitations.js';
 
 const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const uuid = { type: 'string', pattern: uuidPattern.source };
 const failure = (statusCode: number) => Object.assign(new Error('Invalid project action'), { statusCode });
 const projectColumns = 'id, name, description, status, version, created_at AS "createdAt", updated_at AS "updatedAt"';
-const taskColumns = 'id, title, description, assignee_membership_id AS "assigneeMembershipId", author_membership_id AS "authorMembershipId", status, version, created_at AS "createdAt", updated_at AS "updatedAt"';
+const taskColumns = 'id, title, description, assignee_membership_id AS "assigneeMembershipId", author_membership_id AS "authorMembershipId", status, version, created_at AS "createdAt", updated_at AS "updatedAt", can_progress_assignment(organization_id, project_id, assignee_membership_id) AS "canProgress"';
 type Params = { id: string; projectId: string; membershipId: string; taskId: string };
 type Project = { id: string; name: string; description: string; status: string; version: number };
 function fields(request: FastifyRequest, allowed: string[]) {
@@ -37,16 +38,13 @@ export function registerProjectRoutes(app: FastifyInstance, pool: Pool, config: 
   const base = '/api/organizations/:id/projects';
   const params = (...names: string[]) => ({ params: { type: 'object', required: ['id', ...names],
     properties: Object.fromEntries(['id', ...names].map(name => [name, uuid])) } });
-  const audit = (client: PoolClient, tenant: string, actor: string, subject: string, event: string, details: object) =>
-    client.query(`INSERT INTO organization_audit_events(organization_id, actor_id, subject_id, event, details)
-      VALUES ($1, $2, $3, $4, $5)`, [tenant, actor, subject, event, details]);
   async function scope<T>(request: FastifyRequest<{ Params: Params }>, write: boolean, admin: boolean,
     work: (client: PoolClient, actor: { userId: string; membershipId: string; roles: string[] }) => Promise<T>) {
     return withAuthorizedOrganization(pool, request, config, request.params.id, async client => {
       if (write) {
         const session = await readSession(client, request, config);
         if (!checkCsrf(request, session)) throw failure(403);
-        await lockInvitationCompany(client, request.params.id);
+        await lockOrganization(client, request.params.id);
       }
       // Fresh checks after lock acquisition also cover revocations while waiting.
       const session = await readSession(client, request, config);

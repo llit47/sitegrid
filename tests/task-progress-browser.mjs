@@ -1,0 +1,134 @@
+// Online M08 UI checks; synthetic PostgreSQL schema and real runtime RLS.
+import assert from 'node:assert/strict';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import pg from 'pg';
+import { buildApp } from '../apps/server/src/app.ts';
+import { migrate } from '../apps/server/src/migrations.ts';
+import { readConfig } from '../apps/server/src/config.ts';
+const { chromium } = await import(process.env.SITEGRID_PLAYWRIGHT_MODULE ? pathToFileURL(process.env.SITEGRID_PLAYWRIGHT_MODULE).href : 'playwright');
+assert(process.env.TEST_DATABASE_URL && process.env.TEST_RUNTIME_DATABASE_URL);
+const schema = `progress_browser_${randomBytes(6).toString('hex')}`;
+const admin = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
+const ownerUrl = new URL(process.env.TEST_DATABASE_URL); ownerUrl.searchParams.set('options', `-c search_path=${schema}`);
+const runtimeUrl = new URL(process.env.TEST_RUNTIME_DATABASE_URL); runtimeUrl.searchParams.set('options', `-c search_path=${schema}`);
+const owner = new pg.Pool({ connectionString: ownerUrl.href }), runtime = new pg.Pool({ connectionString: runtimeUrl.href });
+const config = readConfig({ NODE_ENV: 'test', DATABASE_URL: runtimeUrl.href });
+const company = randomUUID(), companyB = randomUUID(), users = {}, members = {}, tokens = {}, csrf = {}, errors = [];
+let app, browser;
+await admin.query(`CREATE SCHEMA ${schema}`);
+try {
+  await migrate(owner, 'migrations');
+  await owner.query(`GRANT USAGE ON SCHEMA ${schema} TO sitegrid`);
+  await owner.query('GRANT SELECT ON installation, schema_migrations, users, credentials, platform_admins TO sitegrid');
+  await owner.query('GRANT SELECT, INSERT, DELETE ON sessions TO sitegrid');
+  await owner.query('GRANT SELECT, INSERT, UPDATE, DELETE ON auth_rate_limits TO sitegrid');
+  for (const [id, name] of [[company, 'Firma A'], [companyB, 'Firma B']]) await owner.query('INSERT INTO organizations(id, name) VALUES ($1, $2)', [id, name]);
+  for (const [actor, roles] of [['manager', ['organization_admin', 'manager']], ['worker', ['worker']], ['foreman', ['foreman']], ['admin', ['organization_admin']]]) {
+    users[actor] = randomUUID(); members[actor] = randomUUID(); tokens[actor] = randomBytes(32).toString('base64url'); csrf[actor] = randomBytes(32).toString('base64url');
+    await owner.query('INSERT INTO users(id, email) VALUES ($1, $2)', [users[actor], `${actor}@example.test`]);
+    await owner.query("INSERT INTO organization_memberships(organization_id, id, user_id, status) VALUES ($1, $2, $3, 'active')", [company, members[actor], users[actor]]);
+    await owner.query('INSERT INTO employee_profiles(organization_id, membership_id, display_name) VALUES ($1, $2, $3)', [company, members[actor], actor]);
+    for (const role of roles) await owner.query('INSERT INTO membership_roles(organization_id, membership_id, role) VALUES ($1, $2, $3)', [company, members[actor], role]);
+    await owner.query("INSERT INTO sessions(token_hash, user_id, csrf_token, expires_at) VALUES ($1, $2, $3, now() + interval '1 hour')", [createHash('sha256').update(tokens[actor]).digest('hex'), users[actor], csrf[actor]]);
+  }
+  const workerB = randomUUID();
+  await owner.query("INSERT INTO organization_memberships(organization_id, id, user_id, status) VALUES ($1, $2, $3, 'active')", [companyB, workerB, users.worker]);
+  await owner.query("INSERT INTO membership_roles(organization_id, membership_id, role) VALUES ($1, $2, 'worker')", [companyB, workerB]);
+  app = await buildApp(config, runtime, { serveWeb: true }); config.origin = await app.listen({ host: '127.0.0.1', port: 0 });
+  const api = async (url, payload, actor = 'manager') => {
+    const response = await app.inject({ url, headers: { cookie: `sitegrid=${tokens[actor]}`, origin: config.origin, 'x-csrf-token': csrf[actor] }, ...(payload ? { method: 'POST', payload } : {}) });
+    assert(response.statusCode < 300, response.body); return response.json();
+  };
+  const base = `/api/organizations/${company}/projects`;
+  const project = (await api(base, { name: 'Prace montażowe' })).project;
+  const path = `${base}/${project.id}`;
+  for (const id of Object.values(members)) await api(`${path}/members/${id}`, { status: 'active', expectedVersion: 0 });
+  const tasks = {};
+  for (const [title, actor] of [['Potwierdzenie', 'worker'], ['Konflikt', 'worker'], ['Utrata odpowiedzi', 'worker'], ['Awaria', 'worker'], ['Spóźniona odpowiedź', 'worker'], ['Mobilne', 'worker'], ['Kierownika', 'manager'], ['Brygadzisty', 'foreman']]) tasks[title] = (await api(`${path}/tasks`, { title, assigneeMembershipId: members[actor] })).task;
+  browser = await chromium.launch({ headless: true, ...(process.env.SITEGRID_CHROMIUM_PATH ? { executablePath: process.env.SITEGRID_CHROMIUM_PATH } : {}) });
+  const open = async (actor, mobile = false) => {
+    const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
+    await context.addCookies([{ name: 'sitegrid', value: tokens[actor], url: config.origin, httpOnly: true, sameSite: 'Strict' }]);
+    const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+    await page.goto(config.origin); await page.locator('#active-organization').selectOption(company);
+    await page.getByRole('button', { name: 'Prace montażowe Aktywny', exact: true }).click();
+    await page.locator('.project-details h4').filter({ hasText: 'Prace montażowe' }).waitFor();
+    return { context, page };
+  };
+  const row = (page, title) => page.locator('.task-row').filter({ has: page.locator('strong', { hasText: title }) });
+  const manager = await open('manager');
+  assert.equal(await manager.page.getByRole('button', { name: 'Rozpocznij zadanie', exact: true }).count(), 1);
+  assert(await row(manager.page, 'Kierownika').getByRole('button', { name: 'Rozpocznij zadanie' }).isVisible());
+  assert.equal(await row(manager.page, 'Potwierdzenie').getByRole('button', { name: 'Rozpocznij zadanie' }).count(), 0);
+  await manager.context.close();
+  const foreman = await open('foreman'); assert.equal(await foreman.page.getByRole('button', { name: 'Rozpocznij zadanie' }).count(), 1); await foreman.context.close();
+  const companyAdmin = await open('admin'); assert.equal(await companyAdmin.page.locator('.task-row').count(), 0); await companyAdmin.context.close();
+  console.log('PASS manager/foreman controls are limited to own tasks; admin role has no progress access');
+  const { page, context } = await open('worker');
+  const url = title => `${config.origin}${path}/tasks/${tasks[title].id}/commands`;
+  let release, entered;
+  const gate = new Promise(resolve => { release = resolve; }), arrived = new Promise(resolve => { entered = resolve; });
+  let requests = 0;
+  await page.route(url('Potwierdzenie'), async route => { requests++; const response = await route.fetch(); entered(); await gate; await route.fulfill({ response }); });
+  const confirm = row(page, 'Potwierdzenie');
+  await confirm.getByRole('button', { name: 'Rozpocznij zadanie' }).evaluate(button => { button.click(); button.click(); });
+  await arrived;
+  assert(await confirm.getByRole('button', { name: 'Oczekiwanie na serwer…' }).isDisabled());
+  assert.equal(await confirm.getByText('Serwer potwierdził', { exact: false }).count(), 0);
+  assert(await confirm.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible());
+  release(); await confirm.getByText('Serwer potwierdził rozpoczęcie zadania.', { exact: true }).waitFor();
+  assert.equal(requests, 1); await page.unroute(url('Potwierdzenie'));
+  await confirm.getByRole('button', { name: 'Zgłoś do odbioru', exact: true }).click();
+  await confirm.getByText('Serwer potwierdził zgłoszenie do odbioru.', { exact: true }).waitFor();
+  assert(await confirm.getByText('Zgłoszone do odbioru · Wersja 3', { exact: true }).isVisible());
+  assert.equal(await confirm.getByRole('button').count(), 0);
+  console.log('PASS start/submit, one double-click request and no success until server confirmation');
+  await api(`${path}/tasks/${tasks.Konflikt.id}/update`, { title: 'Konflikt', assigneeMembershipId: members.worker, expectedVersion: 1 });
+  const stale = row(page, 'Konflikt'); await stale.getByRole('button', { name: 'Rozpocznij zadanie' }).click();
+  await stale.getByRole('alert').filter({ hasText: 'Zadanie zmieniło się' }).waitFor(); assert(await stale.getByRole('button').isDisabled());
+  assert(await stale.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible());
+  await page.getByRole('button', { name: 'Wczytaj aktualne dane', exact: true }).click();
+  await stale.getByText('Zaplanowane · Wersja 2', { exact: true }).waitFor(); await stale.getByRole('button', { name: 'Rozpocznij zadanie' }).click();
+  await stale.getByText('W toku · Wersja 3', { exact: true }).waitFor();
+  console.log('PASS stale version feedback blocks another action until explicit refresh');
+  const lost = row(page, 'Utrata odpowiedzi'), sent = [];
+  await page.route(url('Utrata odpowiedzi'), async route => { sent.push(route.request().postDataJSON()); await route.fetch(); await route.abort('failed'); }, { times: 1 });
+  await lost.getByRole('button', { name: 'Rozpocznij zadanie' }).click(); await lost.getByRole('alert').filter({ hasText: 'Brak potwierdzenia' }).waitFor();
+  assert(await lost.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible());
+  await page.route(url('Utrata odpowiedzi'), async route => { sent.push(route.request().postDataJSON()); await route.continue(); }, { times: 1 });
+  await lost.getByRole('button', { name: 'Ponów operację', exact: true }).click(); await lost.getByText('W toku · Wersja 2', { exact: true }).waitFor();
+  assert.deepEqual(sent[0], sent[1]);
+  assert.equal((await owner.query("SELECT count(*) FROM organization_audit_events WHERE subject_id = $1 AND event = 'task_started'", [tasks['Utrata odpowiedzi'].id])).rows[0].count, '1');
+  await page.route(url('Awaria'), route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Awaria serwera' }) }), { times: 1 });
+  const failure = row(page, 'Awaria'); await failure.getByRole('button', { name: 'Rozpocznij zadanie' }).click(); await failure.getByRole('alert').waitFor();
+  assert(await failure.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible()); await failure.getByRole('button', { name: 'Ponów operację' }).click(); await failure.getByText('W toku · Wersja 2', { exact: true }).waitFor();
+  await page.screenshot({ path: '/tmp/sitegrid-pr13-desktop.png', fullPage: true });
+  console.log('PASS response loss/503 keep unconfirmed state and retry the original operation ID');
+  let lateRelease, lateEntered, lateSettled;
+  const lateGate = new Promise(resolve => { lateRelease = resolve; }), lateArrival = new Promise(resolve => { lateEntered = resolve; }), lateDone = new Promise(resolve => { lateSettled = resolve; });
+  await page.route(url('Spóźniona odpowiedź'), async route => {
+    const response = await route.fetch(); lateEntered(); await lateGate;
+    try { await route.fulfill({ response }); } catch (error) { if (!error.message.includes('Route is already handled')) throw error; } finally { lateSettled(); }
+  });
+  await row(page, 'Spóźniona odpowiedź').getByRole('button', { name: 'Rozpocznij zadanie' }).click(); await lateArrival;
+  await page.locator('#active-organization').selectOption(companyB); await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor();
+  lateRelease(); await lateDone; assert.equal(await page.locator('.task-row').count(), 0); assert.equal(await page.getByText('Serwer potwierdził', { exact: false }).count(), 0); await context.close();
+  console.log('PASS late command results are discarded after company switch');
+  const mobile = await open('worker', true), mobileRow = row(mobile.page, 'Mobilne');
+  const button = mobileRow.getByRole('button', { name: 'Rozpocznij zadanie' }); assert((await button.boundingBox()).height >= 44);
+  await button.click(); await mobileRow.getByText('W toku · Wersja 2', { exact: true }).waitFor();
+  await mobileRow.getByRole('button', { name: 'Zgłoś do odbioru' }).click(); await mobileRow.getByText('Zgłoszone do odbioru · Wersja 3', { exact: true }).waitFor();
+  assert(await mobile.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await mobile.page.screenshot({ path: '/tmp/sitegrid-pr13-mobile.png', fullPage: true });
+  // A current row becomes unauthorized before a progress request.
+  await owner.query("UPDATE project_memberships SET status = 'inactive', version = version + 1 WHERE project_id = $1 AND membership_id = $2", [project.id, members.worker]);
+  await row(mobile.page, 'Konflikt').getByRole('button', { name: 'Zgłoś do odbioru' }).click();
+  await mobile.page.waitForFunction(() => document.querySelectorAll('.task-row').length === 0);
+  assert.equal(await mobile.page.getByText('Serwer potwierdził', { exact: false }).count(), 0); await mobile.context.close();
+  assert.deepEqual(errors, []);
+  console.log('PASS 390px mobile start/submit, touch target, no overflow and revoked access clears task data; no runtime errors');
+} finally {
+  await browser?.close(); await app?.close(); await runtime.end(); await owner.end();
+  try { await admin.query(`DROP SCHEMA ${schema} CASCADE`); } finally { await admin.end(); }
+}

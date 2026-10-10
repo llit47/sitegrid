@@ -1,9 +1,9 @@
+import { lockOrganization } from './common/organization-lock.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import type { Config } from './config.js';
 import { readSession, type Session } from './auth/session.js';
 import { withAuthorizedOrganization } from './organization-access.js';
-import { lockInvitationCompany } from './invitations.js';
 
 const roles = ['organization_admin', 'manager', 'foreman', 'worker'];
 const uuid = { type: 'string', pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' };
@@ -35,7 +35,7 @@ export function registerCompanyMemberRoutes(app: FastifyInstance, pool: Pool, co
         if (!actor?.user_id) throw failure(401);
         if (write) {
           if (!checkCsrf(request, actor)) throw failure(403);
-          await lockInvitationCompany(client, request.params.id);
+          await lockOrganization(client, request.params.id);
           // Authorization before the lock may have become stale while waiting.
           const authorized = await client.query(`SELECT m.id FROM organization_memberships m
             JOIN membership_roles r ON (r.organization_id, r.membership_id) = (m.organization_id, m.id)

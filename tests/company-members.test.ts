@@ -1,3 +1,4 @@
+import { lockOrganization } from '../apps/server/src/common/organization-lock.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -10,7 +11,6 @@ import { readConfig } from '../apps/server/src/config.js';
 import { createPool } from '../apps/server/src/db.js';
 import { migrate, migrationFiles, checkMigrations } from '../apps/server/src/migrations.js';
 import { withOrganization } from '../apps/server/src/organization-context.js';
-import { lockInvitationCompany } from '../apps/server/src/invitations.js';
 
 test('PR10 company members and employees under real runtime FORCE RLS', { skip: !process.env.TEST_DATABASE_URL }, async t => {
   assert(process.env.TEST_RUNTIME_DATABASE_URL, 'Set a real unprivileged sitegrid runtime URL');
@@ -201,7 +201,7 @@ test('PR10 company members and employees under real runtime FORCE RLS', { skip: 
         const blocker = await owner.connect();
         let results;
         try {
-          await blocker.query('BEGIN'); await lockInvitationCompany(blocker, id);
+          await blocker.query('BEGIN'); await lockOrganization(blocker, id);
           const requests = actions.map((action, i) => post(action === 'employee'
             ? `${base(id)}/employees/${employeeIds[i]}/deactivate` : `${base(id)}/members/${ids[i]}/${action}`,
           action === 'roles/remove' ? { role: 'organization_admin' } : {}, i ? 'otherA' : 'adminA'));
@@ -229,7 +229,7 @@ test('PR10 company members and employees under real runtime FORCE RLS', { skip: 
       const blocker = await owner.connect();
       let results;
       try {
-        await blocker.query('BEGIN'); await lockInvitationCompany(blocker, id);
+        await blocker.query('BEGIN'); await lockOrganization(blocker, id);
         const pending = Promise.allSettled(ids.map(memberId => sql(id, client => client.query("DELETE FROM membership_roles WHERE organization_id = $1 AND membership_id = $2 AND role = 'organization_admin'", [id, memberId]))));
         await waitForCompanyLocks(2);
         await blocker.query('COMMIT');
@@ -252,7 +252,7 @@ test('PR10 company members and employees under real runtime FORCE RLS', { skip: 
       for (const [suffix, payload] of [['employees', { displayName: 'Must not exist' }], ['invitations', { email: 'must-not-exist@example.test', role: 'worker' }]] as const) {
         const blocker = await owner.connect();
         try {
-          await blocker.query('BEGIN'); await lockInvitationCompany(blocker, org.a);
+          await blocker.query('BEGIN'); await lockOrganization(blocker, org.a);
           const waiting = post(`${base()}/${suffix}`, payload, 'otherA');
           // Start inject before verifying that the request really is waiting.
           const pending = Promise.resolve(waiting);
@@ -376,7 +376,7 @@ test('PR10 company members and employees under real runtime FORCE RLS', { skip: 
         const blocker = await owner.connect();
         let accepted, changed;
         try {
-          await blocker.query('BEGIN'); await lockInvitationCompany(blocker, org.a);
+          await blocker.query('BEGIN'); await lockOrganization(blocker, org.a);
           // Queue both actual API requests in a known order on the same company lock.
           const first = Promise.resolve(acceptFirst ? accept(outstanding.token) : post(`${base()}/${change.path}`, change.body));
           await waitForCompanyLocks(1);

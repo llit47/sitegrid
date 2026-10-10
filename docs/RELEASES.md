@@ -35,3 +35,7 @@ Testy korzystają z lokalnych, podpisanych fixture i efemerycznych kluczy poza r
 PR11 wymaga schematu 8 i dopuszcza migrację 0–8. Ustawienia, logo `BYTEA` i audyt są częścią backupu PostgreSQL. Paczka Linux x64 zawiera przypięty dekoder `sharp` oraz opcjonalne zależności natywne; test paczki musi uruchomić dekodowanie obrazu z jej runtime. Rollback do kodu PR10 po migracji do 8 jest niezgodny ze schematem i wymaga kontrolowanego restore kopii, zgodnie z istniejącym updaterem. [Kontrakt brandingu](COMPANY_BRANDING.md).
 
 PR12 wymaga schematu 9 i dopuszcza migrację 0–9. Projekty, przydziały, zadania i ich audyt należą do backupu PostgreSQL. Migracja 8 → 9 zachowuje także konta, zaproszenia, profile i branding PR11. Rollback do wydania wymagającego wyłącznie schematu 8 jest blokowany; użyj kontrolowanego restore kopii sprzed migracji. Paczka nadal dostarcza wszystkie migracje i ten sam runtime bez nowych frameworków. [Kontrakt M07](PROJECTS_TASKS.md).
+
+## Kontrakt PR13 / M08
+
+PR13 wymaga schematu 10 i dopuszcza upgrade 0–10. Migracja 9 → 10 zachowuje dane PR12 i dodaje trwałe receipts, statusy postępu i audyt komend. Receipts nie są automatycznie usuwane; backup PostgreSQL obejmuje statusy, wersje, receipts i audyt. Powrót do wydania PR12 z kontraktem 9 jest blokowany przed zatrzymaniem usługi i wymaga kontrolowanego restore. Installer, updater, podpisy i format paczki nie zmieniają się. [Kontrakt M08](TASK_PROGRESS.md). Przy restore utracone receipts wymagają uzgodnienia historii; epoka synchronizacji pozostaje M12/M15.

@@ -107,6 +107,38 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(self.events, [])
         self.assertEqual((self.root / 'current').resolve(), self.new)
 
+    def pr12_release(self):
+        # Concrete M07 -> M08 contract; retain the actual historical SQL/checksums.
+        manifest = json.loads((self.old / 'release.json').read_text())
+        manifest['schema'] = {'target': 9, 'min': 9, 'max': 9, 'upgradeMin': 0, 'upgradeMax': 9}
+        (self.old / 'release.json').write_text(json.dumps(manifest))
+        (self.old / 'migrations/010_task_progress.sql').unlink()
+
+    def test_pr13_update_from_schema9_backs_up_before_schema10_activation(self):
+        self.pr12_release()
+        self.rows = self.history(self.old)
+        with patch.object(lc, 'sql', return_value='170000'):
+            lc.can_upgrade(self.new, self.rows)
+        def migrate_schema10(*args):
+            self.events.append('migrate')
+            self.rows = self.history(self.new)
+        with patch.object(lc, 'app_cli', side_effect=migrate_schema10):
+            lc.deploy(self.new, self.old, {}, 'update', migrate=True)
+        self.assertEqual(len(self.rows), 10)
+        self.assertLess(self.events.index('backup'), self.events.index('migrate'))
+        self.assertEqual((self.root / 'current').resolve(), self.new)
+        self.assertEqual(lc.journal()['phase'], 'done')
+
+    def test_pr13_schema10_blocks_pr12_rollback_before_stopping_service(self):
+        self.pr12_release()
+        self.rows = self.history(self.new)
+        atomic_link(self.new, self.root / 'current')
+        write_json(lc.JOURNAL, {'phase': 'done', 'completed_versions': ['0.1.0', '0.1.1']})
+        with self.assertRaisesRegex(SiteGridError, 'Rollback zablokowany'):
+            lc.rollback(argparse.Namespace(version='0.1.0', yes=True))
+        self.assertEqual(self.events, [])
+        self.assertEqual((self.root / 'current').resolve(), self.new)
+
     def test_default_rollback_uses_immediately_previous_active_release(self):
         latest = self.release('0.1.2')
         atomic_link(latest, self.root / 'current')

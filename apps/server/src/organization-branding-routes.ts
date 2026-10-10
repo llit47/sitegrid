@@ -1,9 +1,10 @@
+import { lockOrganization } from './common/organization-lock.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import type { Config } from './config.js';
 import { readSession, type Session } from './auth/session.js';
 import { withAuthorizedOrganization } from './organization-access.js';
-import { lockInvitationCompany } from './invitations.js';
+
 import { brandingFailure as failure, logoByteLimit, readBranding, validateLogo } from './organization-branding.js';
 
 function fields(request: FastifyRequest, allowed: string[]) {
@@ -30,7 +31,7 @@ export function registerOrganizationBrandingRoutes(app: FastifyInstance, pool: P
       let actor = await readSession(client, request, config);
       if (!actor?.user_id) throw failure(401);
       if (!checkCsrf(request, actor)) throw failure(403);
-      await lockInvitationCompany(client, request.params.id);
+      await lockOrganization(client, request.params.id);
       // A role, account or session may have been revoked while waiting for the lock.
       actor = await readSession(client, request, config);
       if (!actor?.user_id) throw failure(401);
