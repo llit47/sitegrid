@@ -51,6 +51,20 @@ dl { font-size: 14px; line-height: 1.8; } dt { color: #59716b; } dd { margin: 0 
 .role-choice { display: flex; align-items: center; gap: 8px; min-height: 40px; margin: 0; font-size: 13px; }
 .role-choice input { width: 18px; min-height: 18px; height: 18px; flex-shrink: 0; }
 .employee-form { max-width: 480px; }
+.company-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.company-choice { display: flex; align-items: center; gap: 10px; margin: 0; text-align: left; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.company-choice[aria-pressed="true"] { outline: 2px solid #163638; outline-offset: 1px; }
+.company-logo { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; background: #edf5ee; border-radius: 8px; overflow: hidden; font-weight: 750; }
+.company-logo img { width: 100%; height: 100%; object-fit: contain; }
+.company-header { display: flex; align-items: center; gap: 12px; margin-top: 24px; overflow-wrap: anywhere; }
+.company-header h3 { min-width: 0; }
+.accent-swatch { width: 8px; height: 48px; flex-shrink: 0; border-radius: 4px; }
+.company-branding { border-top: 1px solid #d9e3dd; margin-top: 24px; padding-top: 12px; }
+.company-branding form { max-width: 480px; margin-top: 16px; }
+.company-branding input[type="file"] { min-width: 0; max-width: 100%; font-size: 13px; }
+.company-branding input[type="color"] { max-width: 120px; padding: 4px; }
+.company-branding .hint { margin: 8px 0; }
+.branding-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 700px) { .member-row { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .tiles { grid-template-columns: 1fr; } .dashboard-heading { flex-direction: column; align-items: flex-start; } .dashboard { margin-top: 36px; } }
 @media (max-width: 480px) { .shell { padding: 24px 16px; } .card { margin-top: 40px; } }

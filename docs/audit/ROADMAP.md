@@ -66,3 +66,7 @@ Identyfikatory M01–M15 są pozycjami planu, nie numerami GitHuba. Każdy PR ma
 Oddzielne decyzje i małe PR-y: brygady i raport zbiorczy; dokumenty/zdjęcia z własną kolejką uploadu; magazyn oparty na ruchach; kalendarz; powiadomienia; koszty. Rozrost danych uzasadnia synchronizację przyrostową z bezpiecznym kursorem i tombstones. Każdy moduł definiuje swój zakres offline przed wejściem do pilotażu. Nie planuje się osobnej aplikacji natywnej.
 
 Do zatwierdzenia: granice MVP, ważność aktywacji 24 h, dostęp offline do 7 dni, cele RPO/RTO i polityka retencji deduplikacji. Przed implementacją snapshotu określić jego limity i wersje docelowych przeglądarek; przed wdrożeniem domenę/HTTPS, pocztę i parametry hosta. Harmonogram kalendarzowy zależy od zespołu; nie jest deklarowany w tym PR.
+
+## Przyrost PR11 — M06
+
+M06 dodaje firmowe ustawienia i logo w PostgreSQL, administrację nazwy/koloru/logo, odczyt dla aktywnych członków oraz branding przełącznika i nagłówka firmy. Izolacja FORCE RLS, aktualne uprawnienia, kontrola wersji i transakcyjny audyt obejmują wszystkie zmiany. [Kontrakt implementacji i testy](../COMPANY_BRANDING.md). To zakres online M06; bramka offline-first MVP pozostaje bez zmian.

@@ -48,7 +48,7 @@ test('PR10 company members and employees under real runtime FORCE RLS', { skip: 
   let employeeA = '', employeeB = '', standalone = '';
   await admin.query(`CREATE SCHEMA ${schema}`);
   try {
-    await t.test('schema 6 to 7 preserves populated PR9 data and requires the new release contract', async () => {
+    await t.test('schema 6 to current preserves populated PR9 data and requires the new release contract', async () => {
       const previous = await mkdtemp(join(tmpdir(), 'sitegrid-pr10-migrations-'));
       try {
         for (const file of (await migrationFiles('migrations')).filter(file => file.version <= 6)) await copyFile(join('migrations', file.name), join(previous, file.name));
@@ -71,14 +71,15 @@ test('PR10 company members and employees under real runtime FORCE RLS', { skip: 
         await owner.query('INSERT INTO organization_invitations(organization_id, email, role, issuer_id, token_hash) VALUES ($1, $2, $3, $4, $5)', [org.a, 'pending@example.test', 'worker', users.adminA, randomBytes(32).toString('hex')]);
         const tables = ['installation', 'users', 'credentials', 'sessions', 'platform_admins', 'organizations', 'organization_memberships', 'membership_roles', 'organization_invitations', 'platform_audit_events'];
         const before = await Promise.all(tables.map(snapshot));
-        assert.equal(await migrate(owner, 'migrations'), 7);
-        assert.equal(await migrate(owner, 'migrations'), 7);
-        assert.equal(await checkMigrations(owner, 'migrations'), 7);
+        const version = (await migrationFiles('migrations')).length;
+        assert.equal(await migrate(owner, 'migrations'), version);
+        assert.equal(await migrate(owner, 'migrations'), version);
+        assert.equal(await checkMigrations(owner, 'migrations'), version);
         for (const [i, table] of tables.entries()) assert.deepEqual(await snapshot(table), before[i], table);
         assert.equal((await owner.query('SELECT count(*) FROM employee_profiles')).rows[0].count, '0');
         assert.equal((await owner.query('SELECT count(*) FROM organization_audit_events')).rows[0].count, '0');
         const release = JSON.parse(await readFile('release.json', 'utf8'));
-        assert.deepEqual(release.schema, { target: 7, min: 7, max: 7, upgradeMin: 0, upgradeMax: 7 });
+        assert.deepEqual(release.schema, { target: version, min: version, max: version, upgradeMin: 0, upgradeMax: version });
         await assert.rejects(checkMigrations(owner, previous), /does not match/);
       } finally { await rm(previous, { recursive: true, force: true }); }
     });

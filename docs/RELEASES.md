@@ -29,3 +29,7 @@ python3 scripts/sign-release.py X.Y.Z --key-file /BEZPIECZNA_SCIEZKA/ed25519.pem
 Te polecenia nie publikują. `sign-release.py` odrzuca klucz prywatny umieszczony w repozytorium oraz klucz o niebezpiecznych prawach. Przygotowaną komendę z `artifacts/INSTALL_COMMAND.txt` należy opublikować w zaufanej instrukcji dopiero po sprawdzeniu Draft i zatwierdzeniu publikacji. Nie pobierać samej sumy i skryptu z niezweryfikowanego miejsca, po czym traktować tej pary jako zaufanej.
 
 Testy korzystają z lokalnych, podpisanych fixture i efemerycznych kluczy poza repozytorium. Są niezależne od dostępności pierwszego publicznego Release. Artefakt CI z kluczem fixture nie jest oficjalnym wydaniem.
+
+## Kontrakt PR11 / M06
+
+PR11 wymaga schematu 8 i dopuszcza migrację 0–8. Ustawienia, logo `BYTEA` i audyt są częścią backupu PostgreSQL. Paczka Linux x64 zawiera przypięty dekoder `sharp` oraz opcjonalne zależności natywne; test paczki musi uruchomić dekodowanie obrazu z jej runtime. Rollback do kodu PR10 po migracji do 8 jest niezgodny ze schematem i wymaga kontrolowanego restore kopii, zgodnie z istniejącym updaterem. [Kontrakt brandingu](COMPANY_BRANDING.md).

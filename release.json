@@ -5,5 +5,5 @@
   "platform": "linux",
   "arch": "x64",
   "postgresMajor": 17,
-  "schema": { "target": 7, "min": 7, "max": 7, "upgradeMin": 0, "upgradeMax": 7 }
+  "schema": { "target": 8, "min": 8, "max": 8, "upgradeMin": 0, "upgradeMax": 8 }
 }

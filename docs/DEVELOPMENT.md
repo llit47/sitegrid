@@ -39,3 +39,7 @@ M03 używa tych samych dwóch połączeń testowych; `node --import tsx --test t
 PR9: [zaproszenia email, SMTP i aktywacja administratora firmy](INVITATIONS.md). Testy korzystają z tych samych dwóch połączeń PostgreSQL i są objęte `npm run check`.
 
 PR10: [panel firmy, członkowie, pracownicy i ochrona ostatniego administratora](COMPANY_MEMBERS.md). `tests/company-members.test.ts` korzysta z tych samych dwóch połączeń, rzeczywistego runtime RLS i jest objęty `npm run check`. Zmiany administracji wymagają `READ COMMITTED` (domyślne dla aplikacji). Używaj świeżej syntetycznej bazy PostgreSQL 17+ z kodowaniem UTF-8.
+
+PR11 (M06): [branding i ustawienia firmy](COMPANY_BRANDING.md). Migracja `008_organization_branding.sql` wymaga schematu 8 (upgrade 0–8). `tests/organization-branding.test.ts` używa tych samych dwóch połączeń i rzeczywistego runtime RLS; `npm run check` wykonuje także pełne regresje PR10. Obrazy dekoduje przypięty `sharp`; paczka produkcyjna musi zawierać natywne zależności platformy. Nie używaj `npm ci --omit=optional`.
+
+Opcjonalny test UI PR11 (po `npm run build`, z oboma testowymi URL PostgreSQL): `node --import tsx tests/organization-branding-browser.mjs`. Wymaga Playwright i Chromium w środowisku testowym; ścieżki można podać przez `SITEGRID_PLAYWRIGHT_MODULE` i `SITEGRID_CHROMIUM_PATH`. Test sam tworzy i usuwa syntetyczny schemat, sprawdza desktop/mobile, zapis, logo, konflikty oraz opóźnione odpowiedzi przy przełączaniu firmy. Nie używa danych wdrożenia.

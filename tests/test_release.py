@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 import os
+import subprocess
 from pathlib import Path
 import sys
 import tarfile
@@ -82,6 +83,22 @@ class ReleaseTests(unittest.TestCase):
             manifest = extract_release(archive, Path(directory) / 'release', sha, version)
             self.assertEqual(manifest['schema'], json.loads(Path('release.json').read_text())['schema'])
             self.assertEqual((Path(directory) / 'release').stat().st_mode & 0o777, 0o755)
+            # Production packaging skips install scripts. Exercise the bundled native
+            # raster decoder with the pinned runtime, rather than the workspace modules.
+            script = '''
+import assert from 'node:assert/strict';
+import sharp from 'sharp';
+import { validateLogo } from './dist/server/organization-branding.js';
+for (const [format, mime] of [['png', 'image/png'], ['jpeg', 'image/jpeg'], ['webp', 'image/webp']]) {
+  const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#ff0022' } }).toFormat(format).toBuffer();
+  const logo = await validateLogo(mime, image.toString('base64'));
+  assert.equal(logo.mimeType, mime);
+  assert.equal((await sharp(logo.data).metadata()).format, format);
+}
+'''
+            result = subprocess.run([str(Path(directory) / 'release/runtime/bin/node'), '--input-type=module', '-e', script],
+                                    cwd=Path(directory) / 'release', capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
             wrong = '9999.9999.9999' if version != '9999.9999.9999' else '0.0.0'
             with self.assertRaises(SiteGridError): extract_release(archive, Path(directory) / 'wrong', sha, wrong)
 
