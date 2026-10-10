@@ -1,3 +1,4 @@
+import { lockOrganization } from './common/organization-lock.js';
 import { createHash, randomBytes } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import type { PoolClient } from 'pg';
@@ -11,10 +12,6 @@ export const invitationColumns = `id, email, role, first_administrator AS "first
     WHEN expires_at <= clock_timestamp() THEN 'expired' ELSE 'pending' END AS status`;
 export const invitationError = () => Object.assign(new Error('Invitation unavailable'), { statusCode: 409 });
 
-// Serialize replacement, revocation and acceptance for this company on one connection.
-export async function lockInvitationCompany(client: PoolClient, organizationId: string) {
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('sitegrid.invitation:' || $1::uuid::text, 0))", [organizationId]);
-}
 export async function requireFirstAdministrator(client: PoolClient, organizationId: string) {
   const { rows } = await client.query(`SELECT
     EXISTS(SELECT 1 FROM organization_memberships WHERE organization_id = $1) OR
@@ -29,7 +26,7 @@ export function requireInvitationDelivery(config: Config) {
 }
 export async function createInvitation(client: PoolClient, organizationId: string, issuerId: string,
   email: string, role: OrganizationRole, firstAdministrator: boolean) {
-  await lockInvitationCompany(client, organizationId);
+  await lockOrganization(client, organizationId);
   const { rows: organizations } = await client.query("SELECT name FROM organizations WHERE id = $1 AND status = 'active'", [organizationId]);
   if (!organizations[0]) throw invitationError();
   if (firstAdministrator) await requireFirstAdministrator(client, organizationId);

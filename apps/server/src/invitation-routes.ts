@@ -1,3 +1,4 @@
+import { lockOrganization } from './common/organization-lock.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
@@ -7,7 +8,7 @@ import { hashPassword, normalizeEmail, validatePassword } from './auth/password.
 import { withAuthorizedOrganization, type OrganizationRole } from './organization-access.js';
 import { withOrganization, withTransaction } from './organization-context.js';
 import { createInvitation, deliverInvitation, invitationColumns, invitationError, invitationHash,
-  lockInvitationCompany, requireFirstAdministrator, requireInvitationDelivery } from './invitations.js';
+  requireFirstAdministrator, requireInvitationDelivery } from './invitations.js';
 
 const roles: OrganizationRole[] = ['organization_admin', 'manager', 'foreman', 'worker'];
 const uuid = { type: 'string', pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' };
@@ -36,7 +37,7 @@ export function registerInvitationRoutes(app: FastifyInstance, pool: Pool, confi
   async function administer<T>(request: FastifyRequest, organizationId: string, platform: boolean,
     write: boolean, work: (client: PoolClient, actor: Session) => Promise<T>) {
     const run = async (client: PoolClient) => {
-      if (write) await lockInvitationCompany(client, organizationId);
+      if (write) await lockOrganization(client, organizationId);
       const actor = await readSession(client, request, config);
       if (!actor?.user_id) throw Object.assign(new Error('Authentication required'), { statusCode: 401 });
       if (write) csrf(request, actor);
@@ -84,7 +85,7 @@ export function registerInvitationRoutes(app: FastifyInstance, pool: Pool, confi
     app.post<{ Params: { id: string; invitationId: string } }>(`${prefix}/:invitationId/revoke`, {
       schema: { params: { type: 'object', required: ['id', 'invitationId'], properties: { id: uuid, invitationId: uuid } } },
     }, request => administer(request, request.params.id, platform, true, async (client, actor) => {
-      await lockInvitationCompany(client, request.params.id);
+      await lockOrganization(client, request.params.id);
       const { rows } = await client.query(`UPDATE organization_invitations SET revoked_at = clock_timestamp()
         WHERE organization_id = $1 AND id = $2 AND accepted_at IS NULL AND revoked_at IS NULL
           AND (NOT $3 OR first_administrator) RETURNING ${invitationColumns}`, [request.params.id, request.params.invitationId, platform]);
@@ -115,7 +116,7 @@ export function registerInvitationRoutes(app: FastifyInstance, pool: Pool, confi
         return { status: 'unavailable' };
       }
       const organizationId = found[0].organization_id as string;
-      await lockInvitationCompany(client, organizationId);
+      await lockOrganization(client, organizationId);
       await client.query("SELECT set_config('sitegrid.organization_id', $1::uuid::text, true)", [organizationId]);
       const invitation = (await client.query(`SELECT ${invitationColumns}, issuer_id FROM organization_invitations
         WHERE organization_id = $1 AND id = $2 ${accept ? 'FOR UPDATE' : ''}`, [organizationId, found[0].id])).rows[0];

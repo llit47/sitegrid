@@ -74,3 +74,7 @@ M06 dodaje firmowe ustawienia i logo w PostgreSQL, administrację nazwy/koloru/l
 ## Przyrost PR12 — M07
 
 M07 dodaje projekty i jawne przydziały administratora firmy oraz planowanie, edycję i przypisywanie zadań przez przypisanych kierowników. Brygadzista odczytuje przypisane projekty, a pracownik własne zadania. Role pozostają firmowe; administracja firmy lub platformy nie nadaje domyślnego dostępu do zadań. FORCE RLS, złożone FK, bieżąca autoryzacja, wersje, archiwizacja i transakcyjny audyt obejmują ten zakres. [Kontrakt implementacji i testy](../PROJECTS_TASKS.md). Status zadania pozostaje początkowy; komendy postępu należą do M08. Ten przyrost jest online i nie zmienia bramki offline-first MVP.
+
+## Przyrost PR13 — M08
+
+M08 dodaje jeden endpoint komend v1 dla rozpoczęcia własnego zadania i zgłoszenia do odbioru, trwałe receipts PostgreSQL, kontrolę wersji oraz atomowy audyt. Retry ponownie sprawdza bieżącą sesję, role i przydział; utrata odpowiedzi po COMMIT i równoległe duplikaty mają jeden efekt. Schemat 10 zachowuje dane PR12. [Kontrakt i testy M08](../TASK_PROGRESS.md). Polski komponent pokazuje potwierdzony postęp i jawne konflikty. Odbiór/zwrot M14, PWA i kolejka offline pozostają poza tym przyrostem; bramka MVP nie zmienia się.

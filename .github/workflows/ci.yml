@@ -63,6 +63,8 @@ jobs:
       - run: node --check tests/deployed-browser-smoke.mjs
       - run: node --check tests/organization-branding-browser.mjs
       - run: node --check tests/projects-browser.mjs
+      - run: node --check tests/task-progress-browser.mjs
+      - run: node --check tests/helpers/task-progress-process.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: sitegrid-m01-linux-x64

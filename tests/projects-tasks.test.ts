@@ -1,3 +1,4 @@
+import { lockOrganization } from '../apps/server/src/common/organization-lock.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -10,7 +11,6 @@ import { buildApp } from '../apps/server/src/app.js';
 import { readConfig } from '../apps/server/src/config.js';
 import { migrate, checkMigrations, migrationFiles } from '../apps/server/src/migrations.js';
 import { withOrganization } from '../apps/server/src/organization-context.js';
-import { lockInvitationCompany } from '../apps/server/src/invitations.js';
 
 test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', { skip: !process.env.TEST_DATABASE_URL }, async t => {
   assert(process.env.TEST_RUNTIME_DATABASE_URL, 'A real unprivileged runtime URL is required');
@@ -51,7 +51,7 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
   };
   await admin.query(`CREATE SCHEMA ${schema}`);
   try {
-    await t.test('schema 8 to 9 preserves populated PR11 data and the release contract', async () => {
+    await t.test('schema 8 to current preserves populated PR11 data and the release contract', async () => {
       const previous = await mkdtemp(join(tmpdir(), 'sitegrid-pr12-migrations-'));
       try {
         for (const file of (await migrationFiles('migrations')).filter(file => file.version <= 8)) await copyFile(join('migrations', file.name), join(previous, file.name));
@@ -86,10 +86,10 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
         await owner.query("INSERT INTO platform_audit_events(actor_id, event, organization_id) VALUES ($1, 'organization_created', $2)", [users.platform, org.a]);
         const tables = (await owner.query('SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename', [schema])).rows.map(row => row.tablename as string);
         const before = await Promise.all(tables.map(snapshot));
-        assert.equal(await migrate(owner, 'migrations'), 9); assert.equal(await migrate(owner, 'migrations'), 9);
-        assert.equal(await checkMigrations(owner, 'migrations'), 9);
+        assert.equal(await migrate(owner, 'migrations'), 10); assert.equal(await migrate(owner, 'migrations'), 10);
+        assert.equal(await checkMigrations(owner, 'migrations'), 10);
         for (const [i, table] of tables.entries()) assert.deepEqual(table === 'schema_migrations' ? (await snapshot(table)).filter(row => row.version <= 8) : await snapshot(table), before[i], table);
-        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 9, min: 9, max: 9, upgradeMin: 0, upgradeMax: 9 });
+        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 10, min: 10, max: 10, upgradeMin: 0, upgradeMax: 10 });
         await assert.rejects(checkMigrations(owner, previous), /does not match/);
       } finally { await rm(previous, { recursive: true, force: true }); }
     });
@@ -291,7 +291,7 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
     await t.test('revoked roles, project assignments and company memberships apply immediately and after lock waits', async () => {
       const blocker = await owner.connect();
       try {
-        await blocker.query('BEGIN'); await lockInvitationCompany(blocker, org.a);
+        await blocker.query('BEGIN'); await lockOrganization(blocker, org.a);
         const waiting = Promise.resolve(post(`${path()}/tasks`, payload(), 'manager'));
         await waitForLock();
         await blocker.query("UPDATE project_memberships SET status = 'inactive', version = version + 1 WHERE organization_id = $1 AND project_id = $2 AND membership_id = $3", [org.a, projects.p1, memberships.manager]);
@@ -321,7 +321,7 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
         const current = await currentProject();
         if (scenario === 'session') await owner.query("UPDATE sessions SET expires_at = clock_timestamp() + interval '500 milliseconds' WHERE user_id = $1", [users.manager]);
         try {
-          await blocker.query('BEGIN'); await lockInvitationCompany(blocker, org.a);
+          await blocker.query('BEGIN'); await lockOrganization(blocker, org.a);
           const waiting = Promise.resolve(scenario === 'admin'
             ? post(`${path()}/update`, { name: 'Denied after wait', expectedVersion: current.version }, 'dual')
             : post(`${path()}/tasks`, payload('worker2'), 'manager'));

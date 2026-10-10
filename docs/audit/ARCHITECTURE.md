@@ -136,3 +136,7 @@ Mały zakres MVP i jego ograniczenia online; 7 dni dostępu offline; aktywacja 2
 ## Implementacja M07 w PR12
 
 [Projekty, przydziały i zadania online](../PROJECTS_TASKS.md) realizują model tenantowy z FORCE RLS, złożonymi FK firmy/projektu/członkostwa, lokalnym kontekstem projektu po autoryzacji, wersjami i transakcyjnym audytem. Schemat 9 zachowuje dane PR11. Wszystkie zadania zaczynają jako `planned`; przejścia statusu, idempotentne komendy, PWA i offline pozostają poza tym przyrostem. Dostęp do zadań jest przecięciem istniejącej roli firmowej i aktywnego przydziału projektowego. Metadane administracyjne firmy nie rozszerzają tego zakresu.
+
+## Implementacja M08 w PR13
+
+[Komendy postępu v1](../TASK_PROGRESS.md) działają jako osobny moduł modularnego monolitu: routes, domain, service i persistence, z dedykowanym komponentem UI. Wspólna blokada firmy i utility audytu należą do common infrastructure. Jedna transakcja PostgreSQL zapisuje status, wersję, audit i receipt kluczowany firmą/aktorem/operationId; hash obejmuje treść i autoryzowany zakres. FORCE RLS i aktualna autoryzacja obowiązują także przy replay. Brak automatycznej retencji receipts w MVP. Schemat 10 zachowuje M07. Wersjonowany endpoint stanowi fundament przyszłej synchronizacji; PWA, lokalna kolejka i epoka po restore pozostają dalszym zakresem.

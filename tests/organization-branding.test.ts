@@ -1,3 +1,4 @@
+import { lockOrganization } from '../apps/server/src/common/organization-lock.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -11,7 +12,6 @@ import { readConfig } from '../apps/server/src/config.js';
 import { createPool } from '../apps/server/src/db.js';
 import { checkMigrations, migrate, migrationFiles } from '../apps/server/src/migrations.js';
 import { withOrganization } from '../apps/server/src/organization-context.js';
-import { lockInvitationCompany } from '../apps/server/src/invitations.js';
 
 test('PR11 branding, migration and authorization under real PostgreSQL runtime FORCE RLS', { skip: !process.env.TEST_DATABASE_URL }, async t => {
   assert(process.env.TEST_RUNTIME_DATABASE_URL, 'Set the real unprivileged runtime URL');
@@ -266,7 +266,7 @@ test('PR11 branding, migration and authorization under real PostgreSQL runtime F
       const version = (await brand()).version;
       const blocker = await owner.connect();
       try {
-        await blocker.query('BEGIN'); await lockInvitationCompany(blocker, org.a);
+        await blocker.query('BEGIN'); await lockOrganization(blocker, org.a);
         const waiting = Promise.resolve(post(base(), update(version), 'shared'));
         await waitForLock();
         await blocker.query("DELETE FROM membership_roles WHERE organization_id = $1 AND membership_id = $2 AND role = 'organization_admin'", [org.a, memberships.sharedA]);
