@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 export type ProgressCommand = { operationId: string; schemaVersion: 1; action: 'start' | 'submit'; expectedVersion: number };
 export type ProgressScope = { organizationId: string; projectId: string; taskId: string; actorId: string };
 export type ProgressTask = { id: string; status: 'planned' | 'in_progress' | 'submitted'; version: number; updatedAt: string };

@@ -158,6 +158,26 @@ test('M08 task progress on real PostgreSQL with unprivileged FORCE RLS', { skip:
       assert.equal((await post(taskB, op, 'worker', org.b, project.b)).statusCode, 200);
       assert.equal((await owner.query('SELECT count(*) FROM task_progress_receipts WHERE operation_id = $1', [op.operationId])).rows[0].count, '2');
     });
+    await t.test('uppercase UUID paths accept commands and casing changes replay the identical receipt', async () => {
+      const task = await createTask(), op = command();
+      const first = await post(task.toUpperCase(), { ...op, operationId: op.operationId.toUpperCase() }, 'worker', org.a.toUpperCase(), project.a.toUpperCase());
+      assert.equal(first.statusCode, 200, first.body);
+      assert.equal(first.json().task.status, 'in_progress'); assert.equal(first.json().task.version, 2);
+      await unchanged(async () => {
+        for (const [id, tenant, proj] of [
+          [task, org.a, project.a],
+          [task.toUpperCase(), org.a, project.a],
+          [task, org.a.toUpperCase(), project.a],
+          [task, org.a, project.a.toUpperCase()],
+        ]) {
+          const retry = await post(id, op, 'worker', tenant, proj);
+          assert.equal(retry.statusCode, 200, retry.body);
+          assert.deepEqual(retry.json(), first.json());
+        }
+      });
+      assert.equal((await owner.query('SELECT count(*) FROM task_progress_receipts WHERE task_id = $1', [task])).rows[0].count, '1');
+      assert.equal((await owner.query("SELECT count(*) FROM organization_audit_events WHERE subject_id = $1 AND event = 'task_started'", [task])).rows[0].count, '1');
+    });
     await t.test('canonical identical retries replay the committed snapshot; different content or path is rejected atomically', async () => {
       const task = await createTask(), op = command();
       const first = await post(task, op); assert.equal(first.statusCode, 200);
