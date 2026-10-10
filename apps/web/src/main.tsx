@@ -81,7 +81,7 @@ function App({ invitationToken }: { invitationToken: string }) {
     const generation = await beginAccountVerification();
     const next = await api<Session>('/api/auth/session', { signal: controller.signal });
     if (controller.signal.aborted) return;
-    const warning = await finishAccountVerification(next.user === null ? null : next.user.id, generation);
+    const warning = await finishAccountVerification(next.user === null ? null : next.user?.id, generation);
     if (controller.signal.aborted) return;
     setLocalWarning(warning);
     setSession(next);

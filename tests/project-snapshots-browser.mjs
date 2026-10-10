@@ -19,7 +19,7 @@ const owner = new pg.Pool({ connectionString: ownerUrl.href }), runtime = new pg
 const config = readConfig({ NODE_ENV: 'test', DATABASE_URL: runtimeUrl.href });
 const companyA = randomUUID(), companyB = randomUUID(), password = 'Synthetic-password-16';
 const users = {}, members = {}, cookies = {}, csrf = {}, errors = [], cspErrors = [];
-let app, browser, servedWorker, snapshotMode = '', releaseDownload, downloadStarted;
+let app, browser, servedWorker, snapshotMode = '', sessionUnavailable = false, releaseDownload, downloadStarted;
 const blockedDownload = () => new Promise(resolve => { releaseDownload = resolve; });
 await admin.query(`CREATE SCHEMA ${schema}`);
 try {
@@ -49,6 +49,7 @@ try {
   servedWorker = await readFile('dist/web/sw.js', 'utf8');
   app.get('/sw.js', (_request, reply) => reply.header('Cache-Control','no-store').type('application/javascript').send(servedWorker));
   app.addHook('onRequest', async (request, reply) => {
+    if(sessionUnavailable && request.url==='/api/auth/session')return reply.code(503).send({error:'Serwer sesji chwilowo niedostępny.'});
     if (!request.url.endsWith('/snapshot')) return;
     if (snapshotMode === 'malformed') return reply.send({ format: 1, complete: false });
     if (snapshotMode === 'limit') return reply.code(413).send({ error: 'Projekt przekracza limit 500 zadań lub 2 MiB.', code: 'snapshot_limit' });
@@ -163,6 +164,11 @@ try {
     let downloads=0; page.on('request',request=>{if(request.url().endsWith('/snapshot')) downloads++;});
     await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();
     await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor(); assert.equal(downloads,1);
+    sessionUnavailable=true;await page.reload();await page.getByRole('alert').filter({hasText:'Serwer sesji chwilowo niedostępny.'}).waitFor();assert.equal(await page.evaluate(()=>navigator.onLine),true);
+    await page.getByRole('button',{name:'Czytaj przygotowane dane lokalnie',exact:true}).click();await page.getByRole('heading',{name:'Odczyt lokalny SiteGrid',exact:true}).waitFor();await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Rozpocznij zadanie',exact:true}).count(),0);assert.equal(await page.locator('form').count(),0);assert.equal(downloads,1);
+    sessionUnavailable=false;await page.getByRole('button',{name:'Wróć do trybu online',exact:true}).click();await page.locator('#active-organization').selectOption(companyA);
+    await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click();await page.getByRole('button',{name:'Odśwież offline',exact:true}).waitFor();
     assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);
     for (const mode of ['malformed','limit','disconnect']) {
       snapshotMode=mode; await page.getByRole('button',{name:'Odśwież offline',exact:true}).click();

@@ -5,7 +5,7 @@ import { shellIsAvailable } from '../pwa/lifecycle.js';
 import { offlineFailureMessage } from './messages.js';
 
 const taskStatus = { planned: 'Zaplanowane', in_progress: 'W toku', submitted: 'Zgłoszone do odbioru' };
-export function OfflineViewer() {
+export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
   const [organization, setOrganization] = useState(''), [organizations, setOrganizations] = useState<string[]>([]);
   const [snapshots, setSnapshots] = useState<ConfirmedSnapshot[]>([]), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -41,7 +41,7 @@ export function OfflineViewer() {
     document.addEventListener('visibilitychange', refreshed); window.addEventListener('sitegrid-offline-access', refreshed);
     return () => { disposed = true; controller.abort(); clearInterval(timer); document.removeEventListener('visibilitychange', refreshed); window.removeEventListener('sitegrid-offline-access', refreshed); };
   }, [organization]);
-  return <section className="card offline-viewer"><h1>SiteGrid bez połączenia</h1>
+  return <section className="card offline-viewer"><h1>{localOnly ? 'Odczyt lokalny SiteGrid' : 'SiteGrid bez połączenia'}</h1>
     <p>Przygotowane dane służą wyłącznie do odczytu. Mogły zmienić się na serwerze. Nie zapisujemy ani nie synchronizujemy zmian offline.</p>
     <p>Po odzyskaniu sieci aplikacja ponownie sprawdzi sesję.</p>
     {loading && <p role="status">Sprawdzanie lokalnego dostępu…</p>}{error && <p role="alert" className="error">{error}</p>}
