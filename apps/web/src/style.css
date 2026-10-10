@@ -69,6 +69,8 @@ dl { font-size: 14px; line-height: 1.8; } dt { color: #59716b; } dd { margin: 0 
 @media (max-width: 700px) { .tiles { grid-template-columns: 1fr; } .dashboard-heading { flex-direction: column; align-items: flex-start; } .dashboard { margin-top: 36px; } }
 @media (max-width: 480px) { .shell { padding: 24px 16px; } .card { margin-top: 40px; } }
 .projects { border-top: 1px solid #d9e3dd; margin-top: 24px; padding-top: 12px; }
+.contractors { border-top: 1px solid #d9e3dd; margin-top: 24px; padding-top: 12px; }
+.contractor-row { overflow-wrap: anywhere; }
 .project-toolbar, .project-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .project-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px; margin: 16px 0; }
 .project-choice { display: flex; flex-direction: column; gap: 6px; text-align: left; margin: 0; overflow-wrap: anywhere; }
@@ -76,7 +78,7 @@ dl { font-size: 14px; line-height: 1.8; } dt { color: #59716b; } dd { margin: 0 
 .project-choice[aria-pressed="true"] { outline: 2px solid #163638; outline-offset: 1px; }
 .project-details { border: 1px solid #d9e3dd; border-radius: 10px; padding: 16px; overflow-wrap: anywhere; }
 .project-details .hint { margin: 8px 0 16px; }
-.project-form, .task-form { max-width: 580px; margin: 20px 0; }
+.project-form, .task-form, .contractor-form { max-width: 580px; margin: 20px 0; }
 .project-roster, .task-list { display: grid; gap: 8px; }
 .project-member, .task-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid #d9e3dd; border-radius: 8px; }
 .project-member > span, .task-row > div { min-width: 0; }

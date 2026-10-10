@@ -102,13 +102,13 @@ test('M08 task progress on real PostgreSQL with unprivileged FORCE RLS', { skip:
       await owner.query("INSERT INTO organization_logos(organization_id, data, mime_type, version) VALUES ($1, $2, 'image/png', 5)", [org.a, Buffer.from('preserved-existing-logo')]);
       await owner.query("INSERT INTO organization_invitations(organization_id, email, role, issuer_id, token_hash) VALUES ($1, 'invite@example.test', 'worker', $2, $3)", [org.a, users.admin, randomBytes(32).toString('hex')]);
       await owner.query("INSERT INTO organization_audit_events(organization_id, actor_id, subject_id, event) VALUES ($1, $2, $3, 'task_created')", [org.a, users.manager, oldTask]);
-      await t.test('schema 9 -> 10 preserves all populated tables, credentials, sessions and task versions', async () => {
+      await t.test('schema 9 to current preserves all populated tables, credentials, sessions and task versions', async () => {
         const tables = (await owner.query('SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename', [schema])).rows.map(row => row.tablename as string);
         const before = await Promise.all(tables.map(snapshot));
-        assert.equal(await migrate(owner, 'migrations'), 10); assert.equal(await migrate(owner, 'migrations'), 10);
-        assert.equal(await checkMigrations(owner, 'migrations'), 10);
-        for (const [i, table] of tables.entries()) assert.deepEqual(table === 'schema_migrations' ? (await snapshot(table)).filter(row => row.version <= 9) : await snapshot(table), before[i], table);
-        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 10, min: 10, max: 10, upgradeMin: 0, upgradeMax: 10 });
+        assert.equal(await migrate(owner, 'migrations'), 11); assert.equal(await migrate(owner, 'migrations'), 11);
+        assert.equal(await checkMigrations(owner, 'migrations'), 11);
+        for (const [i, table] of tables.entries()) assert.deepEqual(table === 'schema_migrations' ? (await snapshot(table)).filter(row => row.version <= 9) : await snapshot(table), table === 'projects' ? before[i].map(row => ({ ...row, contractor_id: null })) : before[i], table);
+        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 11, min: 11, max: 11, upgradeMin: 0, upgradeMax: 11 });
         await assert.rejects(checkMigrations(owner, previous), /does not match/);
       });
     } finally { await rm(previous, { recursive: true, force: true }); }

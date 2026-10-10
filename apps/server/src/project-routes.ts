@@ -5,14 +5,18 @@ import { writeOrganizationAudit as audit } from './common/audit.js';
 import type { Config } from './config.js';
 import { readSession, type Session } from './auth/session.js';
 import { withAuthorizedOrganization } from './organization-access.js';
+import { contractorIdentifier } from './contractors/domain.js';
+import { requireActiveContractor } from './contractors/persistence.js';
 
 const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const uuid = { type: 'string', pattern: uuidPattern.source };
 const failure = (statusCode: number) => Object.assign(new Error('Invalid project action'), { statusCode });
-const projectColumns = 'id, name, description, status, version, created_at AS "createdAt", updated_at AS "updatedAt"';
+const projectColumns = `id, name, description, status, version, created_at AS "createdAt", updated_at AS "updatedAt",
+  (SELECT json_build_object('id', c.id, 'name', c.name, 'status', c.status) FROM contractors c
+    WHERE (c.organization_id, c.id) = (projects.organization_id, projects.contractor_id)) AS contractor`;
 const taskColumns = 'id, title, description, assignee_membership_id AS "assigneeMembershipId", author_membership_id AS "authorMembershipId", status, version, created_at AS "createdAt", updated_at AS "updatedAt", can_progress_assignment(organization_id, project_id, assignee_membership_id) AS "canProgress"';
 type Params = { id: string; projectId: string; membershipId: string; taskId: string };
-type Project = { id: string; name: string; description: string; status: string; version: number };
+type Project = { id: string; name: string; description: string; status: string; version: number; contractor: { id: string; name: string; status: string } | null };
 function fields(request: FastifyRequest, allowed: string[]) {
   const body = request.body as Record<string, unknown>;
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !allowed.includes(key))) throw failure(400);
@@ -78,16 +82,23 @@ export function registerProjectRoutes(app: FastifyInstance, pool: Pool, config: 
   }
   const conflict = (reply: FastifyReply, resource: string, current: unknown) => reply.code(409).send({ error: 'Rekord zmienił się. Odśwież dane przed ponownym zapisem.', [resource]: current });
 
-  app.get<{ Params: Params }>(base, { schema: params() }, request => scope(request, false, false, async client => ({
-    projects: (await client.query(`SELECT ${projectColumns} FROM projects WHERE organization_id = $1 ORDER BY created_at DESC, id`, [request.params.id])).rows,
+  app.get<{ Params: Params; Querystring: { contractorId?: string } }>(base, { schema: { ...params(), querystring: {
+    type: 'object', additionalProperties: false, properties: { contractorId: { anyOf: [uuid, { const: 'none' }] } },
+  } } }, request => scope(request, false, false, async client => ({
+    projects: (await client.query(`SELECT ${projectColumns} FROM projects WHERE organization_id = $1
+      AND ($2::boolean OR contractor_id IS NOT DISTINCT FROM $3::uuid) ORDER BY created_at DESC, id`,
+    [request.params.id, request.query.contractorId === undefined,
+      request.query.contractorId === undefined || request.query.contractorId === 'none' ? null : contractorIdentifier(request.query.contractorId)])).rows,
   })));
   app.post<{ Params: Params }>(base, { schema: params() }, async (request, reply) => {
     const result = await scope(request, true, true, async (client, actor) => {
-      const body = fields(request, ['name', 'description']);
+      const body = fields(request, ['name', 'description', 'contractorId']);
       const name = text(body.name, 200, true), description = text(body.description === undefined ? '' : body.description, 4000);
-      const created = (await client.query(`INSERT INTO projects(organization_id, name, description) VALUES ($1, $2, $3) RETURNING ${projectColumns}`,
-      [request.params.id, name, description])).rows[0];
-      await audit(client, request.params.id, actor.userId, created.id, 'project_created', { beforeVersion: 0, afterVersion: 1 });
+      const contractorId = body.contractorId === undefined ? null : contractorIdentifier(body.contractorId);
+      await requireActiveContractor(client, request.params.id, contractorId);
+      const created = (await client.query(`INSERT INTO projects(organization_id, name, description, contractor_id) VALUES ($1, $2, $3, $4) RETURNING ${projectColumns}`,
+      [request.params.id, name, description, contractorId])).rows[0];
+      await audit(client, request.params.id, actor.userId, created.id, 'project_created', { beforeVersion: 0, afterVersion: 1, contractorId });
       return { project: created };
     });
     return reply.code(201).send(result);
@@ -101,19 +112,21 @@ export function registerProjectRoutes(app: FastifyInstance, pool: Pool, config: 
   for (const action of ['update', 'archive']) {
     app.post<{ Params: Params }>(`${base}/:projectId/${action}`, { schema: params('projectId') }, async (request, reply) => {
       const result = await scope(request, true, true, async (client, actor) => {
-        const body = fields(request, action === 'update' ? ['name', 'description', 'expectedVersion'] : ['expectedVersion']);
+        const body = fields(request, action === 'update' ? ['name', 'description', 'contractorId', 'expectedVersion'] : ['expectedVersion']);
         const expected = version(body.expectedVersion);
         const name = action === 'update' ? text(body.name, 200, true) : '', description = action === 'update' ? text(body.description === undefined ? '' : body.description, 4000) : '';
         const current = await project(client, request);
         if (current.version !== expected) return { stale: current };
         writable(current);
-        const updated = (await client.query(`UPDATE projects SET name = $3, description = $4, status = $5, version = version + 1
+        const contractorId = action === 'archive' || body.contractorId === undefined ? current.contractor?.id ?? null : contractorIdentifier(body.contractorId);
+        if (contractorId !== (current.contractor?.id ?? null)) await requireActiveContractor(client, request.params.id, contractorId);
+        const updated = (await client.query(`UPDATE projects SET name = $3, description = $4, status = $5, contractor_id = $7, version = version + 1
           WHERE organization_id = $1 AND id = $2 AND version = $6 RETURNING ${projectColumns}`,
         [request.params.id, current.id, action === 'update' ? name : current.name, action === 'update' ? description : current.description,
-          action === 'archive' ? 'archived' : 'active', expected])).rows[0];
+          action === 'archive' ? 'archived' : 'active', expected, contractorId])).rows[0];
         if (!updated) throw failure(409);
         await audit(client, request.params.id, actor.userId, current.id, action === 'archive' ? 'project_archived' : 'project_updated',
-          { beforeVersion: expected, afterVersion: updated.version });
+          { beforeVersion: expected, afterVersion: updated.version, beforeContractorId: current.contractor?.id ?? null, afterContractorId: contractorId });
         return { project: updated };
       });
       return 'stale' in result ? conflict(reply, 'project', result.stale) : result;

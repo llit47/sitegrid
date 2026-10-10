@@ -166,7 +166,10 @@ try {
   await owner.query('INSERT INTO users(id,email) VALUES ($1,$2)', [issuer, 'issuer@example.test']);
   await owner.query("INSERT INTO organization_memberships(organization_id,id,user_id,status) VALUES ($1,$2,$3,'active')", [company, issuerMember, issuer]);
   await owner.query("INSERT INTO membership_roles(organization_id,membership_id,role) VALUES ($1,$2,'organization_admin')", [company, issuerMember]);
-  await owner.query('INSERT INTO projects(organization_id,id,name) VALUES ($1,$2,$3)', [company, project, 'Poufny projekt A']);
+  const contractor = randomUUID();
+  await owner.query('INSERT INTO contractors(organization_id,id,name) VALUES ($1,$2,$3)', [company, contractor, 'Poufny kontrahent A']);
+  await owner.query('INSERT INTO contractors(organization_id,name) VALUES ($1,$2)', [company, 'Niewidoczny katalog kontrahentów A']);
+  await owner.query('INSERT INTO projects(organization_id,id,name,contractor_id) VALUES ($1,$2,$3,$4)', [company, project, 'Poufny projekt A', contractor]);
   await owner.query('INSERT INTO project_memberships(organization_id,project_id,membership_id) VALUES ($1,$2,$3)', [company, project, member]);
   const seed = await owner.connect();
   try {
@@ -196,31 +199,42 @@ try {
     await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     await page.locator('#active-organization').selectOption(company);
-    await page.getByRole('button', { name: 'Poufny projekt A Aktywny', exact: true }).click();
+    await page.getByRole('button', { name: 'Poufny projekt A Aktywny Kontrahent: Poufny kontrahent A', exact: true }).click();
     await page.getByText('Poufne zadanie A', { exact: true }).waitFor();
     await page.getByRole('button', { name: mobile ? 'Zgłoś do odbioru' : 'Rozpocznij zadanie', exact: true }).click();
     await page.getByText(mobile ? 'Serwer potwierdził zgłoszenie do odbioru.' : 'Serwer potwierdził rozpoczęcie zadania.', { exact: true }).waitFor();
     await page.locator('#active-organization').selectOption(companyB);
     await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor();
     await page.locator('#active-organization').selectOption(company);
-    await page.getByRole('button', { name: 'Poufny projekt A Aktywny', exact: true }).click();
+    await page.getByRole('button', { name: 'Poufny projekt A Aktywny Kontrahent: Poufny kontrahent A', exact: true }).click();
     await page.getByText('Poufne zadanie A', { exact: true }).waitFor();
+    assert.equal(await page.locator('.project-details').getByText('Kontrahent: Poufny kontrahent A', { exact: true }).count(), 1);
+    assert.equal(await page.getByText('Niewidoczny katalog kontrahentów A', { exact: true }).count(), 0);
     await page.getByText('Zainstaluj SiteGrid', { exact: true }).click();
     assert(await page.getByText('iPhone/iPad:', { exact: false }).isVisible());
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    await page.evaluate(async () => {
+    await page.evaluate(async company => {
       await fetch('/api/auth/session'); await fetch('/api/organizations/foreign/branding/logo');
+      await fetch(`/api/organizations/${company}/projects`); await fetch(`/api/organizations/${company}/contractors`);
       await fetch('/health/ready'); await fetch('/test-storage.js');
-    });
+    }, company);
     const cached = await page.evaluate(async () => {
       const names = await caches.keys();
       return (await Promise.all(names.map(async name => (await (await caches.open(name)).keys()).map(request => new URL(request.url).pathname)))).flat();
     });
     assert.deepEqual(cached.sort(), initialConfig.assets.map(asset => asset.url).sort());
     assert(!cached.some(path => path.startsWith('/api/') || path.includes('test-storage')));
+    assert.equal(await page.evaluate(async () => {
+      for (const name of await caches.keys()) {
+        const cache = await caches.open(name);
+        for (const request of await cache.keys()) if ((await (await cache.match(request)).text()).includes('Poufny kontrahent A')) return true;
+      }
+      return false;
+    }), false);
     await context.setOffline(true);
     await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
     assert.equal(await page.getByText('Poufne zadanie A', { exact: true }).count(), 0);
+    assert.equal(await page.getByText('Kontrahent: Poufny kontrahent A', { exact: true }).count(), 0);
     assert.equal(await page.locator('.account').count(), 0);
     await page.reload(); await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
     await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();

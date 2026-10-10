@@ -54,6 +54,7 @@ jobs:
       - run: node --import tsx tests/pwa-browser.mjs
       - run: node --import tsx tests/organization-branding-browser.mjs
       - run: node --import tsx tests/projects-browser.mjs
+      - run: node --import tsx tests/contractors-browser.mjs
       - run: node --import tsx tests/task-progress-browser.mjs
       - name: Select pinned key (ephemeral fixture only for branch CI)
         run: |
@@ -73,6 +74,7 @@ jobs:
       - run: node --check tests/deployed-browser-smoke.mjs
       - run: node --check tests/organization-branding-browser.mjs
       - run: node --check tests/projects-browser.mjs
+      - run: node --check tests/contractors-browser.mjs
       - run: node --check tests/pwa-browser.mjs
       - run: node --check tests/task-progress-browser.mjs
       - run: node --check tests/helpers/task-progress-process.mjs
