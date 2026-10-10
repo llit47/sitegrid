@@ -1,6 +1,6 @@
 # SiteGrid — roadmapa małego MVP offline-first
 
-Data: 2026-10-09. **Architektura kierunkowa przyjęta w PR #2; bez implementacji, limity nadal do zatwierdzenia.** Źródło decyzji: [architektura](ARCHITECTURE.md) i [macierz uprawnień](PERMISSIONS.md). Historyczny audyt referencji pozostaje w [FUNCTIONALITY.md](FUNCTIONALITY.md). Niniejszy plan zastępuje wcześniejszą kolejność z pilotażem online przed offline; wcześniejsze priorytety backlogu nie wyznaczają już bramki MVP.
+Data: 2026-10-09. **Architektura kierunkowa przyjęta w PR #2; kolejne etapy wdrażano w PR-ach (do M08/PR13), lecz pełne MVP offline nadal jest w budowie; limity pozostają do zatwierdzenia.** Źródło decyzji: [architektura](ARCHITECTURE.md) i [macierz uprawnień](PERMISSIONS.md). Historyczny audyt referencji pozostaje w [FUNCTIONALITY.md](FUNCTIONALITY.md). Niniejszy plan zastępuje wcześniejszą kolejność z pilotażem online przed offline; wcześniejsze priorytety backlogu nie wyznaczają już bramki MVP.
 
 ## Aktualizacja modelu firmy i kontrahentów (2026-10-10)
 
@@ -12,7 +12,7 @@ MVP: fundament wielu izolowanych firm (codzienna praca jednej firmy wykonawczej)
 
 Bez magazynu, zakupów, kalendarza, czatu, PDF/zdjęć, kosztów, pełnych brygad i rozbudowanego raportowania. Rezygnacja z tych modułów zmniejsza MVP, nie odkłada niezawodności. Administracja, przygotowanie urządzenia i odbiór robót pozostają online zgodnie z macierzą.
 
-## Pierwszy działający przyrost — M01 (najbliższy PR implementacyjny)
+## Pierwszy działający przyrost — M01 (historyczny kontrakt tego etapu)
 
 **Zatwierdzona granica instalacji (2026-10-09):** SiteGrid instaluje się na przygotowanym Debianie 13 w LXC, VM, bare metal lub na hoście Proxmox VE; miejsce wybiera użytkownik. Provisioning LXC/VM na hoście Proxmox jest poza zakresem projektu.
 
