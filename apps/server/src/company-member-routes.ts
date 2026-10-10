@@ -82,6 +82,12 @@ export function registerCompanyMemberRoutes(app: FastifyInstance, pool: Pool, co
       const result = action === 'assign'
         ? await client.query('INSERT INTO membership_roles(organization_id, membership_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING role', [request.params.id, request.params.membershipId, body.role])
         : await client.query('DELETE FROM membership_roles WHERE organization_id = $1 AND membership_id = $2 AND role = $3 RETURNING role', [request.params.id, request.params.membershipId, body.role]);
+      if (result.rowCount && action === 'remove' && body.role === 'organization_admin') {
+        await client.query(`UPDATE organization_invitations SET revoked_at = clock_timestamp()
+          WHERE organization_id = $1 AND accepted_at IS NULL AND revoked_at IS NULL
+            AND issuer_id = (SELECT user_id FROM organization_memberships WHERE organization_id = $1 AND id = $2)`,
+        [request.params.id, request.params.membershipId]);
+      }
       if (result.rowCount) await audit(client, request.params.id, actorId, request.params.membershipId, action === 'assign' ? 'role_assigned' : 'role_removed', { role: body.role });
       return { ok: true };
     }));
@@ -94,6 +100,12 @@ export function registerCompanyMemberRoutes(app: FastifyInstance, pool: Pool, co
       if (current.status === 'pending') throw failure(409);
       if (current.status !== status) {
         await client.query('UPDATE organization_memberships SET status = $3 WHERE organization_id = $1 AND id = $2', [request.params.id, current.id, status]);
+        if (action === 'deactivate') {
+          await client.query(`UPDATE organization_invitations SET revoked_at = clock_timestamp()
+            WHERE organization_id = $1 AND accepted_at IS NULL AND revoked_at IS NULL
+              AND issuer_id = (SELECT user_id FROM organization_memberships WHERE organization_id = $1 AND id = $2)`,
+          [request.params.id, current.id]);
+        }
         await audit(client, request.params.id, actorId, current.id, action === 'deactivate' ? 'membership_deactivated' : 'membership_reactivated', { before: current.status, after: status });
       }
       return { ok: true };
@@ -133,6 +145,12 @@ export function registerCompanyMemberRoutes(app: FastifyInstance, pool: Pool, co
       if (!current) throw failure(404);
       if (current.status !== status) {
         await client.query('UPDATE employee_profiles SET status = $3 WHERE organization_id = $1 AND id = $2', [request.params.id, current.id, status]);
+        if (action === 'deactivate' && current.membershipId) {
+          await client.query(`UPDATE organization_invitations SET revoked_at = clock_timestamp()
+            WHERE organization_id = $1 AND accepted_at IS NULL AND revoked_at IS NULL
+              AND issuer_id = (SELECT user_id FROM organization_memberships WHERE organization_id = $1 AND id = $2)`,
+          [request.params.id, current.membershipId]);
+        }
         await audit(client, request.params.id, actorId, current.id, action === 'deactivate' ? 'employee_deactivated' : 'employee_reactivated', { before: current.status, after: status, membershipId: current.membershipId });
       }
       return { ok: true };

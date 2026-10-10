@@ -308,6 +308,101 @@ test('PR10 company members and employees under real runtime FORCE RLS', { skip: 
       assert(auditRows.every(row => row.actor_id && row.subject_id));
       for (const [i, table] of ['users', 'credentials', 'platform_admins'].entries()) assert.deepEqual(await snapshot(table), globalBefore[i], table);
     });
+    // Use real invitation issuance/acceptance with existing identities; no new accounts.
+    const invite = async (organizationId: string, actor: string, email: string) => {
+      const response = await post(`${base(organizationId)}/invitations`, { email, role: 'worker' }, actor);
+      assert.equal(response.statusCode, 201, response.body);
+      return { id: response.json().invitation.id as string, token: new URL(response.json().acceptanceLink).hash.slice(1) };
+    };
+    const accept = (token: string, actor = 'shared') => post('/api/invitations/accept', { token }, actor);
+    await seedMember(org.b, users.otherA, ['organization_admin']);
+    const issuerProfile = await post(`${base()}/employees`, { displayName: 'Administrator wystawiający', membershipId: memberships.otherA });
+    assert.equal(issuerProfile.statusCode, 201, issuerProfile.body);
+    const accessChanges = [
+      { name: 'membership deactivation/reactivation', path: `members/${memberships.otherA}/deactivate`, body: {}, restore: `members/${memberships.otherA}/reactivate`, restoreBody: {} },
+      { name: 'admin role removal/restoration', path: `members/${memberships.otherA}/roles/remove`, body: { role: 'organization_admin' }, restore: `members/${memberships.otherA}/roles/assign`, restoreBody: { role: 'organization_admin' } },
+      { name: 'linked employee deactivation/reactivation', path: `employees/${issuerProfile.json().employee.id}/deactivate`, body: {}, restore: `employees/${issuerProfile.json().employee.id}/reactivate`, restoreBody: {} },
+    ];
+    for (const change of accessChanges) await t.test(`${change.name} permanently revokes only that issuer's outstanding company invitations`, async () => {
+      const accepted = await invite(org.a, 'otherA', 'admina@example.test');
+      assert.equal((await accept(accepted.token, 'adminA')).statusCode, 200);
+      const alreadyRevoked = await invite(org.a, 'otherA', 'revoked@example.test');
+      assert.equal((await post(`${base()}/invitations/${alreadyRevoked.id}/revoke`, {}, 'otherA')).statusCode, 200);
+      const outstanding = await invite(org.a, 'otherA', 'shared@example.test');
+      const secondOutstanding = await invite(org.a, 'otherA', 'second-outstanding@example.test');
+      const otherIssuer = await invite(org.a, 'adminA', 'platform@example.test');
+      const otherCompany = await invite(org.b, 'otherA', 'shared@example.test');
+      const before = await snapshot('organization_invitations');
+      if (change.body.role === 'organization_admin') {
+        assert.equal((await post(`${base()}/members/${memberships.otherA}/roles/assign`, { role: 'manager' })).statusCode, 200);
+        assert.equal((await post(`${base()}/members/${memberships.otherA}/roles/remove`, { role: 'manager' })).statusCode, 200);
+        assert.deepEqual(await snapshot('organization_invitations'), before, 'removing a non-admin role preserves invitations');
+      }
+      assert.equal((await post(`${base()}/${change.path}`, change.body)).statusCode, 200);
+      const revoked = await snapshot('organization_invitations');
+      const revokedIds = [outstanding.id, secondOutstanding.id];
+      assert.deepEqual(revoked.filter(row => !revokedIds.includes(row.id)), before.filter(row => !revokedIds.includes(row.id)), 'other issuers, companies and accepted/revoked history must be preserved');
+      for (const invitation of [outstanding, secondOutstanding]) {
+        assert(revoked.find(row => row.id === invitation.id).revoked_at instanceof Date);
+        assert.equal((await post('/api/invitations/inspect', { token: invitation.token })).json().status, 'revoked');
+      }
+      assert.equal((await accept(outstanding.token)).statusCode, 409);
+      assert.equal((await post(`${base()}/${change.restore}`, change.restoreBody)).statusCode, 200);
+      assert.equal((await get(`${base()}/invitations`, 'otherA')).statusCode, 200, 'issuer access is restored');
+      assert.deepEqual(await snapshot('organization_invitations'), revoked, 'restoring access cannot revive or alter old invitations');
+      assert.equal((await accept(outstanding.token)).statusCode, 409);
+      assert.equal((await post('/api/invitations/inspect', { token: otherIssuer.token })).json().status, 'pending');
+      assert.equal((await post('/api/invitations/inspect', { token: otherCompany.token })).json().status, 'pending');
+    });
+    await t.test('audit failure rolls back invitation revocation with each access-removal action', async () => {
+      const outstanding = await invite(org.a, 'otherA', 'shared@example.test');
+      const tables = ['organization_memberships', 'membership_roles', 'employee_profiles', 'organization_invitations', 'organization_audit_events'];
+      const before = await Promise.all(tables.map(snapshot));
+      await owner.query(`CREATE FUNCTION reject_company_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Synthetic audit failure'; END $$`);
+      await owner.query('CREATE TRIGGER reject_company_audit BEFORE INSERT ON organization_audit_events FOR EACH ROW EXECUTE FUNCTION reject_company_audit()');
+      try {
+        for (const change of accessChanges) {
+          assert.equal((await post(`${base()}/${change.path}`, change.body)).statusCode, 503);
+          for (const [i, table] of tables.entries()) assert.deepEqual(await snapshot(table), before[i], table);
+        }
+      } finally { await owner.query('DROP TRIGGER reject_company_audit ON organization_audit_events'); await owner.query('DROP FUNCTION reject_company_audit()'); }
+      assert.equal((await post('/api/invitations/inspect', { token: outstanding.token })).json().status, 'pending');
+      assert.equal((await accept(outstanding.token)).statusCode, 200);
+    });
+    await t.test('concurrent acceptance respects revocation for membership, role and linked employee changes', async () => {
+      for (const change of accessChanges) for (const acceptFirst of [false, true]) {
+        const outstanding = await invite(org.a, 'otherA', 'shared@example.test');
+        const blocker = await owner.connect();
+        let accepted, changed;
+        try {
+          await blocker.query('BEGIN'); await lockInvitationCompany(blocker, org.a);
+          // Queue both actual API requests in a known order on the same company lock.
+          const first = Promise.resolve(acceptFirst ? accept(outstanding.token) : post(`${base()}/${change.path}`, change.body));
+          await waitForCompanyLocks(1);
+          const second = Promise.resolve(acceptFirst ? post(`${base()}/${change.path}`, change.body) : accept(outstanding.token));
+          await waitForCompanyLocks(2);
+          await blocker.query('COMMIT');
+          [accepted, changed] = acceptFirst ? await Promise.all([first, second]) : await Promise.all([second, first]);
+        } finally { await blocker.query('ROLLBACK'); blocker.release(); }
+        assert.equal(changed.statusCode, 200, changed.body);
+        assert.equal(accepted.statusCode, acceptFirst ? 200 : 409, `${change.name}: ${accepted.body}`);
+        const stored = (await owner.query('SELECT accepted_at, revoked_at FROM organization_invitations WHERE id = $1', [outstanding.id])).rows[0];
+        assert.equal(stored.accepted_at !== null, acceptFirst);
+        assert.equal(stored.revoked_at !== null, !acceptFirst);
+        assert.equal((await post(`${base()}/${change.restore}`, change.restoreBody)).statusCode, 200);
+        assert.equal((await accept(outstanding.token)).statusCode, 409, 'restoration cannot resurrect a revoked or consumed token');
+      }
+    });
+    await t.test('last-admin rejection preserves outstanding invitations', async () => {
+      assert.equal((await post(`${base()}/members/${memberships.otherA}/deactivate`)).statusCode, 200);
+      const outstanding = await invite(org.a, 'adminA', 'shared@example.test');
+      const before = await snapshot('organization_invitations');
+      assert.equal((await post(`${base()}/members/${memberships.adminA}/deactivate`)).statusCode, 409);
+      assert.equal((await post(`${base()}/members/${memberships.adminA}/roles/remove`, { role: 'organization_admin' })).statusCode, 409);
+      assert.deepEqual(await snapshot('organization_invitations'), before);
+      assert.equal((await post('/api/invitations/inspect', { token: outstanding.token })).json().status, 'pending');
+      assert.equal((await post(`${base()}/members/${memberships.otherA}/reactivate`)).statusCode, 200);
+    });
   } finally {
     await app.close(); await runtime.end(); await owner.end();
     try { await admin.query(`DROP SCHEMA ${schema} CASCADE`); } finally { await admin.end(); }
