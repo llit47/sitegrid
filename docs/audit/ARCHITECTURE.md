@@ -2,6 +2,8 @@
 
 Data: 2026-10-09. SiteGrid jest niezależnym produktem wielofirmowym, a HERC pozostaje wyłącznie analizowaną aplikacją referencyjną. **Status: kierunek architektury przyjęty w PR #2; brak implementacji i wdrożenia.** Szczegółowe mechanizmy oraz proponowane limity wymagają dalszej walidacji i zatwierdzenia. Dokument zastępuje wcześniejszy wariant „MVP online, offline później”. Historyczne obserwacje pozostają w [FUNCTIONALITY.md](FUNCTIONALITY.md).
 
+**Aktualizacja 2026-10-10:** Wielofirmowość w PostgreSQL, RLS i role pozostają bez zmian, lecz głównym scenariuszem biznesowym jest jedna firma wykonawcza obsługująca wielu **kontrahentów bez kont**, ze wspólną pulą pracowników na wielu projektach. Model i kolejność wdrożenia: [CONTRACTOR_PROJECT_MODEL.md](../CONTRACTOR_PROJECT_MODEL.md). Dotychczasowa specyfikacja M09/PWA nie zmienia się; planowane M09C poprzedza snapshot offline M10. Pierwotna propozycja wpisu pracy jako dnia/liczby minut zostaje zastąpiona wymaganiem przedziałów czasu w przyszłym M13, z kontrolą kolizji między projektami na serwerze.
+
 ## Decyzje produktowe
 
 - Jedna instalacja obsługuje wiele firm, z izolacją wszystkich danych i operacji między tenantami. Użytkownik ma jedną tożsamość i może należeć do kilku firm, z innymi rolami w każdej.
