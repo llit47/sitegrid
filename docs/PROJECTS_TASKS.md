@@ -72,3 +72,7 @@ Schemat 8 → 9 zachowuje dane PR11: konta, hasła, sesje, firmy, członkostwa, 
 ## Rozszerzenie PR13 — M08
 
 Historyczny kontrakt M07 powyżej rozszerza [TASK_PROGRESS.md](TASK_PROGRESS.md). Schemat 10 zachowuje rekordy M07 i dodaje `in_progress`/`submitted` przez jeden endpoint komend v1. Zwykła edycja nadal nie przyjmuje statusu i nie wykonuje przejść. GET/lista zadania dodają `canProgress`, flagę bieżącego własnego wykonawstwa z rolą roboczą; dedykowany `TaskProgress` komponuje się w istniejącym widoku. Blokada firmy została przeniesiona do wspólnej infrastruktury, zachowując ten sam klucz SQL. Wydanie PR13 wymaga 10 (upgrade 0–10); kod PR12 wymagający 9 wymaga restore przy powrocie. Pełny zestaw PR12 pozostaje regresją w `npm run check`.
+
+## Planowane rozszerzenie po M09: kontrahenci (M09C)
+
+Kontrahenci są rekordami wewnątrz organizacji bez logowania, przypisanymi opcjonalnie do projektów tej samej organizacji. Historyczne projekty i zachowanie API M07/M08 pozostają ważne. Pracownicy mogą mieć wiele przydziałów projektowych; nie wprowadzamy grup/brygad. Wersja M07/M08 przewiduje **jednego wykonawcę zadania** i ta reguła pozostaje bez zmian. Godziny pracy są oddzielne od statusu/przydziału zadania; przyszły M13 wymaga przedziałów i globalnej w ramach organizacji kontroli nakładania czasu dla pracownika. Szczegółowe decyzje: [model biznesowy](CONTRACTOR_PROJECT_MODEL.md). Ten akapit dokumentuje plan — nie wdrożoną funkcję.

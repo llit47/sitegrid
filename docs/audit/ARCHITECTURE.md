@@ -1,6 +1,8 @@
 # SiteGrid — architektura produktu (PR #2)
 
-Data: 2026-10-09. SiteGrid jest niezależnym produktem wielofirmowym, a HERC pozostaje wyłącznie analizowaną aplikacją referencyjną. **Status: kierunek architektury przyjęty w PR #2; brak implementacji i wdrożenia.** Szczegółowe mechanizmy oraz proponowane limity wymagają dalszej walidacji i zatwierdzenia. Dokument zastępuje wcześniejszy wariant „MVP online, offline później”. Historyczne obserwacje pozostają w [FUNCTIONALITY.md](FUNCTIONALITY.md).
+Data: 2026-10-09. SiteGrid jest niezależnym produktem wielofirmowym, a HERC pozostaje wyłącznie analizowaną aplikacją referencyjną. **Status: kierunek architektury przyjęty w PR #2; kolejne etapy były wdrażane w PR-ach, lecz pełne MVP offline i wdrożenie produkcyjne nie są zakończone.** Szczegółowe mechanizmy oraz proponowane limity wymagają dalszej walidacji i zatwierdzenia. Dokument zastępuje wcześniejszy wariant „MVP online, offline później”. Historyczne obserwacje pozostają w [FUNCTIONALITY.md](FUNCTIONALITY.md).
+
+**Aktualizacja 2026-10-10:** Wielofirmowość w PostgreSQL, RLS i role pozostają bez zmian, lecz głównym scenariuszem biznesowym jest jedna firma wykonawcza obsługująca wielu **kontrahentów bez kont**, ze wspólną pulą pracowników na wielu projektach. Model i kolejność wdrożenia: [CONTRACTOR_PROJECT_MODEL.md](../CONTRACTOR_PROJECT_MODEL.md). Dotychczasowa specyfikacja M09/PWA nie zmienia się; planowane M09C poprzedza snapshot offline M10. Pierwotna propozycja wpisu pracy jako dnia/liczby minut zostaje zastąpiona wymaganiem przedziałów czasu w przyszłym M13, z kontrolą kolizji między projektami na serwerze.
 
 ## Decyzje produktowe
 
@@ -19,7 +21,7 @@ Data: 2026-10-09. SiteGrid jest niezależnym produktem wielofirmowym, a HERC poz
 | Firma, branding, konta, aktywacja, role, przydziały | Tak | Nie; wymagane aktualne uprawnienia i odpowiedź serwera. |
 | Projekty i proste zadania: opis, wykonawca, status | Tak | Odczyt wcześniej pobranych projektów i przypisanych zadań. Tworzenie projektu/zadania i zmiana przydziału online. |
 | Rozpoczęcie zadania, zgłoszenie wykonania lub przeszkody | Tak | Lokalna operacja i kolejka; skuteczność serwerowa dopiero po synchronizacji. |
-| Własny wpis pracy: dzień, opis, opcjonalna liczba minut | Tak | Utworzenie i korekta własnego niezatwierdzonego wpisu, trwale kolejkowane. To roboczy zapis, nie ewidencja płac. |
+| Własny wpis pracy: rzeczywisty początek i koniec odcinka, projekt, opis | Tak (plan M13) | Utworzenie i korekta własnego niezatwierdzonego wpisu, trwale kolejkowane; kolizje przedziałów jednego pracownika w różnych projektach rozstrzyga serwer przy synchronizacji, bez cichej utraty propozycji. To roboczy zapis, nie ewidencja płac. |
 | Odbiór lub zwrot zadania przez kierownika | Tak | Tylko online, na aktualnej wersji; wykonawca nie odbiera własnej pracy. |
 | Przełączanie firm | Tak | Wyłącznie do wcześniej przygotowanego, nadal lokalnie ważnego zakresu; brak mieszania kolejek. |
 
