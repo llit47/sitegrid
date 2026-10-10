@@ -29,6 +29,7 @@ Tryb manualny update nadal działa z `--bundle`, `--version` i `--sha256`. Rollb
 - [Panel firmy, członkowie i pracownicy](docs/COMPANY_MEMBERS.md)
 - [Branding, logo i ustawienia firmy](docs/COMPANY_BRANDING.md)
 - [Projekty, przydziały i zadania online (M07)](docs/PROJECTS_TASKS.md)
+- [Model pracy: kontrahenci, wspólni pracownicy, zadania i przyszła ewidencja godzin](docs/CONTRACTOR_PROJECT_MODEL.md) — decyzja na przyszłe PR-y, nie istniejąca funkcja
 - [Rekomendacje](docs/audit/IMPROVEMENTS.md)
 
 HERC pozostaje osobną aplikacją referencyjną: [audyt funkcjonalny](docs/audit/FUNCTIONALITY.md) i [ocena UX](docs/audit/UX_REVIEW.md).
