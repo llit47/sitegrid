@@ -70,3 +70,7 @@ Do zatwierdzenia: granice MVP, ważność aktywacji 24 h, dostęp offline do 7 d
 ## Przyrost PR11 — M06
 
 M06 dodaje firmowe ustawienia i logo w PostgreSQL, administrację nazwy/koloru/logo, odczyt dla aktywnych członków oraz branding przełącznika i nagłówka firmy. Izolacja FORCE RLS, aktualne uprawnienia, kontrola wersji i transakcyjny audyt obejmują wszystkie zmiany. [Kontrakt implementacji i testy](../COMPANY_BRANDING.md). To zakres online M06; bramka offline-first MVP pozostaje bez zmian.
+
+## Przyrost PR12 — M07
+
+M07 dodaje projekty i jawne przydziały administratora firmy oraz planowanie, edycję i przypisywanie zadań przez przypisanych kierowników. Brygadzista odczytuje przypisane projekty, a pracownik własne zadania. Role pozostają firmowe; administracja firmy lub platformy nie nadaje domyślnego dostępu do zadań. FORCE RLS, złożone FK, bieżąca autoryzacja, wersje, archiwizacja i transakcyjny audyt obejmują ten zakres. [Kontrakt implementacji i testy](../PROJECTS_TASKS.md). Status zadania pozostaje początkowy; komendy postępu należą do M08. Ten przyrost jest online i nie zmienia bramki offline-first MVP.

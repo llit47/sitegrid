@@ -132,3 +132,7 @@ Bramka pilotażu: izolacja dwóch firm przy wspólnym użytkowniku, aktywacja i 
 ## Do zatwierdzenia razem z architekturą
 
 Mały zakres MVP i jego ograniczenia online; 7 dni dostępu offline; aktywacja 24 h; RPO/RTO; brak automatycznej retencji identyfikatorów komend w MVP. Przed wdrożeniem ustalić domenę/HTTPS, dostawcę poczty, retencję danych pracowników i limity snapshotów/logo. Nie są to wyniki testów ani deklaracja gotowości produktu.
+
+## Implementacja M07 w PR12
+
+[Projekty, przydziały i zadania online](../PROJECTS_TASKS.md) realizują model tenantowy z FORCE RLS, złożonymi FK firmy/projektu/członkostwa, lokalnym kontekstem projektu po autoryzacji, wersjami i transakcyjnym audytem. Schemat 9 zachowuje dane PR11. Wszystkie zadania zaczynają jako `planned`; przejścia statusu, idempotentne komendy, PWA i offline pozostają poza tym przyrostem. Dostęp do zadań jest przecięciem istniejącej roli firmowej i aktywnego przydziału projektowego. Metadane administracyjne firmy nie rozszerzają tego zakresu.

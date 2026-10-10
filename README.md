@@ -28,6 +28,7 @@ Tryb manualny update nadal działa z `--bundle`, `--version` i `--sha256`. Rollb
 - [Zaproszenia email i aktywacja administratora firmy](docs/INVITATIONS.md)
 - [Panel firmy, członkowie i pracownicy](docs/COMPANY_MEMBERS.md)
 - [Branding, logo i ustawienia firmy](docs/COMPANY_BRANDING.md)
+- [Projekty, przydziały i zadania online (M07)](docs/PROJECTS_TASKS.md)
 - [Rekomendacje](docs/audit/IMPROVEMENTS.md)
 
 HERC pozostaje osobną aplikacją referencyjną: [audyt funkcjonalny](docs/audit/FUNCTIONALITY.md) i [ocena UX](docs/audit/UX_REVIEW.md).
