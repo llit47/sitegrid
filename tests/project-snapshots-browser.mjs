@@ -322,6 +322,43 @@ try {
   await revokingTab.evaluate(async id => (await import('/test-storage.js')).invalidateOfflineProjects(id), companyB);
   await assertRemainingA(); await selection.context.close();
   console.log('PASS removing selected organization B selects remaining prepared A in the same tab and across tabs');
+  const inFlight = await open(false);
+  await inFlight.page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
+  await inFlight.page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).waitFor();
+  const invalidatingTab = await inFlight.context.newPage(); await invalidatingTab.goto(config.origin);
+  await invalidatingTab.getByText('worker@example.test', { exact: true }).waitFor(); await inFlight.page.bringToFront();
+  const generationBefore = await invalidatingTab.evaluate(async () => (await import('/test-storage.js')).offlineAccountGeneration());
+  await inFlight.page.evaluate(() => {
+    const digest = SubtleCrypto.prototype.digest; let calls = 0;
+    const blocked = new Promise(resolve => { window.releaseSnapshotRead = resolve; });
+    window.originalSnapshotDigest = digest;
+    SubtleCrypto.prototype.digest = function (...args) {
+      const result = digest.apply(this, args);
+      // First validation belongs to openProjectStorage.verify; the second
+      // belongs to handle.read, after its IndexedDB transaction has committed.
+      if (++calls === 2) { window.snapshotReadBlocked = true; return result.then(async value => { await blocked; return value; }); }
+      return result;
+    };
+    window.revokedSnapshotPublished = false;
+    window.snapshotObserver = new MutationObserver(() => {
+      if (document.querySelector('.offline-viewer .offline-project')) window.revokedSnapshotPublished = true;
+    });
+    window.snapshotObserver.observe(document.body, { subtree: true, childList: true });
+  });
+  await inFlight.page.getByRole('button', { name: 'Czytaj przygotowane dane lokalnie', exact: true }).click();
+  await inFlight.page.waitForFunction(() => window.snapshotReadBlocked);
+  const generationAfter = await invalidatingTab.evaluate(async id => {
+    const storage = await import('/test-storage.js'); await storage.invalidateOfflineProjects(id);
+    const access = await storage.readOfflineAccess();
+    if (access.scopes.some(scope => scope.organizationId === id)) throw new Error('Revocation did not remove the scope');
+    return access.generation;
+  }, companyA);
+  assert.equal(generationAfter, generationBefore);
+  await inFlight.page.evaluate(() => { SubtleCrypto.prototype.digest = window.originalSnapshotDigest; window.releaseSnapshotRead(); });
+  await inFlight.page.getByText('Brak pobranych projektów', { exact: false }).waitFor();
+  assert.equal(await inFlight.page.locator('.offline-project').count(), 0);
+  assert.equal(await inFlight.page.evaluate(() => { window.snapshotObserver.disconnect(); return window.revokedSnapshotPublished; }), false);
+  await inFlight.context.close(); console.log('PASS in-flight snapshot read never republishes a project revoked by another tab with unchanged account generation');
   // Confirmed revocation invalidates the prepared project before another offline launch.
   const revoked=await open(false); await revoked.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click(); await revoked.page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
   await owner.query("UPDATE project_memberships SET status='inactive',version=version+1 WHERE organization_id=$1 AND project_id=$2 AND membership_id=$3",[companyA,projectOne.id,members.worker]);

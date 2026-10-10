@@ -29,7 +29,11 @@ export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
           catch { invalid = true; } finally { handle.close(); }
         }
         const current = await readOfflineAccess();
-        if (!current || current.generation !== access.generation || controller.signal.aborted) throw new Error('Dostęp lokalny został unieważniony. Wymagane logowanie online.');
+        if (!current || current.generation !== access.generation || controller.signal.aborted ||
+          prepared.some(({ snapshot }) => !current.scopes.some(scope => scope.accountId === snapshot.scope.accountId &&
+            scope.organizationId === snapshot.scope.organizationId && scope.projectId === snapshot.scope.projectId))) {
+          throw new Error('Dostęp lokalny został unieważniony. Wymagane logowanie online.');
+        }
         if (!disposed) {
           setOrganization(selected); setOrganizations(ids); setSnapshots(prepared); setError(invalid ? 'Część danych wygasła lub jest uszkodzona. Wymagane ponowne przygotowanie online.' : '');
         }
