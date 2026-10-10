@@ -91,3 +91,6 @@ dl { font-size: 14px; line-height: 1.8; } dt { color: #59716b; } dd { margin: 0 
 .task-progress p { margin: 0; }
 .task-progress button { min-height: 44px; }
 @media (max-width: 600px) { .task-progress { width: 100%; } }
+.offline-preparation { margin-block: 1rem; padding-block: 1rem; border-block: 1px solid #d9e0e8; }
+.offline-viewer { max-width: 60rem; }
+.offline-project { border-block-start: 1px solid #d9e0e8; margin-block-start: 1rem; overflow-wrap: anywhere; }

@@ -6,7 +6,7 @@ export const taskStateName = (status: string) => ({ planned: 'Zaplanowane', in_p
 
 export function TaskProgress({ task, path, csrfToken, writable, disabled, onConfirmed, onAccessChanged, onGone }: {
   task: ProgressTask; path: string; csrfToken: string; writable: boolean; disabled: boolean;
-  onConfirmed: (task: ProgressTask) => void; onAccessChanged: () => void; onGone: () => void;
+  onConfirmed: (task: ProgressTask) => void; onAccessChanged: (status: number) => void; onGone: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -32,7 +32,7 @@ export function TaskProgress({ task, path, csrfToken, writable, disabled, onConf
       const data = await response.json();
       if (signal.aborted) return;
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) { onAccessChanged(); return; }
+        if (response.status === 401 || response.status === 403) { onAccessChanged(response.status); return; }
         if (response.status === 404) { onGone(); return; }
         if (response.status === 409) {
           command.current = null; setConflict(true);

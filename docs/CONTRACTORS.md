@@ -40,3 +40,5 @@ Kontrakt `release.json`: target/min/max **11**, upgrade 0–11. Paczka zawiera n
 Chromium z mobilnym viewportem nie zastępuje testów na fizycznym Androidzie/iOS. Czysty Debian 13/systemd wymaga osobnego odbioru instalacji; testy instalatora/update/rollback używają istniejącej izolowanej infrastruktury testowej.
 
 Walidacja lokalna 2026-10-10: Node 24.21.0, PostgreSQL 17.11 z oddzielną nieuprzywilejowaną rolą `sitegrid`; `npm run check` **162/162** (w tym 16 testów kontrahentów), zero pominięć. Wszystkie pięć zestawów Playwright/Chromium przeszło desktop/mobile; brak błędów runtime/CSP. Rzeczywista paczka Linux x64 i Python **56/56**, zero pominięć, w tym backup przed upgrade 10 → 11 i odmowa rollbacku do 10. Walidacje skryptów oraz `git diff --check` przeszły. Fizycznych urządzeń i czystego Debiana/systemd nie sprawdzono.
+
+PR17 / M10 dodaje [autoryzowany snapshot projektu](PROJECT_SNAPSHOTS.md) z wyłącznie `{id,name,status}` powiązanego kontrahenta. Dane trafiają do izolowanego IndexedDB, nigdy do cache powłoki; katalog i administracja nadal wymagają online.

@@ -3,6 +3,8 @@ import { InvitationManager } from './invitations.js';
 import { Projects } from './projects.js';
 import { CompanyMembers } from './company-members.js';
 import { AccentSwatch, brandingRequest, CompanyBranding, CompanyLogo, type Branding } from './company-branding.js';
+import { observeAccessFailure } from './offline/account.js';
+import { readOfflineAccess, invalidateOfflineProjects } from './storage/offline-access.js';
 
 type Organization = { id: string; name: string; roles: string[] };
 const roleNames: Record<string, string> = {
@@ -11,11 +13,11 @@ const roleNames: Record<string, string> = {
 async function read<T>(path: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(path, { credentials: 'same-origin', signal });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? 'Nie udało się połączyć z serwerem.');
+  if (!response.ok) { await observeAccessFailure(path, response.status); throw new Error(data.error ?? 'Nie udało się połączyć z serwerem.'); }
   return data;
 }
 
-export function OrganizationSwitcher({ csrfToken }: { csrfToken: string }) {
+export function OrganizationSwitcher({ csrfToken, accountId }: { csrfToken: string; accountId: string }) {
   const [organizations, setOrganizations] = useState<Organization[] | null>(null);
   // Selection lives only in this mounted tab; it is never stored in the session or browser storage.
   const [selectedId, setSelectedId] = useState('');
@@ -29,6 +31,11 @@ export function OrganizationSwitcher({ csrfToken }: { csrfToken: string }) {
     const controller = new AbortController();
     void read<{ organizations: Organization[] }>('/api/me/organizations', controller.signal)
       .then(async data => {
+        if (controller.signal.aborted) return;
+        const access = await readOfflineAccess().catch(() => null);
+        if (access?.accountId === accountId) for (const id of new Set(access.scopes.map(scope => scope.organizationId))) {
+          if (!data.organizations.some(organization => organization.id === id)) await invalidateOfflineProjects(id);
+        }
         if (controller.signal.aborted) return;
         setOrganizations(data.organizations);
         const results = await Promise.allSettled(data.organizations.map(async organization =>
@@ -92,7 +99,7 @@ export function OrganizationSwitcher({ csrfToken }: { csrfToken: string }) {
         <div className="company-header"><AccentSwatch color={branding.accentColor} />
           <CompanyLogo key={`${branding.organizationId}-${branding.logo?.version ?? 0}`} branding={branding} /><h3>{branding.name}</h3></div>
         <p>Twoje role: {context.roles.length ? context.roles.map(role => roleNames[role] ?? role).join(', ') : 'Brak przypisanych ról'}</p>
-        <Projects key={`projects-${context.id}`} organizationId={context.id} admin={context.roles.includes('organization_admin')} csrfToken={csrfToken} onAccessChanged={refresh} />
+        <Projects key={`projects-${context.id}`} accountId={accountId} organizationId={context.id} admin={context.roles.includes('organization_admin')} csrfToken={csrfToken} onAccessChanged={refresh} />
         {context.roles.includes('organization_admin') && <>
           <CompanyBranding key={`branding-${context.id}`} branding={branding} csrfToken={csrfToken} onSaved={saved} onAccessChanged={refresh} />
           <CompanyMembers key={`members-${context.id}`} organizationId={context.id} csrfToken={csrfToken} onAccessChanged={refresh} />

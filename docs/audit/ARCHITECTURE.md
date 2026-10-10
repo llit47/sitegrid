@@ -146,3 +146,7 @@ Mały zakres MVP i jego ograniczenia online; 7 dni dostępu offline; aktywacja 2
 ## Implementacja M09 w PR15
 
 [Powłoka PWA i IndexedDB](../PWA_STORAGE.md) mają dedykowane moduły `pwa/`, `storage/` i plugin buildu. Service worker zapisuje tylko jawnie dozwolone pliki statyczne z digestami wydania, nigdy API/autoryzowane dane. Aktualizacja czeka na zamknięcie klientów i czyści tylko własne stare cache. IndexedDB schema 1 zapisuje wyłącznie metadane izolowanego właściciela; UI wykonuje niesekretny probe bez danych użytkownika. Offline UI odmontowuje widoki online; reconnect pobiera świeżą sesję. PostgreSQL i autoryzacja bez zmiany, brak snapshotów, kolejki i synchronizacji. M09C pozostaje następny przed M10.
+
+## Przyrost PR17 / M10
+
+[Autoryzowane snapshoty](../PROJECT_SNAPSHOTS.md) działają w jednej transakcji REPEATABLE READ READ ONLY. IndexedDB v2 dodaje confirmed store bez zmiany owner/nazw i bez kasowania przyszłych kolejek. Odrębny katalog/generation konta, trwały znacznik odmowy przy błędzie cleanup i 24-godzinny dostęp lokalny ograniczają odczyt do ostatnio zweryfikowanego zakresu. 24 h, 500 zadań i 2 MiB są konserwatywnymi limitami implementacji M10; proponowane wcześniej siedem dni nie było zatwierdzone. Static worker/cache nadal nie przechowuje API. M10 nie implementuje epoki/replay po restore, kolejki, synchronizacji lub godzin; pełna bramka MVP pozostaje w budowie.

@@ -12,6 +12,7 @@ import { withTransaction } from '../organization-context.js';
 import { registerCompanyMemberRoutes } from '../company-member-routes.js';
 import { registerTaskProgressRoutes } from '../task-progress/routes.js';
 import { registerProjectRoutes } from '../project-routes.js';
+import { registerProjectSnapshotRoutes } from '../project-snapshots/routes.js';
 import { registerContractorRoutes } from '../contractors/routes.js';
 import { registerOrganizationBrandingRoutes } from '../organization-branding-routes.js';
 
@@ -69,6 +70,7 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
   registerCompanyMemberRoutes(app, pool, config, checkCsrf);
   registerOrganizationBrandingRoutes(app, pool, config, checkCsrf);
   registerProjectRoutes(app, pool, config, checkCsrf);
+  registerProjectSnapshotRoutes(app, pool, config);
   registerContractorRoutes(app, pool, config, checkCsrf);
   registerTaskProgressRoutes(app, pool, config, checkCsrf);
   app.get('/api/auth/session', async (request, reply) => {
@@ -76,7 +78,7 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
     await pool.query('DELETE FROM sessions WHERE token_hash IN (SELECT token_hash FROM sessions WHERE expires_at <= now() LIMIT 1000)');
     await pool.query('DELETE FROM auth_rate_limits WHERE key_hash IN (SELECT key_hash FROM auth_rate_limits WHERE expires_at <= now() LIMIT 1000)');
     const current = await session(request);
-    if (current) return { csrfToken: current.csrf_token, user: current.user_id ? { email: current.email, platformAdmin: current.admin } : null };
+    if (current) return { csrfToken: current.csrf_token, user: current.user_id ? { id: current.user_id, email: current.email, platformAdmin: current.admin } : null };
     return { csrfToken: await issue(reply, null), user: null };
   });
   app.post<{ Body: { email: string; password: string } }>('/api/auth/login', {

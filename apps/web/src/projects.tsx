@@ -1,6 +1,9 @@
 import { TaskProgress } from './task-progress.js';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { ContractorDirectory, ContractorFilter, ContractorName, ContractorSelect, useContractorDirectory, type Contractor, type ProjectContractor } from './contractors.js';
+import { OfflinePreparation } from './offline/preparation.js';
+import { observeAccessFailure, reconcilePreparedProjects, reconcilePreparedTasks } from './offline/account.js';
+import { type StorageScope } from './storage/indexed-db.js';
 
 type Project = { id: string; name: string; description: string; status: string; version: number; createdAt: string; updatedAt: string; contractor: ProjectContractor | null };
 type Task = { id: string; title: string; description: string; assigneeMembershipId: string; assigneeName?: string; canProgress?: boolean; status: string; version: number };
@@ -11,7 +14,7 @@ async function request<T>(path: string, signal: AbortSignal, csrfToken?: string,
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken! }, body: JSON.stringify(payload),
   }) });
   const data = await response.json();
-  if (!response.ok) throw Object.assign(new Error(data.error ?? 'Nie udało się połączyć z serwerem.'), { status: response.status });
+  if (!response.ok) { await observeAccessFailure(path, response.status); throw Object.assign(new Error(data.error ?? 'Nie udało się połączyć z serwerem.'), { status: response.status }); }
   return data;
 }
 const stateName = (status: string) => status === 'active' ? 'Aktywny' : status === 'archived' ? 'Archiwalny' : 'Zaplanowane';
@@ -56,8 +59,8 @@ function TaskForm({ task, members, busy, save, cancel }: {
       {task && <button type="button" className="secondary" disabled={busy} onClick={cancel}>Anuluj edycję zadania</button>}</div>
   </form>;
 }
-export function Projects({ organizationId, admin, csrfToken, onAccessChanged }: {
-  organizationId: string; admin: boolean; csrfToken: string; onAccessChanged: () => void;
+export function Projects({ accountId, organizationId, admin, csrfToken, onAccessChanged }: {
+  accountId: string; organizationId: string; admin: boolean; csrfToken: string; onAccessChanged: () => void;
 }) {
   const path = `/api/organizations/${encodeURIComponent(organizationId)}/projects`;
   const directory = useContractorDirectory(organizationId, admin, csrfToken, onAccessChanged);
@@ -71,10 +74,11 @@ export function Projects({ organizationId, admin, csrfToken, onAccessChanged }: 
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
   useEffect(() => {
     const controller = new AbortController(); setProjects(null); setError('');
-    void request<{ projects: Project[] }>(path, controller.signal).then(data => {
+    void request<{ projects: Project[] }>(path, controller.signal).then(async data => {
       if (!controller.signal.aborted) setProjects(current => current === null ? data.projects : [
         ...current, ...data.projects.filter(project => !current.some(local => local.id === project.id)),
       ]);
+      if (!controller.signal.aborted) await reconcilePreparedProjects(organizationId, data.projects.map(project => project.id));
     }).catch(e => { if (!controller.signal.aborted) { setError(e.message); if ([401, 403].includes(e.status)) onAccessChanged(); } });
     return () => controller.abort();
   }, [path, revision, onAccessChanged]);
@@ -105,12 +109,12 @@ export function Projects({ organizationId, admin, csrfToken, onAccessChanged }: 
         {project.contractor && <ContractorName contractor={project.contractor} contractors={directory.contractors} />}
       </button>)}
     </div>}
-    {selected && <ProjectDetails key={selected} path={`${path}/${encodeURIComponent(selected)}`} contractors={directory.contractors} csrfToken={csrfToken} onSaved={changed} onGone={gone} onAccessChanged={onAccessChanged} />}
+    {selected && <ProjectDetails key={selected} scope={{ accountId, organizationId, projectId: selected }} path={`${path}/${encodeURIComponent(selected)}`} contractors={directory.contractors} csrfToken={csrfToken} onSaved={changed} onGone={gone} onAccessChanged={onAccessChanged} />}
     {admin && <><ProjectForm contractors={directory.contractors} busy={busy} save={create} /><ContractorDirectory directory={directory} /></>}
   </section>;
 }
-function ProjectDetails({ path, contractors, csrfToken, onSaved, onGone, onAccessChanged }: {
-  path: string; contractors: Contractor[] | null; csrfToken: string; onSaved: (project: Project) => void; onGone: () => void; onAccessChanged: () => void;
+function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, onGone, onAccessChanged }: {
+  scope: StorageScope; path: string; contractors: Contractor[] | null; csrfToken: string; onSaved: (project: Project) => void; onGone: () => void; onAccessChanged: () => void;
 }) {
   const [details, setDetails] = useState<Details | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -129,6 +133,7 @@ function ProjectDetails({ path, contractors, csrfToken, onSaved, onGone, onAcces
         data.permissions.administer || data.permissions.manageTasks ? request<{ members: Member[] }>(`${path}/members`, controller.signal) : { members: [] },
         data.permissions.readTasks ? request<{ tasks: Task[] }>(`${path}/tasks`, controller.signal) : { tasks: [] },
       ]);
+      if (!controller.signal.aborted) await reconcilePreparedTasks(scope.organizationId, scope.projectId, taskList.tasks.map(task => task.id));
       if (!controller.signal.aborted) { setDetails(data); setMembers(roster.members); setTasks(taskList.tasks); onSaved(data.project); }
     }).catch(e => { if (!controller.signal.aborted) { setError(e.message); if ([401, 403].includes(e.status)) onAccessChanged(); if (e.status === 404) onGone(); } });
     return () => controller.abort();
@@ -157,6 +162,7 @@ function ProjectDetails({ path, contractors, csrfToken, onSaved, onGone, onAcces
       <h4>{details.project.name}</h4><p>{details.project.description || 'Brak opisu projektu.'}</p>
       <p><ContractorName contractor={details.project.contractor} contractors={contractors} /></p>
       <p className="hint">{stateName(details.project.status)} · Wersja {details.project.version} · Zmieniono {new Date(details.project.updatedAt).toLocaleString('pl-PL')}</p>
+      <OfflinePreparation scope={scope} />
       {details.project.status === 'archived' && <p role="status">Projekt archiwalny — historia pozostaje dostępna do odczytu.</p>}
       {details.permissions.administer && details.project.status === 'active' && <>
         <ProjectForm key={`project-${revision}`} project={details.project} contractors={contractors} busy={busy} save={payload => mutate('/update', payload)} />
@@ -178,7 +184,7 @@ function ProjectDetails({ path, contractors, csrfToken, onSaved, onGone, onAcces
         <div className="task-list">{tasks.map(task => <article className="task-row" key={task.id}>
           <div><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p><small>{task.assigneeName}</small></div>
           <TaskProgress task={task} path={`${path}/tasks/${encodeURIComponent(task.id)}`} csrfToken={csrfToken}
-            writable={details.project.status === 'active'} disabled={busy} onAccessChanged={onAccessChanged} onGone={onGone}
+            writable={details.project.status === 'active'} disabled={busy} onAccessChanged={status => { void observeAccessFailure(path, status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(path, 404); onGone(); }}
             onConfirmed={confirmed => setTasks(current => current.map(item => item.id === confirmed.id && item.version <= confirmed.version ? { ...item, ...confirmed } : item))} />
           {details.permissions.manageTasks && details.project.status === 'active' && <button className="secondary" disabled={busy} onClick={() => setEditing(task)}>Edytuj zadanie</button>}
         </article>)}</div>
