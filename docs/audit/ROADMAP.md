@@ -2,9 +2,13 @@
 
 Data: 2026-10-09. **Architektura kierunkowa przyjęta w PR #2; bez implementacji, limity nadal do zatwierdzenia.** Źródło decyzji: [architektura](ARCHITECTURE.md) i [macierz uprawnień](PERMISSIONS.md). Historyczny audyt referencji pozostaje w [FUNCTIONALITY.md](FUNCTIONALITY.md). Niniejszy plan zastępuje wcześniejszą kolejność z pilotażem online przed offline; wcześniejsze priorytety backlogu nie wyznaczają już bramki MVP.
 
+## Aktualizacja modelu firmy i kontrahentów (2026-10-10)
+
+Decyzja biznesowa: głównym scenariuszem jest jedna firma wykonawcza, wielu kontrahentów **bez kont** oraz wspólna pula pracowników przypisywanych indywidualnie do projektów i zadań. Zachowujemy wielofirmową izolację i dotychczasowe API. Bez stałych brygad i bez dostępu kontrahentów do aplikacji. Szczegółowy, **jeszcze niewdrożony** kontrakt: [MODEL_KONTRAHENTOW](../CONTRACTOR_PROJECT_MODEL.md). M09/PWA pozostaje bez zmian, M09C realizuje kontrahentów przed M10. M13 musi uwzględniać przedziały czasu i serwerową kontrolę kolizji dla pracownika we wszystkich projektach jego organizacji.
+
 ## Zakres i bramka pilotażu
 
-MVP: wiele firm, provisioning przez platformę, administracja kontami i pracownikami firmy, jednorazowa aktywacja, użytkownik w kilku firmach, branding w PostgreSQL, projekty i przypisane zadania, postęp/przeszkody, własne wpisy pracy oraz odbiór online. Jedna PWA instalowana na Android/iOS. Offline-first dla odczytu przygotowanego zakresu i podstawowych zapisów musi działać przed pierwszym pilotażem, wraz z trwałością kolejki, retry, idempotencją i konfliktami.
+MVP: fundament wielu izolowanych firm (codzienna praca jednej firmy wykonawczej), provisioning przez platformę, administracja kontami i pracownikami firmy, jednorazowa aktywacja, użytkownik w kilku firmach, branding w PostgreSQL, kontrahenci jako rekordy firmowe bez kont, projekty i indywidualnie przypisane zadania, postęp/przeszkody, własne wpisy pracy oraz odbiór online. Jedna PWA instalowana na Android/iOS. Offline-first dla odczytu przygotowanego zakresu i podstawowych zapisów musi działać przed pierwszym pilotażem, wraz z trwałością kolejki, retry, idempotencją i konfliktami.
 
 Bez magazynu, zakupów, kalendarza, czatu, PDF/zdjęć, kosztów, pełnych brygad i rozbudowanego raportowania. Rezygnacja z tych modułów zmniejsza MVP, nie odkłada niezawodności. Administracja, przygotowanie urządzenia i odbiór robót pozostają online zgodnie z macierzą.
 
@@ -40,10 +44,11 @@ Identyfikatory M01–M15 są pozycjami planu, nie numerami GitHuba. Każdy PR ma
 | M07 | Projekty, przydziały i odczyt zadań | M05 | Uprawniony zakres i wersje rekordów; brak dostępu do obcego projektu. |
 | M08 | Jedna komenda postępu: audyt, wersja i idempotencja | M07 | Atomowy wynik i audyt; utrata odpowiedzi po commicie, równoległe duplikaty, zmieniony payload z tym samym ID. |
 | M09 | Instalowalna powłoka PWA i IndexedDB | M06–M07 | Android/iOS, restart offline po przygotowaniu; partycje konto/firma; brak sekretów sesji w storage. |
-| M10 | Pełny ograniczony snapshot projektu i odczyt offline | M09 | Spójny snapshot, limity bez cichego ucięcia, atomowa wymiana bazy bez kasowania kolejki; brak fałszywego „gotowe offline”. |
+| M09C | Kontrahenci jako rekordy firmy i powiązanie z projektami | M09 oraz M07 | Migracja bez utraty istniejących projektów; jeden kontrahent dla wielu projektów; brak kont i uprawnień kontrahentów; RLS/testy między firmami i regresja PR13. |
+| M10 | Pełny ograniczony snapshot projektu i odczyt offline | M09 + M09C | Spójny snapshot z autoryzowaną nazwą kontrahenta projektu, limity bez cichego ucięcia, atomowa wymiana bazy bez kasowania kolejki; brak fałszywego „gotowe offline”. |
 | M11 | Trwała kolejka jednej komendy postępu i retry | M08–M10 | Atomowy zapis lokalny, restart PWA, timeout/5xx/429; synchronizacja na wznowieniu bez wymogu pracy w tle. |
 | M12 | Konflikty, utrata dostępu i zmiana konta | M11 | Dwa urządzenia, brak cichego nadpisania, 401/403, kolejki A+B, lokalne wylogowanie i aktualizacja IndexedDB bez utraty pracy. |
-| M13 | Własny wpis pracy i przeszkoda przez istniejącą kolejkę | M12 | Tworzenie/korekta offline, walidacja czasu, własność wpisu; brak duplikacji i cudzych edycji. |
+| M13 | Własny wpis pracy i przeszkoda przez istniejącą kolejkę | M12 | Wpisy z rzeczywistym początkiem i końcem, własność, tworzenie/korekta offline; transakcyjny brak nakładania czasu jednego pracownika między projektami, konflikt przy synchronizacji bez utraty propozycji; brak duplikacji i cudzych edycji. W razie potrzeby podzielić implementację na kilka małych PR-ów. |
 | M14 | Odbiór/zwrot online i mobilna „moja praca” | M12–M13 | Kierownik nie odbiera własnych robót; filtry, kontekst, stan synchronizacji i podstawowe akcje dotykowe. |
 | M15 | Utrwalenie operacyjne: test odtworzenia, monitoring, obsługa migracji pełnego MVP i ponowna walidacja instalatora/updatera/rollbacku | M01 oraz M06; finalna weryfikacja po M14 | Gotowa procedura odtworzenia firm, logo, audytu i kolejki serwera na nowym LXC; zmierzony RPO/RTO, alert kopii/dysku, ponowne testy wydania. |
 
@@ -63,7 +68,7 @@ Identyfikatory M01–M15 są pozycjami planu, nie numerami GitHuba. Każdy PR ma
 
 ## Po MVP
 
-Oddzielne decyzje i małe PR-y: brygady i raport zbiorczy; dokumenty/zdjęcia z własną kolejką uploadu; magazyn oparty na ruchach; kalendarz; powiadomienia; koszty. Rozrost danych uzasadnia synchronizację przyrostową z bezpiecznym kursorem i tombstones. Każdy moduł definiuje swój zakres offline przed wejściem do pilotażu. Nie planuje się osobnej aplikacji natywnej.
+Oddzielne decyzje i małe PR-y: eksport raportów godzin dla kontrahentów bez udzielania im dostępu, opcjonalna obsługa wielu wykonawców jednego zadania (bez stałych brygad); dokumenty/zdjęcia z własną kolejką uploadu; magazyn oparty na ruchach; kalendarz; powiadomienia; koszty. Rozrost danych uzasadnia synchronizację przyrostową z bezpiecznym kursorem i tombstones. Każdy moduł definiuje swój zakres offline przed wejściem do pilotażu. Nie planuje się osobnej aplikacji natywnej.
 
 Do zatwierdzenia: granice MVP, ważność aktywacji 24 h, dostęp offline do 7 dni, cele RPO/RTO i polityka retencji deduplikacji. Przed implementacją snapshotu określić jego limity i wersje docelowych przeglądarek; przed wdrożeniem domenę/HTTPS, pocztę i parametry hosta. Harmonogram kalendarzowy zależy od zespołu; nie jest deklarowany w tym PR.
 
