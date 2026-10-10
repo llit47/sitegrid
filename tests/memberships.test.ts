@@ -60,6 +60,8 @@ test('memberships, composite relations and RLS on PostgreSQL 17', { skip: !proce
       } finally { await rm(previous, { recursive: true, force: true }); }
     });
     await pool.query(`GRANT USAGE ON SCHEMA ${schema} TO sitegrid`);
+    // Match the installer's auth read grant used by PR10's invoker guard.
+    await pool.query('GRANT SELECT ON users TO sitegrid');
     await t.test('runtime really logs in as a non-owner without RLS bypass or privileged memberships', async () => {
       const identity = (await runtime.query(`
         SELECT current_user, session_user, r.rolsuper, r.rolbypassrls, r.rolcreaterole
@@ -113,6 +115,11 @@ test('memberships, composite relations and RLS on PostgreSQL 17', { skip: !proce
       assert.equal((await pool.query('SELECT count(*) FROM users WHERE id = $1', [sharedUser])).rows[0].count, '1');
       const pending = await inOrganization(organizationA, client => client.query('SELECT status FROM organization_memberships WHERE id = $1', [pendingMembership]));
       assert.equal(pending.rows[0].status, 'pending');
+      // PR10 requires a handover before deactivating the original administrator.
+      await inOrganization(organizationA, async client => {
+        await client.query("UPDATE organization_memberships SET status = 'active' WHERE id = $1", [pendingMembership]);
+        await client.query("INSERT INTO membership_roles(organization_id, membership_id, role) VALUES ($1, $2, 'organization_admin')", [organizationA, pendingMembership]);
+      });
       await inOrganization(organizationA, client => client.query("UPDATE organization_memberships SET status = 'inactive' WHERE id = $1", [membershipA]));
       await inOrganization(organizationB, client => client.query("UPDATE organization_memberships SET status = 'active' WHERE id = $1", [membershipB]));
       assert.equal((await snapshot(organizationA)).rows[0].status, 'inactive');

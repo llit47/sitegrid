@@ -37,5 +37,20 @@ th { font-size: 14px; }
 td:first-child { overflow-wrap: anywhere; }
 .indicator { display: block; height: 10px; width: 10px; border-radius: 50%; background: #4b9664; }
 dl { font-size: 14px; line-height: 1.8; } dt { color: #59716b; } dd { margin: 0 0 12px; }
+.company-members { border-top: 1px solid #d9e3dd; margin-top: 24px; padding-top: 12px; }
+.company-members .hint { margin: 8px 0 16px; }
+.member-toolbar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.member-toolbar label { min-width: 180px; }
+.member-toolbar select { display: block; }
+.member-list { display: grid; gap: 10px; }
+.member-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 1fr); gap: 16px; padding: 16px; border: 1px solid #d9e3dd; border-radius: 10px; overflow-wrap: anywhere; }
+.member-row p { margin: 6px 0; font-size: 14px; }
+.member-row button, .employee-form button { margin-right: 8px; }
+.member-row fieldset { border: 0; padding: 0; margin: 0; }
+.member-row legend { font-size: 13px; color: #59716b; }
+.role-choice { display: flex; align-items: center; gap: 8px; min-height: 40px; margin: 0; font-size: 13px; }
+.role-choice input { width: 18px; min-height: 18px; height: 18px; flex-shrink: 0; }
+.employee-form { max-width: 480px; }
+@media (max-width: 700px) { .member-row { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .tiles { grid-template-columns: 1fr; } .dashboard-heading { flex-direction: column; align-items: flex-start; } .dashboard { margin-top: 36px; } }
 @media (max-width: 480px) { .shell { padding: 24px 16px; } .card { margin-top: 40px; } }

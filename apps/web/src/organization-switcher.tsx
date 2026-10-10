@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { InvitationManager } from './invitations.js';
+import { CompanyMembers } from './company-members.js';
 
 type Organization = { id: string; name: string; roles: string[] };
 const roleNames: Record<string, string> = {
@@ -35,10 +36,10 @@ export function OrganizationSwitcher({ csrfToken }: { csrfToken: string }) {
       .catch(e => { if (!controller.signal.aborted) setContextError(e.message); });
     return () => controller.abort();
   }, [selectedId]);
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setSelectedId(''); setContext(null); setContextError(''); setListError(''); setOrganizations(null);
     setRevision(current => current + 1);
-  };
+  }, []);
   return <section className="tile organizations" aria-labelledby="workspace-title">
     <h2 id="workspace-title">Twoje firmy</h2>
     {listError && <p className="error" role="alert">{listError}</p>}
@@ -54,7 +55,10 @@ export function OrganizationSwitcher({ csrfToken }: { csrfToken: string }) {
       {selectedId && !context && !contextError && <p role="status">Ładowanie kontekstu firmy…</p>}
       {context?.id === selectedId && <div aria-live="polite"><h3>{context.name}</h3>
         <p>Twoje role: {context.roles.length ? context.roles.map(role => roleNames[role] ?? role).join(', ') : 'Brak przypisanych ról'}</p>
-        {context.roles.includes('organization_admin') && <InvitationManager key={context.id} organizationId={context.id} csrfToken={csrfToken} />}</div>}
+        {context.roles.includes('organization_admin') && <>
+          <CompanyMembers key={`members-${context.id}`} organizationId={context.id} csrfToken={csrfToken} onAccessChanged={refresh} />
+          <InvitationManager key={context.id} organizationId={context.id} csrfToken={csrfToken} />
+        </>}</div>}
       {contextError && <p className="error" role="alert">{contextError}</p>}
     </>)}
     <button className="secondary" onClick={refresh}>Odśwież dostępne firmy</button>
