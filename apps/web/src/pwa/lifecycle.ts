@@ -1,13 +1,17 @@
 export type ShellState = 'preparing' | 'ready' | 'unavailable' | 'update' | 'activating';
 export async function shellIsAvailable(): Promise<boolean> {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return false;
-  const worker = navigator.serviceWorker.controller ?? (await navigator.serviceWorker.getRegistration('/'))?.active;
+  // Only the controller supplies this page's offline navigation fallback.
+  const worker = navigator.serviceWorker.controller;
   if (!worker) return false;
   return new Promise(resolve => {
     const channel = new MessageChannel();
     const finish = (ready: boolean) => { clearTimeout(timeout); channel.port1.close(); resolve(ready); };
     const timeout = setTimeout(() => finish(false), 5000);
-    channel.port1.onmessage = event => finish(event.data?.ready === true);
+    channel.port1.onmessage = event => finish(navigator.serviceWorker.controller === worker &&
+      worker.state === 'activated' && event.data?.ready === true &&
+      typeof event.data.version === 'string' && /^[a-f0-9]{64}$/.test(event.data.version) &&
+      Array.isArray(event.data.capabilities) && event.data.capabilities.includes('project-snapshots-v1'));
     try { worker.postMessage({ type: 'SHELL_STATUS' }, [channel.port2]); } catch { finish(false); }
   });
 }

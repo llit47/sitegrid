@@ -19,7 +19,7 @@ export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
         if (!access) throw new Error('Brak potwierdzonego dostępu lokalnego. Połącz się i zaloguj online.');
         if (!await shellIsAvailable()) throw new Error('Powłoka offline niedostępna. Połącz się, aby przygotować aplikację ponownie.');
         const ids = [...new Set(access.scopes.map(scope => scope.organizationId))];
-        const selected = organization || ids[0] || '';
+        const selected = ids.includes(organization) ? organization : ids[0] || '';
         const prepared: ConfirmedSnapshot[] = [];
         let invalid = false;
         for (const scope of access.scopes.filter(item => item.organizationId === selected)) {
@@ -31,7 +31,7 @@ export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
         const current = await readOfflineAccess();
         if (!current || current.generation !== access.generation || controller.signal.aborted) throw new Error('Dostęp lokalny został unieważniony. Wymagane logowanie online.');
         if (!disposed) {
-          setOrganizations(ids); setSnapshots(prepared); setError(invalid ? 'Część danych wygasła lub jest uszkodzona. Wymagane ponowne przygotowanie online.' : '');
+          setOrganization(selected); setOrganizations(ids); setSnapshots(prepared); setError(invalid ? 'Część danych wygasła lub jest uszkodzona. Wymagane ponowne przygotowanie online.' : '');
         }
       } catch (e) { if (!disposed) { setSnapshots([]); setOrganizations([]); setError(offlineFailureMessage(e)); } }
       finally { checking = false; if (!disposed) setLoading(false); }
@@ -45,7 +45,7 @@ export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
     <p>Przygotowane dane służą wyłącznie do odczytu. Mogły zmienić się na serwerze. Nie zapisujemy ani nie synchronizujemy zmian offline.</p>
     <p>Po odzyskaniu sieci aplikacja ponownie sprawdzi sesję.</p>
     {loading && <p role="status">Sprawdzanie lokalnego dostępu…</p>}{error && <p role="alert" className="error">{error}</p>}
-    {organizations.length > 1 && <label>Przygotowana firma<select aria-label="Przygotowana firma" value={organization || organizations[0]} onChange={event => { setSnapshots([]); setOrganization(event.target.value); }}>
+    {organizations.length > 1 && <label>Przygotowana firma<select aria-label="Przygotowana firma" value={organization} onChange={event => { setSnapshots([]); setOrganization(event.target.value); }}>
       {organizations.map(id => <option key={id} value={id}>{id}</option>)}</select></label>}
     {!loading && !snapshots.length && <p>Brak pobranych projektów z ważnym dostępem offline. Połącz się z serwerem, aby przygotować wybrany projekt.</p>}
     {snapshots.map(({ snapshot }) => <article className="offline-project" key={snapshot.scope.projectId}>

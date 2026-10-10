@@ -156,6 +156,31 @@ try {
   }, wire);
   assert(Object.values(storageResults).every(Boolean)); await rawStorage.context.close();
   console.log('PASS real IndexedDB v1→v2, retained owner/queue/draft stores, scope/generation isolation, malformed/quota/abort/unavailable failures, safe v1 rollback');
+  // M09's ready response has no M10 capability. The new worker is waiting,
+  // while the old controller still supplies this page's offline navigation.
+  const currentWorker = servedWorker, currentConfig = JSON.parse(currentWorker.match(/const shell = (.*);/)[1]);
+  servedWorker = currentWorker.replace(", capabilities: ['project-snapshots-v1']", '').replace(JSON.stringify(currentConfig), JSON.stringify({ ...currentConfig, version: 'a'.repeat(64) }));
+  assert.notEqual(servedWorker, currentWorker);
+  const oldShell = await open(false); let oldShellDownloads = 0;
+  oldShell.page.on('request', request => { if (request.url().endsWith('/snapshot')) oldShellDownloads++; });
+  servedWorker = currentWorker;
+  await oldShell.page.evaluate(async () => { await (await navigator.serviceWorker.getRegistration('/')).update(); });
+  await oldShell.page.getByText('Nowa wersja gotowa.', { exact: false }).waitFor();
+  const shellStatuses = await oldShell.page.evaluate(async () => {
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    const status = worker => new Promise(resolve => {
+      const channel = new MessageChannel(); channel.port1.onmessage = event => { channel.port1.close(); resolve(event.data); };
+      worker.postMessage({ type: 'SHELL_STATUS' }, [channel.port2]);
+    });
+    return { controlling: await status(navigator.serviceWorker.controller), waiting: await status(registration.waiting) };
+  });
+  assert.equal(shellStatuses.controlling.version, 'a'.repeat(64)); assert.equal(shellStatuses.controlling.ready, true);
+  assert.equal(shellStatuses.controlling.capabilities, undefined); assert.equal(shellStatuses.waiting.ready, true);
+  assert(shellStatuses.waiting.capabilities.includes('project-snapshots-v1'));
+  await oldShell.page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
+  await oldShell.page.getByText('Powłoka offline jest niedostępna.', { exact: false }).waitFor();
+  assert.equal(oldShellDownloads, 0); assert.equal(await oldShell.page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).count(), 0);
+  await oldShell.context.close(); console.log('PASS M09 controller cannot prepare M10 snapshots while a compatible ready worker is waiting');
   for (const mobile of [false,true]) {
     const { context, page: initialPage } = await open(mobile); let page = initialPage;
     const suffix = mobile ? 'mobile' : 'desktop';
@@ -263,6 +288,40 @@ try {
     await owner.query("INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at) VALUES ($1,$2,$3,now()+interval '1 hour')",[createHash('sha256').update(cookies.worker).digest('hex'),users.worker,csrf.worker]);
     console.log(`PASS ${suffix}: explicit preparation, older snapshot on failed/cancelled/quota refresh, whole replacement, offline close/reopen, authorized scopes, finite expiry/clock rollback, logout/account switch/multi-tab and no private cache`);
   }
+  const selection = await open(false);
+  await selection.page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
+  await selection.page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).waitFor();
+  const prepareB = async page => {
+    await page.locator('#active-organization').selectOption(companyB);
+    await page.getByRole('button', { name: 'Projekt obcej firmy Aktywny Kontrahent: Klient Alfa', exact: true }).click();
+    await page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
+    await page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).waitFor();
+  };
+  const selectB = async () => {
+    await selection.page.getByLabel('Przygotowana firma', { exact: true }).selectOption(companyB);
+    await selection.page.getByRole('heading', { name: 'Projekt obcej firmy', exact: true }).waitFor();
+    assert.equal(await selection.page.getByLabel('Przygotowana firma', { exact: true }).inputValue(), companyB);
+    assert.equal(await selection.page.getByRole('heading', { name: 'Projekt Alfa', exact: true }).count(), 0);
+  };
+  const assertRemainingA = async () => {
+    await selection.page.getByRole('heading', { name: 'Projekt Alfa', exact: true }).waitFor();
+    assert.equal(await selection.page.getByRole('heading', { name: 'Projekt obcej firmy', exact: true }).count(), 0);
+    assert.equal(await selection.page.getByLabel('Przygotowana firma', { exact: true }).count(), 0);
+    assert.equal(await selection.page.getByText('Brak pobranych projektów', { exact: false }).count(), 0);
+    const access = await selection.page.evaluate(async () => (await import('/test-storage.js')).readOfflineAccess());
+    assert.deepEqual([...new Set(access.scopes.map(scope => scope.organizationId))], [companyA]);
+  };
+  await prepareB(selection.page);
+  await selection.page.getByRole('button', { name: 'Czytaj przygotowane dane lokalnie', exact: true }).click();
+  await selection.page.getByRole('heading', { name: 'Projekt Alfa', exact: true }).waitFor(); await selectB();
+  await selection.page.evaluate(async id => (await import('/test-storage.js')).invalidateOfflineProjects(id), companyB);
+  await assertRemainingA();
+  const revokingTab = await selection.context.newPage(); await revokingTab.goto(config.origin);
+  await revokingTab.getByText('worker@example.test', { exact: true }).waitFor(); await prepareB(revokingTab);
+  await selection.page.bringToFront(); await selectB();
+  await revokingTab.evaluate(async id => (await import('/test-storage.js')).invalidateOfflineProjects(id), companyB);
+  await assertRemainingA(); await selection.context.close();
+  console.log('PASS removing selected organization B selects remaining prepared A in the same tab and across tabs');
   // Confirmed revocation invalidates the prepared project before another offline launch.
   const revoked=await open(false); await revoked.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click(); await revoked.page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
   await owner.query("UPDATE project_memberships SET status='inactive',version=version+1 WHERE organization_id=$1 AND project_id=$2 AND membership_id=$3",[companyA,projectOne.id,members.worker]);

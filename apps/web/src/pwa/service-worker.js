@@ -37,7 +37,7 @@ self.addEventListener('message', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(cacheName);
     const ready = (await Promise.all(shell.assets.map(asset => cache.match(asset.url)))).every(Boolean);
-    event.ports[0].postMessage({ version: shell.version, ready });
+    event.ports[0].postMessage({ version: shell.version, ready, capabilities: ['project-snapshots-v1'] });
   })());
 });
 self.addEventListener('fetch', event => {
