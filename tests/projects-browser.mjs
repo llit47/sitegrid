@@ -54,7 +54,7 @@ try {
   const initialListDelivery = new Promise(resolve => { initialListFinished = resolve; });
   browser = await chromium.launch({ headless: true, ...(process.env.SITEGRID_CHROMIUM_PATH ? { executablePath: process.env.SITEGRID_CHROMIUM_PATH } : {}) });
   const login = async (actor, mobile = false) => {
-    const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
+    const context = await browser.newContext({ serviceWorkers: 'block', viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     const page = await context.newPage();
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', msg => { if (msg.text().includes('Content Security Policy')) cspErrors.push(msg.text()); });

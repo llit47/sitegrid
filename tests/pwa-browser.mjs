@@ -62,12 +62,16 @@ try {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     await context.addCookies([{ name: 'sitegrid', value: token, url: config.origin, httpOnly: true, sameSite: 'Strict' }]);
     let page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+    let ownSessionReads = 0;
+    page.on('request', request => { if (new URL(request.url()).pathname === '/api/auth/session') ownSessionReads++; });
     await page.goto(config.origin);
     await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     await page.locator('#active-organization').selectOption(company);
     await page.getByRole('button', { name: 'Poufny projekt A Aktywny', exact: true }).click();
     await page.getByText('Poufne zadanie A', { exact: true }).waitFor();
+    await page.getByRole('button', { name: mobile ? 'Zgłoś do odbioru' : 'Rozpocznij zadanie', exact: true }).click();
+    await page.getByText(mobile ? 'Serwer potwierdził zgłoszenie do odbioru.' : 'Serwer potwierdził rozpoczęcie zadania.', { exact: true }).waitFor();
     await page.locator('#active-organization').selectOption(companyB);
     await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor();
     await page.locator('#active-organization').selectOption(company);
@@ -101,15 +105,17 @@ try {
     await page.getByRole('button', { name: 'Wyloguj się', exact: true }).click();
     await otherTab.getByRole('heading', { name: 'Zaloguj się.' }).waitFor();
     await page.getByRole('heading', { name: 'Zaloguj się.' }).waitFor();
+    const beforeLoginReads = ownSessionReads;
     await page.locator('#email').fill('second@example.test'); await page.locator('#password').fill('Synthetic-password-15');
     await page.getByRole('button', { name: 'Zaloguj się', exact: true }).click();
     await page.getByText('second@example.test', { exact: true }).waitFor();
     await otherTab.getByText('second@example.test', { exact: true }).waitFor();
+    assert.equal(ownSessionReads - beforeLoginReads, 1, 'Account notifications must not remount the initiating tab');
     assert.equal(await otherTab.getByText('first@example.test', { exact: true }).count(), 0);
     await otherTab.close();
     assert.equal(await page.getByText('Poufny projekt A', { exact: true }).count(), 0);
     assert.equal(await page.getByText('first@example.test', { exact: true }).count(), 0);
-    console.log(`PASS ${mobile ? 'mobile' : 'desktop'} registration, API exclusion, organization switch, offline reload/reconnect, logout and real login as another account`);
+    console.log(`PASS ${mobile ? 'mobile' : 'desktop'} registration, API exclusion, task progress, organization switch, offline reload/reconnect, logout and real login as another account`);
     if (!mobile) {
       const storage = await page.evaluate(async ({ user, company, project }) => {
         const { openProjectStorage, checkLocalStorage, projectDatabaseName } = await import('/test-storage.js');

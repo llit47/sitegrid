@@ -45,19 +45,19 @@ export function registerShell(onState: (state: ShellState) => void): () => void 
   }).catch(() => publish('unavailable'));
   return () => { disposed = true; cleanups.forEach(cleanup => cleanup()); };
 }
-// Only an invalidation signal crosses tabs. Never transmit user/session information.
+// One channel per mounted shell: BroadcastChannel excludes the sending object,
+// so notifications invalidate other tabs without remounting the initiating tab.
+let accountChannel: BroadcastChannel | null = null;
 export function announceAccountChange(): void {
-  if (!('BroadcastChannel' in window)) return;
-  try {
-    const channel = new BroadcastChannel('sitegrid-account-change'); channel.postMessage('changed'); channel.close();
-  } catch { /* Optional browser storage must never block login/logout. */ }
+  try { accountChannel?.postMessage('changed'); }
+  catch { /* Optional browser storage must never block login/logout. */ }
 }
-
 export function subscribeAccountChanges(invalidate: () => void): () => void {
   try {
     if (!('BroadcastChannel' in window)) return () => {};
     const channel = new BroadcastChannel('sitegrid-account-change');
+    accountChannel = channel;
     channel.onmessage = event => { if (event.data === 'changed') invalidate(); };
-    return () => channel.close();
+    return () => { if (accountChannel === channel) accountChannel = null; channel.close(); };
   } catch { return () => {}; }
 }

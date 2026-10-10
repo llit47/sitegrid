@@ -13,6 +13,7 @@ permissions:
 jobs:
   application:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     services:
       postgres:
         image: public.ecr.aws/docker/library/postgres:17
