@@ -43,7 +43,7 @@ try {
   app = await buildApp(config, runtime, { serveWeb: true });
   config.origin = await app.listen({ port: 0, host: '127.0.0.1' });
   browser = await chromium.launch({ headless: true, ...(process.env.SITEGRID_CHROMIUM_PATH ? { executablePath: process.env.SITEGRID_CHROMIUM_PATH } : {}) });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1280, height: 900 } });
   const page = await context.newPage(), errors = [], cspErrors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', msg => { if (msg.text().includes('Content Security Policy')) cspErrors.push(msg.text()); });

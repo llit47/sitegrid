@@ -56,3 +56,7 @@ Kontrahent nie jest tenantem, użytkownikiem ani rolą. Nie otrzymuje zaproszeń
 ## Implementacja M08 w PR13
 
 Rozpoczęcie i zgłoszenie do odbioru wymagają własnego wykonawstwa, aktywnego przydziału i jawnej roli roboczej firmy (`worker`, `foreman` lub `manager`). Kierownik/brygadzista nie działają w imieniu wykonawcy. Administrator firmy z samą administracją ani platformy nie mają wyjątku. Po blokadzie transakcyjnej API ponownie sprawdza sesję, konto, firmę, członkostwo, role, projekt i wykonawcę, także przed zwrotem utrwalonego receipt. Cofnięcie dostępu blokuje stare wyniki i nowe komendy bez ujawniania obcych rekordów. Archiwum zachowuje uprawniony replay historii, blokując nowe mutacje. [Kontrakt M08](../TASK_PROGRESS.md); odbiór i zwrot należą do M14.
+
+## Implementacja M09 w PR15
+
+Powłoka statyczna jest publiczna i nie nadaje uprawnień offline. API, sesje i autoryzowane logo nigdy nie trafiają do cache workera. Partycje IndexedDB wymagają konta, firmy i projektu; M09 przechowuje tylko metadane i nie otwiera z UI partycji biznesowych. Offline usuwa z widoku wcześniej pobrane dane; reconnect i sygnał zmiany konta montują świeży kontekst. Dotychczasowe sesje/CSRF/RLS/uprawnienia M07/M08 pozostają autorytatywne. [Szczegóły i ograniczenia](../PWA_STORAGE.md).

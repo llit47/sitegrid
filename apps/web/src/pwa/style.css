@@ -1,0 +1,4 @@
+.pwa-status { margin: 0 0 1.5rem; padding: .85rem 1rem; border: 1px solid #d3ded8; border-radius: .75rem; background: #f5f7ef; font-size: .9rem; }
+.pwa-status p { margin: .3rem 0; }
+.pwa-status summary { cursor: pointer; min-height: 44px; display: list-item; padding: .7rem 0; }
+@media (display-mode: standalone) { .shell { padding-top: max(1.5rem, env(safe-area-inset-top)); padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); } }

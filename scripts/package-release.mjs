@@ -19,7 +19,7 @@ const run = (command, args, options = {}) => {
   const result = spawnSync(command, args, { stdio: 'inherit', ...options });
   if (result.status !== 0) throw new Error(`${command} failed`);
 };
-run('npm', ['run', 'build']);
+run('npm', ['run', 'build'], { env: { ...process.env, SITEGRID_RELEASE_VERSION: version } });
 const staging = await mkdtemp(`${tmpdir()}/sitegrid-release-`);
 try {
   for (const path of ['dist', 'migrations', 'ops', 'package.json', 'package-lock.json']) await cp(path, `${staging}/${path}`, { recursive: true, filter: source => !source.includes('__pycache__') });

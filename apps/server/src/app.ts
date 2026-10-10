@@ -25,10 +25,13 @@ export async function buildApp(config: Config, pool: Pool, options: { logger?: b
   });
   await registerAuth(app, pool, config);
   if (options.serveWeb ?? config.production) {
-    await app.register(fastifyStatic, { root: config.webRoot, prefix: '/' });
+    await app.register(fastifyStatic, { root: config.webRoot, prefix: '/', setHeaders(response, file) {
+      // Stable entry points must revalidate on update/rollback. API keeps no-store.
+      response.header('Cache-Control', /\/(?:assets|pwa)\//.test(file) ? 'public, max-age=31536000, immutable' : 'no-store');
+    } });
     app.setNotFoundHandler((request, reply) => {
-      if (request.method === 'GET' && !request.url.startsWith('/api/') && !request.url.startsWith('/health/')) {
-        return reply.header('Cache-Control', 'no-cache').sendFile('index.html');
+      if (request.method === 'GET' && request.url !== '/api' && !request.url.startsWith('/api/') && !request.url.startsWith('/health/') && !/^\/(?:assets|pwa)\//.test(request.url) && request.url !== '/sw.js') {
+        return reply.header('Cache-Control', 'no-store').sendFile('index.html');
       }
       return reply.code(404).send({ error: 'Not found' });
     });

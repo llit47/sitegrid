@@ -13,6 +13,7 @@ permissions:
 jobs:
   application:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     services:
       postgres:
         image: public.ecr.aws/docker/library/postgres:17
@@ -45,6 +46,15 @@ jobs:
           } finally { await db.end(); }
           JS
       - run: npm run check
+      - name: Prepare Playwright/Chromium for production PWA and online browser regressions
+        run: |
+          npm install --prefix "$RUNNER_TEMP/sitegrid-playwright" --no-save --no-package-lock --no-audit --no-fund playwright@1.64.0
+          node "$RUNNER_TEMP/sitegrid-playwright/node_modules/playwright/cli.js" install --with-deps chromium
+          echo "SITEGRID_PLAYWRIGHT_MODULE=$RUNNER_TEMP/sitegrid-playwright/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - run: node --import tsx tests/pwa-browser.mjs
+      - run: node --import tsx tests/organization-branding-browser.mjs
+      - run: node --import tsx tests/projects-browser.mjs
+      - run: node --import tsx tests/task-progress-browser.mjs
       - name: Select pinned key (ephemeral fixture only for branch CI)
         run: |
           if [ -f ops/release-public.pem ]; then
@@ -63,6 +73,7 @@ jobs:
       - run: node --check tests/deployed-browser-smoke.mjs
       - run: node --check tests/organization-branding-browser.mjs
       - run: node --check tests/projects-browser.mjs
+      - run: node --check tests/pwa-browser.mjs
       - run: node --check tests/task-progress-browser.mjs
       - run: node --check tests/helpers/task-progress-process.mjs
       - uses: actions/upload-artifact@v4

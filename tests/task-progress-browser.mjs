@@ -48,7 +48,7 @@ try {
   for (const [title, actor] of [['Potwierdzenie', 'worker'], ['Konflikt', 'worker'], ['Utrata odpowiedzi', 'worker'], ['Awaria', 'worker'], ['Spóźniona odpowiedź', 'worker'], ['Mobilne', 'worker'], ['Kierownika', 'manager'], ['Brygadzisty', 'foreman']]) tasks[title] = (await api(`${path}/tasks`, { title, assigneeMembershipId: members[actor] })).task;
   browser = await chromium.launch({ headless: true, ...(process.env.SITEGRID_CHROMIUM_PATH ? { executablePath: process.env.SITEGRID_CHROMIUM_PATH } : {}) });
   const open = async (actor, mobile = false) => {
-    const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
+    const context = await browser.newContext({ serviceWorkers: 'block', viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     await context.addCookies([{ name: 'sitegrid', value: tokens[actor], url: config.origin, httpOnly: true, sameSite: 'Strict' }]);
     const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
     await page.goto(config.origin); await page.locator('#active-organization').selectOption(company);
