@@ -5,6 +5,10 @@ import { PwaShell } from './pwa/shell.js';
 import { announceAccountChange } from './pwa/lifecycle.js';
 import { OrganizationSwitcher } from './organization-switcher.js';
 import { InvitationAcceptance, InvitationDelivery, InvitationManager, type InvitationDeliveryResult } from './invitations.js';
+import { captureInvitationToken } from './invitation-bootstrap.js';
+
+// Bootstrap also runs offline; App remounts keep this page-lifetime token.
+const invitationToken = captureInvitationToken(window);
 
 type Session = { csrfToken: string; user: { email: string; platformAdmin: boolean } | null };
 type Overview = { email: string; installedAt: string; status: string };
@@ -63,19 +67,12 @@ function Organizations({ csrfToken }: { csrfToken: string }) {
       <button className="secondary" onClick={() => setInvitationCompany('')}>Zamknij zaproszenia</button></>}
   </section>;
 }
-function App() {
+function App({ invitationToken }: { invitationToken: string }) {
   const [session, setSession] = useState<Session | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [workspaceRevision, setWorkspaceRevision] = useState(0);
-  const [invitationToken] = useState(() => {
-    if (window.location.pathname !== '/invitations/accept') return '';
-    const value = window.location.hash.slice(1);
-    // Keep the bearer token only in memory; remove it from the visible URL/history.
-    window.history.replaceState(null, '', window.location.pathname);
-    return value;
-  });
   const load = async () => {
     const next = await api<Session>('/api/auth/session');
     setSession(next);
@@ -126,4 +123,4 @@ function App() {
     {!session && !error && <p role="status">Łączenie z SiteGrid…</p>}
   </>;
 }
-createRoot(document.getElementById('root')!).render(<PwaShell><App /></PwaShell>);
+createRoot(document.getElementById('root')!).render(<PwaShell><App invitationToken={invitationToken} /></PwaShell>);

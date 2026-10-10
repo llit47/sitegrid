@@ -9,6 +9,7 @@ import { buildApp } from '../apps/server/src/app.ts';
 import { readConfig } from '../apps/server/src/config.ts';
 import { migrate } from '../apps/server/src/migrations.ts';
 import { hashPassword } from '../apps/server/src/auth/password.ts';
+import { createInvitation } from '../apps/server/src/invitations.ts';
 const { chromium } = await import(process.env.SITEGRID_PLAYWRIGHT_MODULE ? pathToFileURL(process.env.SITEGRID_PLAYWRIGHT_MODULE).href : 'playwright');
 assert(process.env.TEST_DATABASE_URL && process.env.TEST_RUNTIME_DATABASE_URL);
 const schema = `pwa_browser_${randomBytes(6).toString('hex')}`;
@@ -21,6 +22,129 @@ const company = randomUUID(), companyB = randomUUID(), user = randomUUID(), seco
 const token = randomBytes(32).toString('base64url'), csrf = randomBytes(32).toString('base64url');
 let app, browser, servedWorker;
 const errors = [], shellCookies = [];
+
+async function assertInvitationIsMemoryOnly(page, token) {
+  const persisted = await page.evaluate(async secret => {
+    const contains = value => JSON.stringify(value)?.includes(secret) ?? false;
+    for (const storage of [localStorage, sessionStorage]) {
+      for (let index = 0; index < storage.length; index++) {
+        const key = storage.key(index);
+        if (contains([key, storage.getItem(key)])) return true;
+      }
+    }
+    for (const name of await caches.keys()) {
+      if (contains(name)) return true;
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) {
+        const response = await cache.match(request);
+        if (contains([request.url, [...request.headers], [...response.headers], await response.text()])) return true;
+      }
+    }
+    for (const { name } of await indexedDB.databases()) {
+      if (contains(name)) return true;
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open(name);
+        request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+      });
+      try {
+        for (const storeName of database.objectStoreNames) {
+          if (contains(storeName)) return true;
+          const records = await new Promise((resolve, reject) => {
+            const transaction = database.transaction(storeName, 'readonly');
+            const store = transaction.objectStore(storeName), keys = store.getAllKeys(), values = store.getAll();
+            transaction.oncomplete = () => resolve([keys.result, values.result]);
+            transaction.onabort = () => reject(transaction.error);
+          });
+          if (contains(records)) return true;
+        }
+      } finally { database.close(); }
+    }
+    return false;
+  }, token);
+  assert.equal(persisted, false, 'Invitation bearer must never enter persistent browser storage or caches');
+  assert((await page.context().cookies()).every(cookie => !cookie.value.includes(token)));
+}
+
+async function invitationRegression(mobile, offlineLaunch, issuer) {
+  const email = offlineLaunch ? `invited-${mobile ? 'mobile' : 'desktop'}@example.test` : 'second@example.test';
+  const seed = await owner.connect();
+  let created;
+  try {
+    await seed.query('BEGIN');
+    created = await createInvitation(seed, company, issuer, email, 'worker', false);
+    await seed.query('COMMIT');
+  } finally { seed.release(); }
+  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
+  try {
+    await context.addInitScript(() => {
+      if (location.pathname !== '/invitations/accept') return;
+      history.replaceState({ invitationRegression: true }, '');
+      // Observe the first React view, including the offline view where App never mounts.
+      const observer = new MutationObserver(() => {
+        if (!document.getElementById('root')?.childElementCount) return;
+        window.invitationScrubbedBeforeRender = location.hash === '';
+        observer.disconnect();
+      });
+      observer.observe(document, { childList: true, subtree: true });
+    });
+    const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+    await page.goto(config.origin);
+    await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
+    await page.waitForFunction(() => navigator.serviceWorker.controller);
+    if (offlineLaunch) await context.setOffline(true);
+    const sanitizedUrl = `${config.origin}/invitations/accept?source=email&next=%2F`;
+    await page.goto(`${sanitizedUrl}#${created.token}`);
+    const checkSanitized = async () => {
+      assert.equal(page.url(), sanitizedUrl);
+      assert.equal(await page.evaluate(() => window.invitationScrubbedBeforeRender), true);
+      assert.deepEqual(await page.evaluate(() => history.state), { invitationRegression: true });
+    };
+    if (offlineLaunch) {
+      await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
+      await checkSanitized();
+      assert.equal(await page.getByRole('heading', { name: 'Aktywacja zaproszenia' }).count(), 0);
+      await assertInvitationIsMemoryOnly(page, created.token);
+      await context.setOffline(false);
+    }
+    await page.getByText('Oczekujące — Firma A', { exact: true }).waitFor();
+    await checkSanitized();
+    // Both an offline launch and an already sanitized online page survive remounts.
+    await context.setOffline(true);
+    await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
+    await checkSanitized();
+    await context.setOffline(false);
+    await page.getByText('Oczekujące — Firma A', { exact: true }).waitFor();
+    await checkSanitized();
+    await assertInvitationIsMemoryOnly(page, created.token);
+    if (offlineLaunch) {
+      await page.getByLabel('Email z zaproszenia', { exact: true }).fill(email);
+      await page.getByLabel('Nowe hasło', { exact: true }).fill('Synthetic-password-15');
+      await page.getByLabel('Powtórz hasło', { exact: true }).fill('Synthetic-password-15');
+      await page.getByRole('button', { name: 'Utwórz konto i zaakceptuj', exact: true }).click();
+      await page.getByText('Zaproszenie zostało przyjęte.', { exact: false }).waitFor();
+    }
+    await page.locator('#email').fill(email); await page.locator('#password').fill('Synthetic-password-15');
+    await page.getByRole('button', { name: 'Zaloguj się', exact: true }).click();
+    await page.locator('.account').getByText(email, { exact: true }).waitFor();
+    if (!offlineLaunch) {
+      await page.getByRole('button', { name: 'Akceptuj zaproszenie', exact: true }).click();
+      await page.getByText('Zaproszenie zostało przyjęte.', { exact: false }).waitFor();
+    }
+    const accepted = (await owner.query(`SELECT u.email FROM organization_invitations i
+      JOIN users u ON u.id = i.accepted_by WHERE i.id = $1 AND i.accepted_at IS NOT NULL`, [created.invitation.id])).rows;
+    assert.deepEqual(accepted, [{ email }]);
+    await assertInvitationIsMemoryOnly(page, created.token);
+    await page.getByRole('button', { name: 'Wyloguj się', exact: true }).click();
+    await page.getByRole('heading', { name: 'Zaloguj się.' }).waitFor();
+    await checkSanitized();
+    await assertInvitationIsMemoryOnly(page, created.token);
+    await page.reload();
+    await page.getByText('Niedostępne', { exact: true }).waitFor(); // a new page cannot recover the scrubbed bearer
+    assert.equal(page.url(), sanitizedUrl);
+    console.log(`PASS ${mobile ? 'mobile' : 'desktop'} invitation ${offlineLaunch ? 'offline launch/new account' : 'online launch/existing account'}: scrub before first render, URL/history preservation, reconnect/remount retention, acceptance/login/logout, memory-only bearer`);
+  } finally { await context.close(); }
+}
+
 await admin.query(`CREATE SCHEMA ${schema}`);
 try {
   await migrate(owner, 'migrations');
@@ -38,6 +162,10 @@ try {
     await owner.query("INSERT INTO organization_memberships(organization_id,id,user_id,status) VALUES ($1,$2,$3,'active')", [organization, id, user]);
     await owner.query("INSERT INTO membership_roles(organization_id,membership_id,role) VALUES ($1,$2,'worker')", [organization, id]);
   }
+  const issuer = randomUUID(), issuerMember = randomUUID();
+  await owner.query('INSERT INTO users(id,email) VALUES ($1,$2)', [issuer, 'issuer@example.test']);
+  await owner.query("INSERT INTO organization_memberships(organization_id,id,user_id,status) VALUES ($1,$2,$3,'active')", [company, issuerMember, issuer]);
+  await owner.query("INSERT INTO membership_roles(organization_id,membership_id,role) VALUES ($1,$2,'organization_admin')", [company, issuerMember]);
   await owner.query('INSERT INTO projects(organization_id,id,name) VALUES ($1,$2,$3)', [company, project, 'Poufny projekt A']);
   await owner.query('INSERT INTO project_memberships(organization_id,project_id,membership_id) VALUES ($1,$2,$3)', [company, project, member]);
   const seed = await owner.connect();
@@ -116,6 +244,8 @@ try {
     assert.equal(await page.getByText('Poufny projekt A', { exact: true }).count(), 0);
     assert.equal(await page.getByText('first@example.test', { exact: true }).count(), 0);
     console.log(`PASS ${mobile ? 'mobile' : 'desktop'} registration, API exclusion, task progress, organization switch, offline reload/reconnect, logout and real login as another account`);
+    await invitationRegression(mobile, true, issuer);
+    await invitationRegression(mobile, false, issuer);
     if (!mobile) {
       const storage = await page.evaluate(async ({ user, company, project }) => {
         const { openProjectStorage, checkLocalStorage, projectDatabaseName } = await import('/test-storage.js');
