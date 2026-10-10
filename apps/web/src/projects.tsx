@@ -139,7 +139,7 @@ function ProjectDetails({ path, csrfToken, onSaved, onGone, onAccessChanged }: {
   };
   return <article className="project-details">
     <div className="project-toolbar"><h4>Szczegóły projektu</h4><button className="secondary" disabled={busy} onClick={() => { setRevision(value => value + 1); }}>Wczytaj aktualne dane</button></div>
-    <p className="hint">Wczytanie aktualnych danych zastępuje niezapisane formularze. Po konflikcie Twoja propozycja pozostaje w formularzu.</p>
+    {details?.project.status === 'active' && (details.permissions.administer || details.permissions.manageTasks) && <p className="hint">Wczytanie aktualnych danych zastępuje niezapisane formularze. Po konflikcie Twoja propozycja pozostaje w formularzu.</p>}
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {!details && !error && <p role="status">Ładowanie projektu i zadań…</p>}
     {details && <>
