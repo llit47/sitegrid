@@ -86,6 +86,8 @@ class ReleaseTests(unittest.TestCase):
             self.assertTrue((Path(directory) / 'release/migrations/011_contractors.sql').is_file())
             for module in ['domain', 'persistence', 'routes']:
                 self.assertTrue((Path(directory) / f'release/dist/server/contractors/{module}.js').is_file())
+            for module in ['contract', 'serialize', 'routes']:
+                self.assertTrue((Path(directory) / f'release/dist/server/project-snapshots/{module}.js').is_file())
             self.assertEqual((Path(directory) / 'release').stat().st_mode & 0o777, 0o755)
             web = Path(directory) / 'release/dist/web'
             worker = (web / 'sw.js').read_text()

@@ -60,3 +60,7 @@ Rozpoczęcie i zgłoszenie do odbioru wymagają własnego wykonawstwa, aktywnego
 ## Implementacja M09 w PR15
 
 Powłoka statyczna jest publiczna i nie nadaje uprawnień offline. API, sesje i autoryzowane logo nigdy nie trafiają do cache workera. Partycje IndexedDB wymagają konta, firmy i projektu; M09 przechowuje tylko metadane i nie otwiera z UI partycji biznesowych. Offline usuwa z widoku wcześniej pobrane dane; reconnect i sygnał zmiany konta montują świeży kontekst. Dotychczasowe sesje/CSRF/RLS/uprawnienia M07/M08 pozostają autorytatywne. [Szczegóły i ograniczenia](../PWA_STORAGE.md).
+
+## PR17 / M10 — odczyt snapshotu
+
+[Snapshot jednego projektu](../PROJECT_SNAPSHOTS.md) zachowuje aktualną sesję, stable account UUID i FORCE RLS w spójnym odczycie transakcyjnym. Pracownik otrzymuje własne zadania, manager/foreman ich dotychczasowy projektowy zakres, administrator metadata-only pustą listę zadań. Minimalny kontrahent nie rozszerza dostępu. Offline dostęp obejmuje wyłącznie przygotowany zakres/generation konta, maksymalnie 24 h od potwierdzenia online. Logout niezawodnie unieważnia dopuszczenie; cleanup failure blokuje offline. Remote wipe odciętego urządzenia nie jest możliwy. Nie ma zapisów ani nowych uprawnień offline.

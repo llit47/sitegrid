@@ -1,4 +1,20 @@
 export type ShellState = 'preparing' | 'ready' | 'unavailable' | 'update' | 'activating';
+export async function shellIsAvailable(): Promise<boolean> {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return false;
+  // Only the controller supplies this page's offline navigation fallback.
+  const worker = navigator.serviceWorker.controller;
+  if (!worker) return false;
+  return new Promise(resolve => {
+    const channel = new MessageChannel();
+    const finish = (ready: boolean) => { clearTimeout(timeout); channel.port1.close(); resolve(ready); };
+    const timeout = setTimeout(() => finish(false), 5000);
+    channel.port1.onmessage = event => finish(navigator.serviceWorker.controller === worker &&
+      worker.state === 'activated' && event.data?.ready === true &&
+      typeof event.data.version === 'string' && /^[a-f0-9]{64}$/.test(event.data.version) &&
+      Array.isArray(event.data.capabilities) && event.data.capabilities.includes('project-snapshots-v1'));
+    try { worker.postMessage({ type: 'SHELL_STATUS' }, [channel.port2]); } catch { finish(false); }
+  });
+}
 export function registerShell(onState: (state: ShellState) => void): () => void {
   let disposed = false;
   let updateAvailable = false;
@@ -49,15 +65,24 @@ export function registerShell(onState: (state: ShellState) => void): () => void 
 // so notifications invalidate other tabs without remounting the initiating tab.
 let accountChannel: BroadcastChannel | null = null;
 export function announceAccountChange(): void {
-  try { accountChannel?.postMessage('changed'); }
+  try {
+    // Ordered prefix says M10 already established its durable local fence.
+    // Keep the original signal for still-open M09 clients during an update.
+    accountChannel?.postMessage({ type: 'local-fence', format: 2 });
+    accountChannel?.postMessage('changed');
+  }
   catch { /* Optional browser storage must never block login/logout. */ }
 }
-export function subscribeAccountChanges(invalidate: () => void): () => void {
+export function subscribeAccountChanges(invalidate: (legacy: boolean) => void): () => void {
   try {
     if (!('BroadcastChannel' in window)) return () => {};
     const channel = new BroadcastChannel('sitegrid-account-change');
     accountChannel = channel;
-    channel.onmessage = event => { if (event.data === 'changed') invalidate(); };
+    let fenced = false;
+    channel.onmessage = event => {
+      if (event.data?.type === 'local-fence' && event.data.format === 2) { fenced = true; return; }
+      if (event.data === 'changed') { const legacy = !fenced; fenced = false; invalidate(legacy); }
+    };
     return () => { if (accountChannel === channel) accountChannel = null; channel.close(); };
   } catch { return () => {}; }
 }

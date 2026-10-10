@@ -2,7 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import type { Config } from './config.js';
 import { readSession } from './auth/session.js';
-import { withOrganization, withTransaction } from './organization-context.js';
+import { withOrganization, withTransaction, type TransactionOptions } from './organization-context.js';
 
 export type OrganizationRole = 'organization_admin' | 'manager' | 'foreman' | 'worker';
 export type OrganizationContext = { id: string; name: string; roles: OrganizationRole[] };
@@ -39,6 +39,7 @@ export async function withAuthorizedOrganization<T>(
   pool: Pool, request: FastifyRequest, config: Config, organizationId: string,
   work: (client: PoolClient, context: OrganizationContext) => Promise<T>,
   requiredRoles: readonly OrganizationRole[] = [],
+  options?: TransactionOptions,
 ): Promise<T> {
   let context: OrganizationContext;
   return withOrganization(pool, organizationId, client => work(client, context), async client => {
@@ -48,5 +49,5 @@ export async function withAuthorizedOrganization<T>(
       throw Object.assign(new Error('Organization access denied'), { statusCode: 403 });
     }
     context = available;
-  });
+  }, options);
 }

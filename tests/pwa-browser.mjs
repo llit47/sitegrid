@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import ts from 'typescript';
+import { build } from 'esbuild';
 import pg from 'pg';
 import { buildApp } from '../apps/server/src/app.ts';
 import { readConfig } from '../apps/server/src/config.ts';
@@ -181,7 +181,7 @@ try {
   await owner.query("INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at) VALUES ($1,$2,$3,now()+interval '1 hour')", [createHash('sha256').update(token).digest('hex'), user, csrf]);
   app = await buildApp(config, runtime, { serveWeb: true });
   // Test-only endpoints for the real browser's storage module and version upgrade.
-  const storageSource = ts.transpileModule(await readFile('apps/web/src/storage/indexed-db.ts', 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext } }).outputText;
+  const storageSource = (await build({ entryPoints: ['apps/web/src/storage/indexed-db.ts'], bundle: true, write: false, format: 'esm', target: 'es2023' })).outputFiles[0].text;
   app.get('/test-storage.js', (_request, reply) => reply.type('application/javascript').send(storageSource));
   servedWorker = await readFile('dist/web/sw.js', 'utf8');
   app.get('/sw.js', (_request, reply) => reply.header('Cache-Control', 'no-store').type('application/javascript').send(servedWorker));
@@ -276,7 +276,7 @@ try {
           request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
         });
         const name = projectDatabaseName(scope);
-        const raw = await openRaw(name, 1);
+        const raw = await openRaw(name, 2);
         const originalPut = IDBObjectStore.prototype.put;
         IDBObjectStore.prototype.put = function () { throw new DOMException('Full', 'QuotaExceededError'); };
         try { await expectFailure(checkLocalStorage, 'quota'); } finally { IDBObjectStore.prototype.put = originalPut; }
@@ -291,7 +291,7 @@ try {
         (await openRaw(projectDatabaseName(unknownScope), 1, db => db.createObjectStore('unexpected'))).close();
         await expectFailure(() => openProjectStorage(unknownScope), 'invalid');
         const newerScope = { ...scope, projectId: crypto.randomUUID() };
-        (await openRaw(projectDatabaseName(newerScope), 2, db => db.createObjectStore('metadata'))).close();
+        (await openRaw(projectDatabaseName(newerScope), 3, db => db.createObjectStore('metadata'))).close();
         await expectFailure(() => openProjectStorage(newerScope), 'invalid');
         // A deleted v1 database blocks reinitialization until an old tab releases it.
         const blocked = { ...scope, projectId: crypto.randomUUID() };
@@ -304,12 +304,12 @@ try {
         // Our handles close themselves for versionchange; an upgrade can complete safely.
         const upgradeScope = { ...scope, projectId: crypto.randomUUID() };
         const upgraded = await openProjectStorage(upgradeScope);
-        (await openRaw(projectDatabaseName(upgradeScope), 2)).close();
+        (await openRaw(projectDatabaseName(upgradeScope), 3)).close();
         await expectFailure(() => upgraded.verify(), 'failed');
         return { partitions: names.filter(name => name.startsWith('sitegrid-project-')).length };
       }, { user, company, project });
       assert.equal(storage.partitions, 4);
-      console.log('PASS real IndexedDB v0→v1 initialization, 4 isolated partitions, discarded handles, blocked upgrades, v2 rejection, corrupt ownership/schema, quota and aborted transaction failures');
+      console.log('PASS real IndexedDB v0→v2 initialization, 4 isolated partitions, discarded handles, blocked upgrades, v3 rejection, corrupt ownership/schema, quota and aborted transaction failures');
       // Worker update never replaces a live tab or removes its working shell.
       const updateTab = await context.newPage(); await updateTab.goto(config.origin);
       await updateTab.getByText('second@example.test', { exact: true }).waitFor();

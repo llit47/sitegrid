@@ -1,10 +1,10 @@
 # SiteGrid — roadmapa małego MVP offline-first
 
-Data: 2026-10-09. **Architektura kierunkowa przyjęta w PR #2; kolejne etapy wdrażano w PR-ach (do M09C/PR16), lecz pełne MVP offline nadal jest w budowie; limity pozostają do zatwierdzenia.** Źródło decyzji: [architektura](ARCHITECTURE.md) i [macierz uprawnień](PERMISSIONS.md). Historyczny audyt referencji pozostaje w [FUNCTIONALITY.md](FUNCTIONALITY.md). Niniejszy plan zastępuje wcześniejszą kolejność z pilotażem online przed offline; wcześniejsze priorytety backlogu nie wyznaczają już bramki MVP.
+Data: 2026-10-09. **Architektura kierunkowa przyjęta w PR #2; kolejne etapy wdrażano w PR-ach (do M10/PR17), lecz pełne MVP offline nadal jest w budowie; limity pozostają do zatwierdzenia.** Źródło decyzji: [architektura](ARCHITECTURE.md) i [macierz uprawnień](PERMISSIONS.md). Historyczny audyt referencji pozostaje w [FUNCTIONALITY.md](FUNCTIONALITY.md). Niniejszy plan zastępuje wcześniejszą kolejność z pilotażem online przed offline; wcześniejsze priorytety backlogu nie wyznaczają już bramki MVP.
 
 ## Aktualizacja modelu firmy i kontrahentów (2026-10-10)
 
-Decyzja biznesowa: głównym scenariuszem jest jedna firma wykonawcza, wielu kontrahentów **bez kont** oraz wspólna pula pracowników przypisywanych indywidualnie do projektów i zadań. Zachowujemy wielofirmową izolację i dotychczasowe API. Bez stałych brygad i bez dostępu kontrahentów do aplikacji. Kontrakt produktu (M09C wdrożone w PR16; godziny i raporty nadal planowane): [MODEL_KONTRAHENTOW](../CONTRACTOR_PROJECT_MODEL.md). M09/PWA pozostaje bez zmian; [M09C/PR16](../CONTRACTORS.md) realizuje kontrahentów przed następnym etapem M10. M13 musi uwzględniać przedziały czasu i serwerową kontrolę kolizji dla pracownika we wszystkich projektach jego organizacji.
+Decyzja biznesowa: głównym scenariuszem jest jedna firma wykonawcza, wielu kontrahentów **bez kont** oraz wspólna pula pracowników przypisywanych indywidualnie do projektów i zadań. Zachowujemy wielofirmową izolację i dotychczasowe API. Bez stałych brygad i bez dostępu kontrahentów do aplikacji. Kontrakt produktu (M09C wdrożone w PR16; godziny i raporty nadal planowane): [MODEL_KONTRAHENTOW](../CONTRACTOR_PROJECT_MODEL.md). M09/PWA pozostaje bez zmian; [M09C/PR16](../CONTRACTORS.md) realizuje kontrahentów; [M10/PR17](../PROJECT_SNAPSHOTS.md) dodaje wyłącznie autoryzowany odczyt offline. Następny etap to M11. M13 musi uwzględniać przedziały czasu i serwerową kontrolę kolizji dla pracownika we wszystkich projektach jego organizacji.
 
 ## Zakres i bramka pilotażu
 
