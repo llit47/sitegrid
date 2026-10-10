@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 import sys
@@ -83,6 +84,18 @@ class ReleaseTests(unittest.TestCase):
             manifest = extract_release(archive, Path(directory) / 'release', sha, version)
             self.assertEqual(manifest['schema'], json.loads(Path('release.json').read_text())['schema'])
             self.assertEqual((Path(directory) / 'release').stat().st_mode & 0o777, 0o755)
+            web = Path(directory) / 'release/dist/web'
+            worker = (web / 'sw.js').read_text()
+            shell = json.loads(re.search(r'const shell = (.*);', worker).group(1))
+            self.assertRegex(shell['version'], r'^[a-f0-9]{64}$')
+            for asset in shell['assets']:
+                self.assertRegex(asset['url'], r'^/(assets|pwa)/')
+                self.assertEqual(hashlib.sha256((web / asset['url'].lstrip('/')).read_bytes()).hexdigest(), asset['sha256'])
+            self.assertEqual((web / shell['shell'].lstrip('/')).read_bytes(), (web / 'index.html').read_bytes())
+            manifest_path = next(asset['url'] for asset in shell['assets'] if asset['url'].endswith('.webmanifest'))
+            pwa = json.loads((web / manifest_path.lstrip('/')).read_text())
+            self.assertEqual([pwa['id'], pwa['name'], pwa['display']], ['/', 'SiteGrid', 'standalone'])
+            self.assertTrue(all((web / icon['src'].lstrip('/')).is_file() for icon in pwa['icons']))
             # Production packaging skips install scripts. Exercise the bundled native
             # raster decoder with the pinned runtime, rather than the workspace modules.
             script = '''

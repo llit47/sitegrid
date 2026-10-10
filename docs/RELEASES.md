@@ -39,3 +39,7 @@ PR12 wymaga schematu 9 i dopuszcza migrację 0–9. Projekty, przydziały, zadan
 ## Kontrakt PR13 / M08
 
 PR13 wymaga schematu 10 i dopuszcza upgrade 0–10. Migracja 9 → 10 zachowuje dane PR12 i dodaje trwałe receipts, statusy postępu i audyt komend. Receipts nie są automatycznie usuwane; backup PostgreSQL obejmuje statusy, wersje, receipts i audyt. Powrót do wydania PR12 z kontraktem 9 jest blokowany przed zatrzymaniem usługi i wymaga kontrolowanego restore. Installer, updater, podpisy i format paczki nie zmieniają się. [Kontrakt M08](TASK_PROGRESS.md). Przy restore utracone receipts wymagają uzgodnienia historii; epoka synchronizacji pozostaje M12/M15.
+
+## Kontrakt PR15 / M09
+
+Schemat PostgreSQL pozostaje **10**, upgrade 0–10, bez nowych/zmienionych migracji. `package-release.mjs` przekazuje wersję paczki do buildu powłoki; `dist/web` zawiera `/sw.js`, hash JS/CSS, wersjonowany HTML/manifest i PNG SiteGrid. Całe `dist` trafia do istniejącej podpisanej paczki. Test rzeczywistej paczki weryfikuje obecność i SHA-256 każdego zasobu PWA. Installer/update/rollback, podpisany kanał i backup PostgreSQL pozostają zgodne; cache/IndexedDB urządzeń nie są częścią backupu serwera. Podmiana lub zgodny rollback paczki powodują standardowy cykl aktualizacji workera, z oczekiwaniem na zamknięcie kart; brak wymuszonej aktywacji albo kasowania pamięci innych aplikacji. [Procedury PWA, wersjonowanie IDB i ograniczenia](PWA_STORAGE.md).

@@ -83,3 +83,7 @@ M07 dodaje projekty i jawne przydziały administratora firmy oraz planowanie, ed
 ## Przyrost PR13 — M08
 
 M08 dodaje jeden endpoint komend v1 dla rozpoczęcia własnego zadania i zgłoszenia do odbioru, trwałe receipts PostgreSQL, kontrolę wersji oraz atomowy audyt. Retry ponownie sprawdza bieżącą sesję, role i przydział; utrata odpowiedzi po COMMIT i równoległe duplikaty mają jeden efekt. Schemat 10 zachowuje dane PR12. [Kontrakt i testy M08](../TASK_PROGRESS.md). Polski komponent pokazuje potwierdzony postęp i jawne konflikty. Odbiór/zwrot M14, PWA i kolejka offline pozostają poza tym przyrostem; bramka MVP nie zmienia się.
+
+## Przyrost PR15 — M09
+
+M09 dostarcza instalowalną powłokę PWA, offline restart statycznego HTML i wersjonowany fundament IndexedDB z izolacją konto/firma/projekt. Brak offline danych projektów, kolejki, synchronizacji i nowych migracji PostgreSQL. [Kontrakt cache/storage, testy i odbiór Android/iOS](../PWA_STORAGE.md). Bramka offline-first MVP pozostaje niespełniona; **następny oddzielny przyrost to M09C (kontrahenci), przed M10**.

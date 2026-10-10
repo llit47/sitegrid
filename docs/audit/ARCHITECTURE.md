@@ -142,3 +142,7 @@ Mały zakres MVP i jego ograniczenia online; 7 dni dostępu offline; aktywacja 2
 ## Implementacja M08 w PR13
 
 [Komendy postępu v1](../TASK_PROGRESS.md) działają jako osobny moduł modularnego monolitu: routes, domain, service i persistence, z dedykowanym komponentem UI. Wspólna blokada firmy i utility audytu należą do common infrastructure. Jedna transakcja PostgreSQL zapisuje status, wersję, audit i receipt kluczowany firmą/aktorem/operationId; hash obejmuje treść i autoryzowany zakres. FORCE RLS i aktualna autoryzacja obowiązują także przy replay. Brak automatycznej retencji receipts w MVP. Schemat 10 zachowuje M07. Wersjonowany endpoint stanowi fundament przyszłej synchronizacji; PWA, lokalna kolejka i epoka po restore pozostają dalszym zakresem.
+
+## Implementacja M09 w PR15
+
+[Powłoka PWA i IndexedDB](../PWA_STORAGE.md) mają dedykowane moduły `pwa/`, `storage/` i plugin buildu. Service worker zapisuje tylko jawnie dozwolone pliki statyczne z digestami wydania, nigdy API/autoryzowane dane. Aktualizacja czeka na zamknięcie klientów i czyści tylko własne stare cache. IndexedDB schema 1 zapisuje wyłącznie metadane izolowanego właściciela; UI wykonuje niesekretny probe bez danych użytkownika. Offline UI odmontowuje widoki online; reconnect pobiera świeżą sesję. PostgreSQL i autoryzacja bez zmiany, brak snapshotów, kolejki i synchronizacji. M09C pozostaje następny przed M10.
