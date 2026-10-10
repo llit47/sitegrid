@@ -66,7 +66,9 @@ export function Projects({ organizationId, admin, csrfToken, onAccessChanged }: 
   useEffect(() => {
     const controller = new AbortController(); setProjects(null); setError('');
     void request<{ projects: Project[] }>(path, controller.signal).then(data => {
-      if (!controller.signal.aborted) setProjects(data.projects);
+      if (!controller.signal.aborted) setProjects(current => current === null ? data.projects : [
+        ...current, ...data.projects.filter(project => !current.some(local => local.id === project.id)),
+      ]);
     }).catch(e => { if (!controller.signal.aborted) { setError(e.message); if ([401, 403].includes(e.status)) onAccessChanged(); } });
     return () => controller.abort();
   }, [path, revision, onAccessChanged]);

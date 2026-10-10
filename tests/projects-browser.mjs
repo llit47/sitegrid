@@ -47,6 +47,11 @@ try {
     const result = await app.inject({ url, headers, ...(payload ? { method: 'POST', payload } : {}) });
     assert(result.statusCode < 300, result.body); return result.json();
   };
+  await api(`/api/organizations/${companyA}/projects`, { name: 'Projekt istniejący' });
+  let releaseInitialList, initialListFetched, initialListFinished;
+  const initialListGate = new Promise(resolve => { releaseInitialList = resolve; });
+  const initialListSnapshot = new Promise(resolve => { initialListFetched = resolve; });
+  const initialListDelivery = new Promise(resolve => { initialListFinished = resolve; });
   browser = await chromium.launch({ headless: true, ...(process.env.SITEGRID_CHROMIUM_PATH ? { executablePath: process.env.SITEGRID_CHROMIUM_PATH } : {}) });
   const login = async (actor, mobile = false) => {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
@@ -55,16 +60,33 @@ try {
     page.on('console', msg => { if (msg.text().includes('Content Security Policy')) cspErrors.push(msg.text()); });
     await page.goto(config.origin); await page.locator('#email').fill(`${actor.toLowerCase()}@example.test`); await page.locator('#password').fill(password);
     await page.getByRole('button', { name: 'Zaloguj się', exact: true }).click();
+    if (actor === 'dual') await page.route(`${config.origin}/api/organizations/${companyA}/projects`, async route => {
+      const response = await route.fetch();
+      assert.deepEqual((await response.json()).projects.map(project => project.name), ['Projekt istniejący']);
+      initialListFetched(); await initialListGate;
+      await route.fulfill({ response }); initialListFinished();
+    }, { times: 1 });
     await page.locator('#active-organization').selectOption(companyA); await page.locator('.projects').waitFor();
     return { context, page };
   };
   const { context, page } = await login('dual');
   const projects = page.locator('.projects'), details = projects.locator('.project-details');
-  await projects.getByText('Brak dostępnych projektów.', { exact: false }).waitFor();
+  await initialListSnapshot;
+  await projects.getByText('Ładowanie projektów…', { exact: true }).waitFor();
   const creation = projects.locator('.project-form').last();
   await creation.getByLabel('Nazwa projektu', { exact: true }).fill('Budowa A'); await creation.getByLabel('Opis projektu (opcjonalnie)').fill('Prace montażowe');
   await creation.getByRole('button', { name: 'Utwórz projekt', exact: true }).click();
   await details.getByRole('heading', { name: 'Budowa A', exact: true }).waitFor();
+  const createdChoice = projects.getByRole('button', { name: 'Budowa A Aktywny', exact: true });
+  assert.equal(await createdChoice.getAttribute('aria-pressed'), 'true');
+  assert.equal(await projects.getByText('Ładowanie projektów…', { exact: true }).count(), 0);
+  releaseInitialList(); await initialListDelivery;
+  // Seeing the old snapshot's row proves the released GET has reached React state.
+  await projects.getByRole('button', { name: 'Projekt istniejący Aktywny', exact: true }).waitFor();
+  assert(await createdChoice.isVisible(), 'The stale initial GET must preserve the newly created project');
+  assert.equal(await createdChoice.getAttribute('aria-pressed'), 'true', 'The created project must remain selected');
+  assert.equal(await projects.locator('.project-choice').count(), 2);
+  console.log('PASS regression: delayed initial project GET preserves creation, selection and existing projects');
   assert.equal(await details.locator('.task-form').count(), 0, 'Manager role alone must not grant project access');
   const projectA = (await api(`/api/organizations/${companyA}/projects`)).projects[0].id;
   const projectPath = `/api/organizations/${companyA}/projects/${projectA}`;
@@ -104,6 +126,10 @@ try {
   // Add a second project and prove empty/error/loading views and late response isolation.
   const second = (await api(`/api/organizations/${companyA}/projects`, { name: 'Budowa druga' })).project;
   await projects.getByRole('button', { name: 'Odśwież projekty', exact: true }).click();
+  await projects.getByRole('button', { name: 'Budowa druga Aktywny', exact: true }).waitFor();
+  assert.equal(await projects.locator('.project-choice[aria-pressed="true"]').count(), 0, 'Manual refresh clears selection');
+  assert.equal(await details.count(), 0);
+  assert.equal(await projects.locator('.project-choice').count(), 3, 'Manual refresh reloads the full server list');
   await projects.getByRole('button', { name: 'Budowa druga Aktywny', exact: true }).click();
   await details.getByRole('heading', { name: 'Budowa druga', exact: true }).waitFor();
   await details.getByRole('button', { name: 'Przydziel: Kierownik A', exact: true }).click();
