@@ -1,6 +1,6 @@
 # SiteGrid — kontrahenci, projekty, pracownicy i ewidencja godzin
 
-Decyzja produktowa: 2026-10-10. **Stan: założenia i plan, nie wdrożona funkcja.** Dokument doprecyzowuje architekturę i roadmapę; istniejące zachowanie PR1–PR13 pozostaje bez zmian.
+Decyzja produktowa: 2026-10-10. **Stan: kontrahenci i powiązania projektów wdrożone w PR16/M09C; ewidencja godzin i raporty pozostają planem.** Szczegóły implementacji: [CONTRACTORS.md](CONTRACTORS.md). Dotychczasowe konta, organizacje, uprawnienia i komendy M08 pozostają bez zmian.
 
 ## Model działalności i granice dostępu
 
@@ -8,7 +8,7 @@ Decyzja produktowa: 2026-10-10. **Stan: założenia i plan, nie wdrożona funkcj
 - Nie usuwamy wielofirmowego modelu PostgreSQL, globalnych użytkowników, organizacji, członkostw, ról, zaproszeń, izolacji RLS i audytu. Pozostają poprawnym fundamentem produktu i mogą nadal obsługiwać więcej niż jedną niezależną firmę. Jedna firma to domyślny *sposób użytkowania*, nie nowe ograniczenie bazy czy regresja API.
 - Kontrahent **nie loguje się do SiteGrid**. Nie planujemy panelu klienta, dostępu kontrahenta do projektów ani uprawnień zewnętrznych. Późniejsze raporty przepracowanych godzin mogą być generowane przez uprawnionych pracowników naszej firmy i przekazywane kontrahentowi poza aplikacją.
 - Dane kontrahenta należą do konkretnej organizacji (organization_id). Kontrahent ma nazwę i status aktywności; dalsze pola kontaktowe/rozliczeniowe wymagają osobnej decyzji. Projekt należy do dokładnie jednej organizacji i opcjonalnie do jednego kontrahenta z **tej samej organizacji**. Jeden kontrahent może mieć wiele projektów.
-- Istniejące projekty nie mogą zniknąć po migracji: nowe powiązanie contractor_id jest początkowo opcjonalne dla danych historycznych. Nie przenosimy projektów między organizacjami i nie podmieniamy ich identyfikatorów. Nowo utworzone projekty powinny wskazywać kontrahenta po wdrożeniu odpowiedniego formularza, z jawnym wyjątkiem dla projektów wewnętrznych, jeśli zostaną zaplanowane.
+- Istniejące projekty nie mogą zniknąć po migracji: powiązanie contractor_id jest opcjonalne; migracja 10 → 11 ustawia NULL dla istniejących danych. Nie przenosimy projektów między organizacjami i nie podmieniamy ich identyfikatorów. Nowo utworzone projekty mogą wskazywać aktywnego kontrahenta lub pozostać bez powiązania jako projekty wewnętrzne/historyczne.
 
 ## Pracownicy i zadania
 
@@ -28,8 +28,8 @@ Decyzja produktowa: 2026-10-10. **Stan: założenia i plan, nie wdrożona funkcj
 
 ## Plan i zgodność wsteczna
 
-1. **M09 (przygotowany PR PWA): bez zmiany zakresu.** Manifest, service worker cache'ujący wyłącznie wersjonowane zasoby statyczne oraz wersjonowany IndexedDB z partycjami konto/firma/projekt. Bez danych projektowych offline, kolejki i synchronizacji.
-2. **M09C (nowy, odrębny etap po M09, przed M10):** model i UI kontrahentów; opcjonalne przypisanie kontrahenta do projektów i filtrowanie, autoryzacja w obrębie organizacji, niezmienione działanie istniejących projektów oraz izolacja tenantów. Oddzielny moduł serwera i interfejsu, mały punkt integracji.
+1. **M09 (PR15, wdrożony): bez zmiany zakresu.** Manifest, service worker cache'ujący wyłącznie wersjonowane zasoby statyczne oraz wersjonowany IndexedDB z partycjami konto/firma/projekt. Bez danych projektowych offline, kolejki i synchronizacji.
+2. **M09C (PR16, wdrożony odrębnie po M09, przed M10):** model i UI kontrahentów; opcjonalne przypisanie kontrahenta do projektów i filtrowanie, autoryzacja w obrębie organizacji, niezmienione działanie istniejących projektów oraz izolacja tenantów. Oddzielny moduł serwera i interfejsu, mały punkt integracji.
 3. **M10–M12:** zachowujemy fundament snapshotów, trwałej kolejki i konfliktów. Snapshot zawiera autoryzowane metadane kontrahenta potrzebne do wyświetlenia projektu, nigdy globalny katalog obcych kontrahentów. Lokalne klucze nadal wyznacza konto/firma/projekt; contractor_id jest metadaną, nie nowym tenantem.
 4. **M13:** przed implementacją doprecyzować kontrakt przedziałów godzinowych, własności wpisów, rozliczenia czasu, edycji i blokad między projektami. Jeśli zakres urośnie, podzielić M13 na małe PR-y, nie osłabiając niezmienników i testów.
 5. **Po podstawowej ewidencji godzin:** raporty dla kontrahentów jako osobny moduł, bez ich logowania. Obsługa kilku wykonawców jednego zadania pozostaje niezależnym pomysłem na przyszłość.

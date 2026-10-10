@@ -83,6 +83,9 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             manifest = extract_release(archive, Path(directory) / 'release', sha, version)
             self.assertEqual(manifest['schema'], json.loads(Path('release.json').read_text())['schema'])
+            self.assertTrue((Path(directory) / 'release/migrations/011_contractors.sql').is_file())
+            for module in ['domain', 'persistence', 'routes']:
+                self.assertTrue((Path(directory) / f'release/dist/server/contractors/{module}.js').is_file())
             self.assertEqual((Path(directory) / 'release').stat().st_mode & 0o777, 0o755)
             web = Path(directory) / 'release/dist/web'
             worker = (web / 'sw.js').read_text()
@@ -102,6 +105,8 @@ class ReleaseTests(unittest.TestCase):
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { validateLogo } from './dist/server/organization-branding.js';
+import { contractorInput } from './dist/server/contractors/domain.js';
+assert.equal(contractorInput({ name: ' Contractor ' }).name, 'Contractor');
 for (const [format, mime] of [['png', 'image/png'], ['jpeg', 'image/jpeg'], ['webp', 'image/webp']]) {
   const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#ff0022' } }).toFormat(format).toBuffer();
   const logo = await validateLogo(mime, image.toString('base64'));

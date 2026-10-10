@@ -1,7 +1,8 @@
 import { TaskProgress } from './task-progress.js';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { ContractorDirectory, ContractorFilter, ContractorName, ContractorSelect, useContractorDirectory, type Contractor, type ProjectContractor } from './contractors.js';
 
-type Project = { id: string; name: string; description: string; status: string; version: number; createdAt: string; updatedAt: string };
+type Project = { id: string; name: string; description: string; status: string; version: number; createdAt: string; updatedAt: string; contractor: ProjectContractor | null };
 type Task = { id: string; title: string; description: string; assigneeMembershipId: string; assigneeName?: string; canProgress?: boolean; status: string; version: number };
 type Member = { membershipId: string; displayName: string; companyStatus: string; accountActive: boolean; status: string | null; version: number };
 type Details = { project: Project; permissions: { administer: boolean; readTasks: boolean; manageTasks: boolean } };
@@ -14,18 +15,20 @@ async function request<T>(path: string, signal: AbortSignal, csrfToken?: string,
   return data;
 }
 const stateName = (status: string) => status === 'active' ? 'Aktywny' : status === 'archived' ? 'Archiwalny' : 'Zaplanowane';
-function ProjectForm({ project, busy, save }: { project?: Project; busy: boolean; save: (payload: object) => Promise<boolean> }) {
+function ProjectForm({ project, contractors, busy, save }: { project?: Project; contractors: Contractor[] | null; busy: boolean; save: (payload: object) => Promise<boolean> }) {
+  const [contractorId, setContractorId] = useState(project?.contractor?.id ?? '');
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget, values = new FormData(form);
-    if (await save({ name: values.get('name'), description: values.get('description'), ...(project ? { expectedVersion: project.version } : {}) })) {
-      if (!project) form.reset();
+    if (await save({ name: values.get('name'), description: values.get('description'), contractorId: contractorId || null, ...(project ? { expectedVersion: project.version } : {}) })) {
+      if (!project) { form.reset(); setContractorId(''); }
     }
   };
   return <form className="project-form" onSubmit={event => void submit(event)}>
     <h4>{project ? 'Edytuj projekt' : 'Nowy projekt'}</h4>
     <label>Nazwa projektu<input name="name" defaultValue={project?.name} required maxLength={200} disabled={busy} /></label>
     <label>Opis projektu (opcjonalnie)<input name="description" defaultValue={project?.description} maxLength={4000} disabled={busy} /></label>
+    <ContractorSelect contractors={contractors} current={project?.contractor} value={contractorId} onChange={setContractorId} disabled={busy} />
     <button disabled={busy}>{busy ? 'Zapisywanie…' : project ? 'Zapisz projekt' : 'Utwórz projekt'}</button>
   </form>;
 }
@@ -57,11 +60,13 @@ export function Projects({ organizationId, admin, csrfToken, onAccessChanged }: 
   organizationId: string; admin: boolean; csrfToken: string; onAccessChanged: () => void;
 }) {
   const path = `/api/organizations/${encodeURIComponent(organizationId)}/projects`;
+  const directory = useContractorDirectory(organizationId, admin, csrfToken, onAccessChanged);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [contractorFilter, setContractorFilter] = useState('');
   const lifetime = useRef<AbortController | null>(null);
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
   useEffect(() => {
@@ -91,18 +96,21 @@ export function Projects({ organizationId, admin, csrfToken, onAccessChanged }: 
       <button className="secondary" disabled={busy} onClick={gone}>Odśwież projekty</button></div>
     {error && <p className="error" role="alert">{error}</p>}
     {!projects && !error && <p role="status">Ładowanie projektów…</p>}
+    {projects && <ContractorFilter projects={projects} contractors={directory.contractors} value={contractorFilter} onChange={value => { setContractorFilter(value); setSelected(''); }} />}
     {projects && <div className="project-list">
       {!projects.length && <p role="status">Brak dostępnych projektów. Przydziały nadaje administrator firmy.</p>}
-      {projects.map(project => <button className="secondary project-choice" aria-pressed={selected === project.id} key={project.id} onClick={() => setSelected(project.id)}>
+      {!!projects.length && contractorFilter && !projects.some(project => (project.contractor?.id ?? 'none') === contractorFilter) && <p role="status">Brak projektów dla wybranego kontrahenta.</p>}
+      {projects.filter(project => !contractorFilter || (project.contractor?.id ?? 'none') === contractorFilter).map(project => <button className="secondary project-choice" aria-pressed={selected === project.id} key={project.id} onClick={() => setSelected(project.id)}>
         <strong>{project.name}</strong><span>{stateName(project.status)}</span>
+        {project.contractor && <ContractorName contractor={project.contractor} contractors={directory.contractors} />}
       </button>)}
     </div>}
-    {selected && <ProjectDetails key={selected} path={`${path}/${encodeURIComponent(selected)}`} csrfToken={csrfToken} onSaved={changed} onGone={gone} onAccessChanged={onAccessChanged} />}
-    {admin && <ProjectForm busy={busy} save={create} />}
+    {selected && <ProjectDetails key={selected} path={`${path}/${encodeURIComponent(selected)}`} contractors={directory.contractors} csrfToken={csrfToken} onSaved={changed} onGone={gone} onAccessChanged={onAccessChanged} />}
+    {admin && <><ProjectForm contractors={directory.contractors} busy={busy} save={create} /><ContractorDirectory directory={directory} /></>}
   </section>;
 }
-function ProjectDetails({ path, csrfToken, onSaved, onGone, onAccessChanged }: {
-  path: string; csrfToken: string; onSaved: (project: Project) => void; onGone: () => void; onAccessChanged: () => void;
+function ProjectDetails({ path, contractors, csrfToken, onSaved, onGone, onAccessChanged }: {
+  path: string; contractors: Contractor[] | null; csrfToken: string; onSaved: (project: Project) => void; onGone: () => void; onAccessChanged: () => void;
 }) {
   const [details, setDetails] = useState<Details | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -147,10 +155,11 @@ function ProjectDetails({ path, csrfToken, onSaved, onGone, onAccessChanged }: {
     {!details && !error && <p role="status">Ładowanie projektu i zadań…</p>}
     {details && <>
       <h4>{details.project.name}</h4><p>{details.project.description || 'Brak opisu projektu.'}</p>
+      <p><ContractorName contractor={details.project.contractor} contractors={contractors} /></p>
       <p className="hint">{stateName(details.project.status)} · Wersja {details.project.version} · Zmieniono {new Date(details.project.updatedAt).toLocaleString('pl-PL')}</p>
       {details.project.status === 'archived' && <p role="status">Projekt archiwalny — historia pozostaje dostępna do odczytu.</p>}
       {details.permissions.administer && details.project.status === 'active' && <>
-        <ProjectForm key={`project-${revision}`} project={details.project} busy={busy} save={payload => mutate('/update', payload)} />
+        <ProjectForm key={`project-${revision}`} project={details.project} contractors={contractors} busy={busy} save={payload => mutate('/update', payload)} />
         <button className="secondary" disabled={busy} onClick={() => void mutate('/archive', { expectedVersion: details.project.version })}>Archiwizuj projekt</button>
       </>}
       {(details.permissions.administer || details.permissions.manageTasks) && <section aria-label="Członkowie projektu">
