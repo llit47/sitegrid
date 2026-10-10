@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { InvitationManager } from './invitations.js';
+import { Projects } from './projects.js';
 import { CompanyMembers } from './company-members.js';
 import { AccentSwatch, brandingRequest, CompanyBranding, CompanyLogo, type Branding } from './company-branding.js';
 
@@ -91,6 +92,7 @@ export function OrganizationSwitcher({ csrfToken }: { csrfToken: string }) {
         <div className="company-header"><AccentSwatch color={branding.accentColor} />
           <CompanyLogo key={`${branding.organizationId}-${branding.logo?.version ?? 0}`} branding={branding} /><h3>{branding.name}</h3></div>
         <p>Twoje role: {context.roles.length ? context.roles.map(role => roleNames[role] ?? role).join(', ') : 'Brak przypisanych ról'}</p>
+        <Projects key={`projects-${context.id}`} organizationId={context.id} admin={context.roles.includes('organization_admin')} csrfToken={csrfToken} onAccessChanged={refresh} />
         {context.roles.includes('organization_admin') && <>
           <CompanyBranding key={`branding-${context.id}`} branding={branding} csrfToken={csrfToken} onSaved={saved} onAccessChanged={refresh} />
           <CompanyMembers key={`members-${context.id}`} organizationId={context.id} csrfToken={csrfToken} onAccessChanged={refresh} />

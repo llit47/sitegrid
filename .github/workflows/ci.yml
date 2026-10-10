@@ -62,6 +62,7 @@ jobs:
       - run: python3 -m py_compile ops/*.py tests/*.py
       - run: node --check tests/deployed-browser-smoke.mjs
       - run: node --check tests/organization-branding-browser.mjs
+      - run: node --check tests/projects-browser.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: sitegrid-m01-linux-x64

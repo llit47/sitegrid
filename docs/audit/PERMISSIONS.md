@@ -44,3 +44,7 @@ Brygadzista w małym MVP odczytuje postęp przypisanych projektów i zgłasza w�
 - RLS i klucze złożone blokują połączenie obcych tenantów; kontekst nie wycieka przez pulę połączeń ani proces workera.
 
 Scenariusze są planem testów przyszłej implementacji, nie wykonanymi testami tego PR.
+
+## Implementacja M07 w PR12
+
+„Osobna rola projektowa” w macierzy oznacza jawną rolę roboczą `manager`, `foreman` lub `worker` w istniejącym katalogu firmy **oraz aktywne członkostwo konkretnego projektu**; nie wprowadza nowego globalnego systemu ról. Administrator zarządza metadanymi i członkostwami projektów swojej firmy bez automatycznego dostępu do zadań. Tworzenie/edycja/przydzielanie zadań wymaga roli `manager` i aktywnego przydziału. `foreman` odczytuje zadania przypisanych projektów, `worker` wyłącznie swoje. Rola platformowa nie daje wyjątków. Archiwizacja zachowuje uprawniony odczyt historii i blokuje zapisy. Szczegóły i wykonane scenariusze testów opisuje [kontrakt M07](../PROJECTS_TASKS.md); komendy postępu, odbiór i wpisy pracy pozostają dalszym zakresem roadmapy.

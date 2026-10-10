@@ -12,7 +12,7 @@ export async function readSession(db: Pool | PoolClient, request: FastifyRequest
     SELECT s.token_hash, s.user_id, s.csrf_token, u.email,
       EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id = u.id) AS admin
     FROM sessions s LEFT JOIN users u ON u.id = s.user_id
-    WHERE s.token_hash = $1 AND s.expires_at > now()
+    WHERE s.token_hash = $1 AND s.expires_at > clock_timestamp()
       AND (s.user_id IS NULL OR (u.id IS NOT NULL AND u.blocked_at IS NULL))`,
   [createHash('sha256').update(raw).digest('hex')]);
   return rows[0];

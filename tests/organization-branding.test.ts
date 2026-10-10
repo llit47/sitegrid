@@ -55,7 +55,7 @@ test('PR11 branding, migration and authorization under real PostgreSQL runtime F
   };
   await admin.query(`CREATE SCHEMA ${schema}`);
   try {
-    await t.test('schema 7 to 8 preserves all populated PR10 tables and migration history', async () => {
+    await t.test('schema 7 to current preserves all populated PR10 tables and migration history', async () => {
       const previous = await mkdtemp(join(tmpdir(), 'sitegrid-pr11-migrations-'));
       try {
         for (const file of (await migrationFiles('migrations')).filter(file => file.version <= 7)) await copyFile(join('migrations', file.name), join(previous, file.name));
@@ -84,8 +84,9 @@ test('PR11 branding, migration and authorization under real PostgreSQL runtime F
         await owner.query("INSERT INTO auth_rate_limits(key_hash, attempts, expires_at) VALUES ('preserved', 1, now() + interval '1 hour')");
         const tables = (await owner.query("SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename", [schema])).rows.map(row => row.tablename as string);
         const before = await Promise.all(tables.map(snapshot));
-        assert.equal(await migrate(owner, 'migrations'), 8); assert.equal(await migrate(owner, 'migrations'), 8);
-        assert.equal(await checkMigrations(owner, 'migrations'), 8);
+        const latest = (await migrationFiles('migrations')).length;
+        assert.equal(await migrate(owner, 'migrations'), latest); assert.equal(await migrate(owner, 'migrations'), latest);
+        assert.equal(await checkMigrations(owner, 'migrations'), latest);
         for (const [i, table] of tables.entries()) assert.deepEqual(table === 'schema_migrations' ? (await snapshot(table)).filter(row => row.version <= 7) : await snapshot(table), before[i], table);
         await assert.rejects(checkMigrations(owner, previous), /does not match/);
       } finally { await rm(previous, { recursive: true, force: true }); }
