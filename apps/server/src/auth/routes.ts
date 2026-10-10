@@ -10,6 +10,7 @@ import { invitationEmail, registerInvitationRoutes } from '../invitation-routes.
 import { createInvitation, deliverInvitation, requireInvitationDelivery } from '../invitations.js';
 import { withTransaction } from '../organization-context.js';
 import { registerCompanyMemberRoutes } from '../company-member-routes.js';
+import { registerOrganizationBrandingRoutes } from '../organization-branding-routes.js';
 
 const token = () => randomBytes(32).toString('base64url');
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -63,6 +64,7 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
   registerOrganizationRoutes(app, pool, config);
   registerInvitationRoutes(app, pool, config, { checkCsrf, reserve });
   registerCompanyMemberRoutes(app, pool, config, checkCsrf);
+  registerOrganizationBrandingRoutes(app, pool, config, checkCsrf);
   app.get('/api/auth/session', async (request, reply) => {
     if (!await reserve(pool, `session:${request.ip}`, 120)) return reply.header('Retry-After', '900').code(429).send({ error: 'Spróbuj ponownie później.' });
     await pool.query('DELETE FROM sessions WHERE token_hash IN (SELECT token_hash FROM sessions WHERE expires_at <= now() LIMIT 1000)');
