@@ -144,6 +144,27 @@ try {
   console.log('PASS polling preserves an in-flight photo upload and the photo dialog follows the system theme');
   assert.deepEqual(dialogs, []); assert.deepEqual(errors, []);
   console.log('PASS automatic live light/dark/light changes, accessible badge/form contrast and 1280/768/390px layouts');
+  for (const colorScheme of ['light', 'dark']) {
+    await page.emulateMedia({colorScheme});
+    for (const online of [false, true]) {
+      await manager.context.setOffline(!online);
+      const indicator = page.locator(`.connection-indicator.is-${online ? 'online' : 'offline'}`);
+      await indicator.waitFor(); assert.equal(await indicator.textContent(), online ? 'Online' : 'Offline');
+      const colors = await indicator.evaluate(element => {
+        const rgb = css => css.match(/\d+/g).slice(0, 3).map(Number);
+        const luminance = values => values.map(x => x / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4).reduce((sum, value, i) => sum + value * [.2126, .7152, .0722][i], 0);
+        const contrast = (a, b) => (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+        const dot = rgb(getComputedStyle(element, '::before').backgroundColor);
+        const background = luminance(rgb(getComputedStyle(document.documentElement).backgroundColor));
+        return {dot, dotContrast: contrast(luminance(dot), background), textContrast: contrast(luminance(rgb(getComputedStyle(element).color)), background)};
+      });
+      const [red, green, blue] = colors.dot;
+      assert(online ? green > red && green > blue : red > green && red > blue, `${colorScheme}: Online green, Offline red`);
+      assert(colors.dotContrast >= 3, `${colorScheme}: indicator dot contrast`);
+      assert(colors.textContrast >= 4.5, `${colorScheme}: indicator label contrast`);
+    }
+  }
+  console.log('PASS red Offline and green Online dots with accessible dot/label contrast in both themes');
   // A status change outside the current filter still preserves its authorized editor.
   const filteredTask = (await post(`${project}/tasks`, {title:'Szkic poza filtrem',assigneeMembershipId:f.members.worker})).task;
   const filtered = await open('manager', true);
@@ -158,6 +179,40 @@ try {
   assert.equal(await retained.locator('.status-badge').textContent(),'W toku');
   console.log('PASS a reauthorized card falling outside its status filter preserves the open discussion draft');
   await filtered.context.close();
+
+  const assigneeTask = (await post(`${project}/tasks`, {title:'Szkic poza filtrem wykonawcy',assigneeMembershipId:f.members.worker})).task;
+  const assigneeFiltered = await open('foreman', true), assigneePage = assigneeFiltered.page;
+  const filter = assigneePage.locator('.task-filters').getByLabel('Wykonawca', {exact:true});
+  await filter.selectOption(f.members.worker);
+  const assigneeCard = assigneePage.getByRole('article', {name:assigneeTask.title,exact:true});
+  await assigneeCard.locator('.task-assignee-name').getByText('worker', {exact:true}).waitFor();
+  await assigneeCard.getByRole('button', {name:'Komentarze i zdjęcia',exact:true}).click();
+  await assigneeCard.getByLabel('Treść komentarza', {exact:true}).fill('Zachowaj po zmianie wykonawcy');
+  await assigneeCard.getByLabel('Zdjęcia z galerii', {exact:true}).setInputFiles({name:'assignee-draft.png',mimeType:'image/png',buffer:png});
+  await assigneeCard.getByRole('button', {name:'Pokaż podzadania',exact:true}).click();
+  const assigneeElement = await assigneeCard.elementHandle();
+  const assigneePath = `${project}/tasks/${assigneeTask.id}`;
+  for (const [id, name, version] of [[f.members.other, 'other', 1], [null, null, 2]]) {
+    await post(`${assigneePath}/assign`, {assigneeMembershipId:id,expectedVersion:version});
+    const read = assigneePage.waitForResponse(response => new URL(response.url()).pathname === assigneePath && response.request().method() === 'GET');
+    await assigneePage.clock.runFor(15_000);
+    const response = await read; assert.equal(response.status(), 200);
+    const current = (await response.json()).task;
+    assert.equal(current.assigneeMembershipId, id); assert.equal(current.assigneeName, name);
+    await assigneeCard.locator('.task-assignee-name').getByText(name ?? 'Bez wykonawcy · Backlog', {exact:true}).waitFor();
+    await assigneeCard.getByText('Zachowano otwarty widok. Zadanie jest poza bieżącą listą.', {exact:true}).waitFor();
+    assert.equal(await filter.inputValue(), f.members.worker);
+    assert.equal(await assigneeCard.getByLabel('Treść komentarza', {exact:true}).inputValue(), 'Zachowaj po zmianie wykonawcy');
+    assert.equal(await assigneeCard.locator('.photo-previews li > span').textContent(), 'assignee-draft.png');
+    assert(await assigneeCard.getByRole('button', {name:'Zwiń dyskusję',exact:true}).isVisible());
+    assert(await assigneeCard.getByRole('button', {name:'Zwiń podzadania',exact:true}).isVisible());
+    assert(await assigneeElement.evaluate(element => element.isConnected));
+  }
+  await f.owner.query("DELETE FROM membership_roles WHERE membership_id=$1 AND role='foreman'", [f.members.foreman]);
+  await assigneePage.clock.runFor(15_000); await assigneeCard.waitFor({state:'detached'});
+  assert.equal(await assigneeElement.evaluate(element => element.isConnected), false);
+  await assigneeFiltered.context.close();
+  console.log('PASS retained cards update assignee ID/name after filtered reassignment/unassignment, preserve drafts/files/expansions, and disappear on revocation');
 
   // A live card must not silently advance the version of an unsaved editor.
   const assignmentTask = (await post(`${project}/tasks`, {title:'Szkic przydziału',assigneeMembershipId:f.members.worker})).task;

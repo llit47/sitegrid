@@ -11,5 +11,5 @@
 
 .connection-indicator { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 12px; letter-spacing: 0; color: var(--text-muted); font-weight: 650; }
 .connection-indicator::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
-.connection-indicator.is-offline::before { background: var(--warning-text); }
+.connection-indicator.is-offline::before { background: var(--error-text); }
 .pwa-status details { margin-left: auto; }

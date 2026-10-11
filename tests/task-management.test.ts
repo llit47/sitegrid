@@ -7,6 +7,42 @@ import { lockOrganization } from '../apps/server/src/common/organization-lock.js
 import { withOrganization } from '../apps/server/src/organization-context.js';
 import { validateSnapshot } from '../apps/web/src/storage/snapshot.js';
 
+test('single-task reads return current assignee ID/name and enforce reassignment access under runtime RLS', { skip: !process.env.TEST_DATABASE_URL }, async () => {
+  const f = await taskFixture();
+  try {
+    const project = `/api/organizations/${f.organizations.a}/projects/${f.projects[0]}`;
+    const created = await f.app.inject({ method: 'POST', url: `${project}/tasks`, headers: f.headers.manager,
+      payload: { title: 'Retained assignment', assigneeMembershipId: f.members.worker } });
+    assert.equal(created.statusCode, 201, created.body);
+    const path = `${project}/tasks/${created.json().task.id}`;
+    const read = (actor: string) => f.app.inject({ url: path, headers: f.headers[actor] });
+    const assertAssignment = async (actor: string, id: string | null, name: string | null) => {
+      const response = await read(actor); assert.equal(response.statusCode, 200, response.body);
+      assert.equal(response.json().task.assigneeMembershipId, id);
+      assert.equal(response.json().task.assigneeName, name);
+      assert.equal(response.headers['cache-control'], 'no-store');
+    };
+    for (const actor of ['admin', 'manager', 'foreman', 'worker']) await assertAssignment(actor, f.members.worker, 'worker');
+    for (const [id, name, expectedVersion] of [[f.members.other, 'other', 1], [null, null, 2]] as const) {
+      const assigned = await f.app.inject({ method: 'POST', url: `${path}/assign`, headers: f.headers.manager,
+        payload: { assigneeMembershipId: id, expectedVersion } });
+      assert.equal(assigned.statusCode, 200, assigned.body);
+      await assertAssignment('manager', id, name);
+      assert.equal((await read('worker')).statusCode, 404);
+      if (id) await assertAssignment('other', id, name);
+      else assert.equal((await read('other')).statusCode, 404);
+    }
+    await f.owner.query('DELETE FROM employee_profiles WHERE membership_id=$1', [f.members.other]);
+    const assigned = await f.app.inject({ method: 'POST', url: `${path}/assign`, headers: f.headers.manager,
+      payload: { assigneeMembershipId: f.members.other, expectedVersion: 3 } });
+    assert.equal(assigned.statusCode, 200, assigned.body);
+    await assertAssignment('manager', f.members.other, 'other@example.test');
+    for (const actor of ['foreign', 'platform']) assert.equal((await read(actor)).statusCode, 403);
+    await f.owner.query("DELETE FROM membership_roles WHERE membership_id=$1 AND role='manager'", [f.members.manager]);
+    assert.equal((await read('manager')).statusCode, 404);
+  } finally { await f.close(); }
+});
+
 test('PR21 populated schema 11 → 12 preserves every record and checksum, including M08 receipt', { skip: !process.env.TEST_DATABASE_URL }, async () => {
   const f=await taskFixture({ legacy:true });
   try {

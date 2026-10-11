@@ -20,7 +20,11 @@ export function registerProjectTaskRoutes(app: FastifyInstance, pool: Pool, conf
   }));
   app.get<{ Params: Params }>(`${base}/:projectId/tasks/:taskId`, { schema: params('projectId', 'taskId') }, request => scope(request, false, false, async client => {
     await project(client, request, ['manager', 'foreman', 'worker']);
-    const task = (await client.query(`SELECT ${taskColumns} FROM tasks WHERE organization_id = $1 AND project_id = $2 AND id = $3`,
+    const task = (await client.query(`SELECT ${taskColumns},
+      (SELECT COALESCE(e.display_name, u.email) FROM organization_memberships m JOIN users u ON u.id = m.user_id
+        LEFT JOIN employee_profiles e ON (e.organization_id, e.membership_id) = (m.organization_id, m.id)
+        WHERE (m.organization_id, m.id) = (tasks.organization_id, tasks.assignee_membership_id)) AS "assigneeName"
+      FROM tasks WHERE organization_id = $1 AND project_id = $2 AND id = $3`,
     [request.params.id, request.params.projectId, request.params.taskId])).rows[0];
     if (!task) throw failure(404);
     return { task: (await withSubtaskProgress(client,request.params.id,[task],request.params.projectId))[0] };
