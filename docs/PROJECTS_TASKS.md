@@ -1,5 +1,8 @@
 # PR12 — projekty, przydziały i zadania online (M07)
 
+> **Decyzja produktowa 2026-10-11 — plan dla PR21–PR23, niewdrożony w v0.1.1:** zobacz [Zarządzanie zadaniami v2](TASK_MANAGEMENT_V2.md). Backlog bez wykonawcy, pełne zarządzanie zadaniami firmy przez administratora/kierownika/brygadzistę, automatyczny ograniczony odczyt pracownika po przypisaniu, zadania w pulpicie, podzadania oraz komentarze ze zdjęciami **zastąpią** wskazane poniżej ograniczenia M07/M08. Historyczny opis niżej pozostaje dokładnym kontraktem wdrożonej wersji, nie nowym wymaganiem. Nie mieszać migracji nullable assignee z historycznym schematem 9/11: nowy PR dostanie własną migrację i testy aktualizacji/rollbacku.
+
+
 Po wybraniu firmy użytkownik widzi dostępne projekty. Administrator firmy tworzy projekt, edytuje nazwę/opis, archiwizuje go i jawnie przypisuje aktywne członkostwa firmy. Utworzenie projektu nie przypisuje automatycznie autora. Role nadal pochodzą z `membership_roles`; nie ma nowych ról globalnych ani osobnego katalogu ról projektowych.
 
 ## Uprawnienia
