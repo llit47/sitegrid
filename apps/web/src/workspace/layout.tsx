@@ -36,7 +36,7 @@ export function WorkspaceLayout({ active, navigate, sections, company, identity,
       <header className="workspace-header"><button ref={toggle} className="secondary mobile-only" aria-label="Otwórz nawigację" aria-expanded={open} aria-controls="workspace-navigation" onClick={() => setOpen(value => !value)}>☰</button>
         <div className="workspace-identity">{identity}</div><div className="workspace-account"><span className="account">{email}</span><button className="secondary" disabled={busy} onClick={onLogout}>Wyloguj się</button></div>
       </header>
-      <main id="workspace-content" className="workspace-content"><div className="workspace-page-heading"><p className="eyebrow">SITEGRID / {active === 'platform' ? 'PLATFORMA' : 'FIRMA'}</p><h1 ref={heading} tabIndex={-1}>{sectionNames[active]}</h1></div>{children}</main>
+      <div id="workspace-content" className="workspace-content"><div className="workspace-page-heading"><p className="eyebrow">SITEGRID / {active === 'platform' ? 'PLATFORMA' : 'FIRMA'}</p><h1 ref={heading} tabIndex={-1}>{sectionNames[active]}</h1></div>{children}</div>
     </div>
   </div>;
 }

@@ -33,7 +33,10 @@ export function Projects({ accountId, organizationId, admin, csrfToken, onAccess
     return () => controller.abort();
   }, [path, revision, onAccessChanged]);
   const changed = useCallback((project: Project) => setProjects(current => current?.map(item => item.id === project.id ? project : item) ?? null), []);
-  const gone = useCallback(() => { setSelected(''); setRevision(value => value + 1); }, []);
+  const gone = useCallback(() => { setCreating(false); setSelected(''); setRevision(value => value + 1); }, []);
+  const startCreating = () => {
+    if (!creating && guardWorkspaceChange(root.current!)) { setSelected(''); setCreating(true); }
+  };
   const create = async (payload: object) => {
     const signal = lifetime.current!.signal;
     if (busy || !guardPendingOperations()) return false;
@@ -49,14 +52,14 @@ export function Projects({ accountId, organizationId, admin, csrfToken, onAccess
   };
   return <section ref={root} className="projects" aria-labelledby={`projects-${organizationId}`}>
     <div className="project-toolbar"><h3 id={`projects-${organizationId}`}>Lista projektów</h3>
-      <div className="project-actions"><button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) gone(); }}>Odśwież projekty</button>{admin && <button disabled={busy} onClick={() => setCreating(true)}>Nowy projekt</button>}</div></div>
+      <div className="project-actions"><button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) gone(); }}>Odśwież projekty</button>{admin && <button disabled={busy} onClick={startCreating}>Nowy projekt</button>}</div></div>
     {error && <p className="error" role="alert">{error}</p>}
     {!projects && !error && <p role="status">Ładowanie projektów…</p>}
-    {projects && <ContractorFilter projects={projects} contractors={directory.contractors} value={contractorFilter} onChange={value => { if (guardWorkspaceChange(root.current!)) { setContractorFilter(value); setSelected(''); } }} />}
+    {projects && <ContractorFilter projects={projects} contractors={directory.contractors} value={contractorFilter} onChange={value => { if (guardWorkspaceChange(root.current!)) { setCreating(false); setContractorFilter(value); setSelected(''); } }} />}
     {projects && <div className="project-list">
       {!projects.length && <p role="status">Brak dostępnych projektów. Przydziały nadaje administrator firmy.</p>}
       {!!projects.length && contractorFilter && !projects.some(project => (project.contractor?.id ?? 'none') === contractorFilter) && <p role="status">Brak projektów dla wybranego kontrahenta.</p>}
-      {projects.filter(project => !contractorFilter || (project.contractor?.id ?? 'none') === contractorFilter).map(project => <button className="secondary project-choice" aria-pressed={selected === project.id} key={project.id} onClick={() => { if (project.id !== selected && guardWorkspaceChange(root.current!)) setSelected(project.id); }}>
+      {projects.filter(project => !contractorFilter || (project.contractor?.id ?? 'none') === contractorFilter).map(project => <button className="secondary project-choice" aria-pressed={selected === project.id} key={project.id} onClick={() => { if (project.id !== selected && guardWorkspaceChange(root.current!)) { setCreating(false); setSelected(project.id); } }}>
         <strong>{project.name}</strong><span>{stateName(project.status)}</span>
         <ContractorName contractor={project.contractor} contractors={directory.contractors} />
       </button>)}

@@ -132,8 +132,9 @@ try {
     await navigateWorkspace(page, 'Projekty');
     await details.getByText(`Kontrahent: ${currentName} (nieaktywny)`, { exact: true }).waitFor();
     await projects.getByRole('button', { name: 'Nowy projekt', exact: true }).click();
-    await details.getByRole('button', { name: 'Edytuj projekt', exact: true }).click();
     assert.equal(await projectCreation.getByLabel('Kontrahent projektu', { exact: true }).locator(`option[value="${item.id}"]`).count(), 0);
+    await projects.locator('.project-choice').filter({ hasText: projectName }).click();
+    await details.getByRole('button', { name: 'Edytuj projekt', exact: true }).click();
     assert.equal(await details.getByLabel('Kontrahent projektu', { exact: true }).locator(`option[value="${item.id}"]`).evaluate(option => option.disabled), true);
     await details.getByLabel('Nazwa projektu', { exact: true }).fill(`${projectName} z historią`);
     await details.getByRole('button', { name: 'Zapisz projekt', exact: true }).click(); await details.getByText(/Wersja 6 ·/).waitFor();
@@ -145,6 +146,8 @@ try {
     await projects.getByLabel('Filtruj projekty po kontrahencie', { exact: true }).selectOption('');
     await navigateWorkspace(page, 'Kontrahenci');
     await row(currentName).getByRole('button', { name: 'Aktywuj kontrahenta', exact: true }).click(); await row(currentName).getByText(/^Aktywny kontrahent · Wersja/).waitFor();
+    await navigateWorkspace(page, 'Projekty');
+    await projects.getByRole('button', { name: 'Nowy projekt', exact: true }).click();
     assert.equal(await projectCreation.getByLabel('Kontrahent projektu', { exact: true }).locator(`option[value="${item.id}"]`).count(), 1);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await navigateWorkspace(page, 'Kontrahenci');

@@ -7,7 +7,7 @@ import pg from 'pg';
 import { buildApp } from '../apps/server/src/app.ts';
 import { migrate } from '../apps/server/src/migrations.ts';
 import { readConfig } from '../apps/server/src/config.ts';
-import { navigateWorkspace, selectCompany } from './helpers/workspace-browser.mjs';
+import { navigateWorkspace, selectCompany, assertMainLandmark } from './helpers/workspace-browser.mjs';
 const { chromium } = await import(process.env.SITEGRID_PLAYWRIGHT_MODULE ? pathToFileURL(process.env.SITEGRID_PLAYWRIGHT_MODULE).href : 'playwright');
 assert(process.env.TEST_DATABASE_URL && process.env.TEST_RUNTIME_DATABASE_URL);
 const schema = `workspace_browser_${randomBytes(6).toString('hex')}`;
@@ -74,6 +74,7 @@ try {
     assert.equal(await page.locator('select#active-organization').count(), 1);
     await selectCompany(page, companyA, 'Pulpit');
     await page.locator('.workspace-metric').getByText('2', { exact: true }).waitFor();
+    await assertMainLandmark(page, 'Pulpit');
     await noOverflow(page);
     assert.equal(await page.getByRole('navigation', { includeHidden: true }).getByRole('button', { name: 'Pulpit', exact: true, includeHidden: true }).getAttribute('aria-current'), 'page');
     if (width < 901) {
@@ -113,6 +114,50 @@ try {
     await page.getByRole('button', { name: 'Wyloguj się', exact: true }).click();
     assert(await page.locator('.workspace').isVisible(), 'Cancelled logout retains the session and draft');
     page.once('dialog', async dialog => { assert.equal(dialog.type(), 'confirm'); await dialog.accept(); });
+    await choice.click(); await page.locator('.task-row').waitFor();
+    const createForm = page.locator('.projects > .project-form');
+    assert.equal(await createForm.count(), 0, 'Accepted project navigation closes the discarded create form');
+    await page.getByRole('button', { name: 'Edytuj projekt', exact: true }).click();
+    await page.getByLabel('Nazwa projektu', { exact: true }).fill('Szkic edycji projektu');
+    page.once('dialog', async dialog => { assert.equal(dialog.type(), 'confirm'); await dialog.dismiss(); });
+    await page.getByRole('button', { name: 'Nowy projekt', exact: true }).click();
+    assert.equal(await createForm.count(), 0, 'Cancelled create navigation preserves the edit form');
+    assert.equal(await page.getByLabel('Nazwa projektu', { exact: true }).inputValue(), 'Szkic edycji projektu');
+    page.once('dialog', async dialog => { assert.equal(dialog.type(), 'confirm'); await dialog.accept(); });
+    await page.getByRole('button', { name: 'Nowy projekt', exact: true }).click();
+    assert.equal(await page.locator('.project-details').count(), 0, 'Create and edit contexts cannot remain open together');
+    const assertFreshCreate = async () => {
+      assert.equal(await createForm.count(), 1);
+      assert.equal(await createForm.getByLabel('Nazwa projektu', { exact: true }).inputValue(), '');
+      assert.equal(await createForm.getByLabel('Opis projektu (opcjonalnie)').inputValue(), '');
+      assert.equal(await createForm.getByLabel('Kontrahent projektu', { exact: true }).inputValue(), '');
+    };
+    await assertFreshCreate();
+    const filter = page.getByLabel('Filtruj projekty po kontrahencie', { exact: true });
+    for (const [name, navigate] of [
+      ['filter', () => filter.selectOption('none')],
+      ['refresh', () => page.getByRole('button', { name: 'Odśwież projekty', exact: true }).click()],
+      ['project', () => choice.click()],
+    ]) {
+      await createForm.getByLabel('Nazwa projektu', { exact: true }).fill(`Draft ${name}`);
+      await createForm.getByLabel('Opis projektu (opcjonalnie)').fill('Zachowany opis');
+      await createForm.getByLabel('Kontrahent projektu', { exact: true }).selectOption(contractor.id);
+      page.once('dialog', async dialog => { assert.equal(dialog.type(), 'confirm'); await dialog.dismiss(); });
+      await navigate();
+      assert.equal(await createForm.getByLabel('Nazwa projektu', { exact: true }).inputValue(), `Draft ${name}`);
+      assert.equal(await createForm.getByLabel('Opis projektu (opcjonalnie)').inputValue(), 'Zachowany opis');
+      assert.equal(await createForm.getByLabel('Kontrahent projektu', { exact: true }).inputValue(), contractor.id);
+      assert.equal(await filter.inputValue(), '', 'Cancelled navigation keeps the filter');
+      assert.equal(await page.locator('.project-details').count(), 0);
+      page.once('dialog', async dialog => { assert.equal(dialog.type(), 'confirm'); await dialog.accept(); });
+      await navigate();
+      assert.equal(await createForm.count(), 0, `Accepted ${name} navigation closes the discarded create form`);
+      if (name === 'filter') { assert.equal(await filter.inputValue(), 'none'); await filter.selectOption(''); }
+      if (name === 'project') await page.locator('.task-row').waitFor();
+      await choice.waitFor();
+      await page.getByRole('button', { name: 'Nowy projekt', exact: true }).click();
+      await assertFreshCreate();
+    }
     await page.getByRole('button', { name: 'Anuluj formularz projektu', exact: true }).click();
     await choice.click(); await page.locator('.task-row').waitFor();
     assert.equal(await page.locator('.task-form').count(), 0);
@@ -137,7 +182,7 @@ try {
     await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor();
     assert.equal(await page.locator('.company-branding, .company-members, .task-row').count(), 0, 'Company switch clears previous company state and admin sections');
     await noOverflow(page); await context.close();
-    console.log(`PASS ${width}px navigation, dashboard, shared contractor request, worker directory, project/task/branding drafts, cancelled project/company/logout and confirmed company switch`);
+    console.log(`PASS ${width}px navigation, dashboard, shared contractor request, worker directory, project/task/branding drafts, accepted/cancelled create draft navigation, exclusive create/edit forms, main landmark and company switching`);
   }
   for (const width of [1280, 390]) {
     const { page, context, requests } = await open('worker', width);

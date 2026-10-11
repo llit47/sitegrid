@@ -55,7 +55,7 @@ export function PwaShell({ children }: { children: ReactNode }) {
         {prompt && <button type="button" onClick={() => { const current = prompt; setPrompt(null); void current.prompt().catch(() => { /* Menu guidance stays available. */ }); }}>Zainstaluj aplikację</button>}
       </details>}
     </div></aside>
-    {online && !localView ? <div key={revision}>{children}</div> : <OfflineViewer key={revision} localOnly={online} />}
+    <main aria-label="Treść aplikacji">{online && !localView ? <div key={revision}>{children}</div> : <OfflineViewer key={revision} localOnly={online} />}</main>
     <footer>SiteGrid · samodzielna instalacja</footer>
   </div>;
 }
