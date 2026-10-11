@@ -1,6 +1,6 @@
 # SiteGrid — zarządzanie zadaniami v2 (decyzja produktowa, 2026-10-11)
 
-**Status: PR21 (scalony) implementuje backlog, uprawnienia i pulpit pracy; PR22 implementuje podzadania w bieżącej gałęzi. Komentarze/zdjęcia (PR23) pozostają planem. Publiczne wydanie v0.1.1 nie zawiera tych zmian.** [Kontrakt implementacji PR21](TASK_BACKLOG.md), [kontrakt PR22](SUBTASKS.md). Historyczne kontrakty M07/M08/M10 opisują działający kod. Wszędzie, gdzie są sprzeczne z niniejszym dokumentem, ten dokument określa **docelowe** zachowanie, ale nie stan wdrożenia. Najpierw zmieniamy dokumentację, następnie backend, API, UI i testy w osobnych PR-ach. Dotychczasowe zasady ochrony firm, audytu, wersjonowania i wydawania paczek obowiązują.
+**Status: PR21 (scalony) implementuje backlog, uprawnienia i pulpit pracy; PR22 jest scalony; PR23 w bieżącej gałęzi implementuje komentarze/zdjęcia online i backup DB+files (schema14). Publiczne wydanie v0.1.1 nie zawiera tych zmian.** [Kontrakt implementacji PR21](TASK_BACKLOG.md), [kontrakt PR22](SUBTASKS.md). Historyczne kontrakty M07/M08/M10 opisują działający kod. Wszędzie, gdzie są sprzeczne z niniejszym dokumentem, ten dokument określa **docelowe** zachowanie, ale nie stan wdrożenia. Najpierw zmieniamy dokumentację, następnie backend, API, UI i testy w osobnych PR-ach. Dotychczasowe zasady ochrony firm, audytu, wersjonowania i wydawania paczek obowiązują.
 
 ## Główny scenariusz pracy
 
@@ -44,9 +44,11 @@ Pracownik widzi wyłącznie zadania przypisane do jego aktywnego członkostwa, t
 
 ## Podzadania — PR22
 
-Zadanie główne może zawierać podzadania: maksymalnie jeden poziom, bez podzadań podzadań. Każde podzadanie ma własny tytuł, opis, wykonawcę lub backlog, status, wersję i historię M08. Relacja jest niezmienna i należy do tego samego projektu/firmy; PostgreSQL wymusza głębokość i brak cykli. Zarządzający widzi całą hierarchię swojej firmy. Pracownik widzi wyłącznie przypisane mu rekordy oraz minimum kontekstu rodzica `{id,title}`, bez jego pełnego opisu, rodzeństwa i liczników. Sam przydział rodzica nie udostępnia dzieci. Zagregowany postęp dzieci jest dostępny wyłącznie zarządzającym i nie zmienia statusu ani wersji rodzica. Komentarze i zdjęcia pozostają zakresem PR23. Szczegóły API, FORCE RLS, UI, M10 i migracji: [PR22](SUBTASKS.md).
+Zadanie główne może zawierać podzadania: maksymalnie jeden poziom, bez podzadań podzadań. Każde podzadanie ma własny tytuł, opis, wykonawcę lub backlog, status, wersję i historię M08. Relacja jest niezmienna i należy do tego samego projektu/firmy; PostgreSQL wymusza głębokość i brak cykli. Zarządzający widzi całą hierarchię swojej firmy. Pracownik widzi wyłącznie przypisane mu rekordy oraz minimum kontekstu rodzica `{id,title}`, bez jego pełnego opisu, rodzeństwa i liczników. Sam przydział rodzica nie udostępnia dzieci. Zagregowany postęp dzieci jest dostępny wyłącznie zarządzającym i nie zmienia statusu ani wersji rodzica. Komentarze i zdjęcia online implementuje [PR23](TASK_COMMENTS_MEDIA.md). Szczegóły API, FORCE RLS, UI, M10 i migracji: [PR22](SUBTASKS.md).
 
-## Komentarze i zdjęcia — osobny etap
+## Komentarze i zdjęcia — PR23
+
+Kontrakt implementacji, uprawnienia, API, magazyn i testowany restore: [TASK_COMMENTS_MEDIA](TASK_COMMENTS_MEDIA.md).
 
 Dostępne zadanie i podzadanie mają chronologiczną historię komentarzy z autorem, czasem i opcjonalnie wieloma fotografiami. **Każda osoba uprawniona do odczytu konkretnego zadania (w tym przypisany pracownik) widzi wszystkie jego komentarze i fotografie niezależnie od autora; nie widzi komentarzy/mediów z innych, nieuprawnionych zadań.** API pobierania dyskusji i samych plików musi stosować identyczną autoryzację do wskazanego zadania i aktualnego przydziału, bez filtrowania po autorze. Zdjęcia z aparatu i galerii, miniatury i powiększenie mają działać mobilnie. Każdy odczyt pliku jest uwierzytelniony i sprawdza firmę oraz dostęp do konkretnego zadania; nie wystawiać plików jako publicznych URL. Walidować rozmiar, typ i faktyczną zawartość pliku, nie ufać nazwie/Content-Type, stosować limity i bezpieczne nazwy magazynowe. Domyślnie nie modyfikować/usuwać historii innych osób bez jawnego modelu korekt i audytu.
 

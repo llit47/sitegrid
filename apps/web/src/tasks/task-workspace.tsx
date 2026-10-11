@@ -1,3 +1,4 @@
+import { Discussion } from '../task-comments/discussion.js';
 import { ParentContext, ProgressHistory, Subtasks } from '../subtasks/hierarchy.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request, type Project, type Task } from '../project-api.js';
@@ -109,6 +110,7 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
         {manage && task.projectStatus==='active' && task.status==='planned' && <button className="secondary" disabled={busy || !!directoryError} onClick={() => changeFilter(() => setAssigning(task.id))}>{task.assigneeMembershipId ? 'Zmień wykonawcę' : 'Przypisz'}</button>}
         {assigning===task.id && <Assignment current={task.assigneeMembershipId} assignees={assignees} busy={busy} save={id => void assign(task,id)} cancel={() => setAssigning('')} />}
       </div>
+      <Discussion path={taskPath(task)} title={task.title} csrfToken={csrfToken} writable={task.projectStatus==='active'} onAccessChanged={onAccessChanged} />
       {task.parent && <ProgressHistory path={taskPath(task)} version={task.version} onAccessChanged={onAccessChanged} />}
       {manage && !task.parent && <Subtasks task={task} path={taskPath(task)} organizationId={organizationId} projectId={task.projectId} csrfToken={csrfToken} assignees={assignees} writable={task.projectStatus==='active'} disabled={busy || !!assigning} pendingOnly={reloadPending ? pendingProgress : undefined} onChanged={() => setReloadPending(true)} onAccessChanged={onAccessChanged} onPendingChange={trackProgress} onOpenChange={open => setExpandedRoots(current => { const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next; })} />}
     </article>)}</div>

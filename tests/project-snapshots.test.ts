@@ -45,7 +45,7 @@ test('M10 complete project snapshots use real PostgreSQL 17 and unprivileged FOR
   const get = (actor = 'worker', organization = orgA, project = projectA) => app.inject({ url: `/api/organizations/${organization}/projects/${project}/snapshot`, headers: headers[actor] });
   await admin.query(`CREATE SCHEMA ${schema}`);
   try {
-    assert.equal(await migrate(owner, 'migrations'), 13); await owner.query(`GRANT USAGE ON SCHEMA ${schema} TO sitegrid`);
+    assert.equal(await migrate(owner, 'migrations'), 14); await owner.query(`GRANT USAGE ON SCHEMA ${schema} TO sitegrid`);
     await owner.query('GRANT SELECT ON installation, schema_migrations, users, credentials, platform_admins TO sitegrid');
     await owner.query('GRANT SELECT, INSERT, DELETE ON sessions TO sitegrid'); await owner.query('GRANT SELECT, INSERT, UPDATE, DELETE ON auth_rate_limits TO sitegrid');
     for (const [id, name] of [[orgA, 'Firma A'], [orgB, 'Firma B']]) await owner.query('INSERT INTO organizations(id,name) VALUES ($1,$2)', [id, name]);

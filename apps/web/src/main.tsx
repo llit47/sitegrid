@@ -1,3 +1,4 @@
+import { DiscussionDraftMemory, clearDiscussionDraftMemory } from './task-comments/drafts.js';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
@@ -49,6 +50,7 @@ function App({ invitationToken }: { invitationToken: string }) {
     setBusy(true); setError('');
     try {
       setLocalWarning(await beforeAccountChange());
+      clearDiscussionDraftMemory();
       await api('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken },
         body: JSON.stringify({ email: fields.get('email'), password: fields.get('password') }) });
       form.reset();
@@ -61,6 +63,7 @@ function App({ invitationToken }: { invitationToken: string }) {
     setBusy(true); setError('');
     try {
       setLocalWarning(await beforeAccountChange());
+      clearDiscussionDraftMemory();
       await api('/api/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': session.csrfToken } });
       setSession(null); setOverview(null);
       // Establish the anonymous cookie before other tabs re-read their session.
@@ -84,4 +87,4 @@ function App({ invitationToken }: { invitationToken: string }) {
     {!session && !error && <p role="status">Łączenie z SiteGrid…</p>}
   </>;
 }
-createRoot(document.getElementById('root')!).render(<PwaShell><App invitationToken={invitationToken} /></PwaShell>);
+createRoot(document.getElementById('root')!).render(<DiscussionDraftMemory><PwaShell><App invitationToken={invitationToken} /></PwaShell></DiscussionDraftMemory>);

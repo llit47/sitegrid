@@ -12,6 +12,7 @@ import { withTransaction } from '../organization-context.js';
 import { registerCompanyMemberRoutes } from '../company-member-routes.js';
 import { registerTaskProgressRoutes } from '../task-progress/routes.js';
 import { registerProjectTaskRoutes } from '../task-management/project-tasks.js';
+import { registerTaskCommentRoutes } from '../task-comments/routes.js';
 import { registerSubtaskRoutes } from '../subtasks/routes.js';
 import { registerCompanyTaskRoutes } from '../task-management/routes.js';
 import { registerProjectRoutes } from '../project-routes.js';
@@ -58,9 +59,10 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
     return csrf;
   };
   app.addHook('onSend', async (request, reply) => {
-    if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
+    if (request.url.startsWith('/api/')) reply.header('Cache-Control', reply.getHeader('Cache-Control') === 'private, no-store' ? 'private, no-store' : 'no-store');
   });
   app.setErrorHandler<FastifyError>((error, request, reply) => {
+    if (/^(?:PHOTO_|HEIC_|UPLOAD_|COMMENT_|REQUEST_TOO_LARGE|MEDIA_STORAGE_FULL)/.test(error.code ?? '')) return reply.code(error.statusCode ?? 400).send({ code:error.code,error:error.message });
     const status = error.statusCode && error.statusCode >= 400 && error.statusCode < 500 ? error.statusCode : 503;
     if (status === 503) app.log.error({ requestId: request.id }, 'Request failed; check service/database availability');
     const message = status === 503 ? 'Usługa jest chwilowo niedostępna.'
@@ -76,6 +78,7 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
   registerProjectTaskRoutes(app, pool, config, checkCsrf);
   registerCompanyTaskRoutes(app, pool, config, checkCsrf);
   registerSubtaskRoutes(app, pool, config, checkCsrf);
+  await registerTaskCommentRoutes(app, pool, config, checkCsrf);
   registerProjectSnapshotRoutes(app, pool, config);
   registerContractorRoutes(app, pool, config, checkCsrf);
   registerTaskProgressRoutes(app, pool, config, checkCsrf);

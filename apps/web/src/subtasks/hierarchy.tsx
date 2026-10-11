@@ -1,3 +1,4 @@
+import { Discussion } from '../task-comments/discussion.js';
 import { useEffect, useRef, useState } from 'react';
 import { request, type Task } from '../project-api.js';
 import { TaskProgress, taskStateName } from '../task-progress.js';
@@ -78,6 +79,7 @@ export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignee
         {writable && child.status==='planned' && <button className="secondary" disabled={busy || disabled} onClick={()=>{if(guardWorkspaceChange(root.current!)) {setAssigning(child.id); setCreating(false);}}}>{child.assigneeMembershipId?'Zmień wykonawcę podzadania':'Przypisz podzadanie'}</button>}
         {assigning===child.id && <Assignment current={child.assigneeMembershipId} assignees={assignees} busy={busy} cancel={()=>setAssigning('')}
           save={id=>void mutate(`${childPath(child.id)}/assign`,{assigneeMembershipId:id,expectedVersion:child.version},child)} />}
+        <Discussion path={childPath(child.id)} title={child.title} csrfToken={csrfToken} writable={writable} onAccessChanged={onAccessChanged} />
         <ProgressHistory path={childPath(child.id)} version={child.version} onAccessChanged={onAccessChanged} />
       </article>)}</div>
     </>}

@@ -1,0 +1,22 @@
+.discussion { width:100%; min-width:0; border-top:1px solid var(--border,#dce3e8); padding-top:12px; margin-top:12px; grid-column:1/-1; }
+.comment-list { list-style:none; padding:0; display:grid; gap:12px; }
+.comment-list > li { border:1px solid #dce3e8; border-radius:10px; padding:14px; background:#f8fafc; }
+.comment-list header { display:flex; gap:12px; flex-wrap:wrap; justify-content:space-between; font-size:.9rem; }
+.comment-list time { color:#516475; }
+.comment-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+.comment-form { display:grid; gap:12px; margin-top:16px; }
+.comment-form textarea { width:100%; min-height:96px; resize:vertical; }
+.photo-inputs { display:flex; flex-wrap:wrap; gap:12px; }
+.photo-inputs label { flex:1 1 230px; min-width:0; }
+.photo-inputs input { width:100%; max-width:100%; }
+.comment-photos,.photo-previews { display:flex; flex-wrap:wrap; gap:10px; }
+.photo-previews { list-style:none; padding:0; }
+.photo-previews li { width:130px; display:grid; gap:4px; }
+.photo-previews span { font-size:.8rem; overflow-wrap:anywhere; }
+.photo-previews img,.photo-button img { width:130px; height:110px; object-fit:cover; border-radius:8px; }
+.photo-button { padding:0; background:transparent; border:0; display:block; }
+.discussion-photo { max-width:100%; }
+.photo-dialog { max-width:94vw; max-height:94vh; border:0; border-radius:12px; padding:16px; }
+.photo-dialog::backdrop { background:rgba(10,20,30,.75); }
+.photo-dialog img { display:block; max-width:85vw; max-height:75vh; object-fit:contain; margin-top:12px; }
+@media(max-width:640px) { .comment-list > li { padding:10px; } .photo-inputs { flex-direction:column; } .photo-inputs label { flex:auto; } .comment-form button { min-height:44px; } }

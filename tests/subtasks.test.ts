@@ -20,7 +20,7 @@ test('PR22 populated schema 12 → 13 preserves all records, checksums, backlog 
     const tables=(await f.owner.query('SELECT tablename FROM pg_tables WHERE schemaname=$1 ORDER BY tablename',[f.schema])).rows.map(row=>row.tablename);
     const snapshot=async(table:string)=>(await f.owner.query(`SELECT * FROM ${table} ORDER BY to_jsonb(${table})::text`)).rows;
     const before=await Promise.all(tables.map(snapshot));
-    assert.equal(await migrate(f.owner,'migrations'),13); assert.equal(await migrate(f.owner,'migrations'),13); assert.equal(await checkMigrations(f.owner,'migrations'),13);
+    assert.equal(await migrate(f.owner,'migrations'),14); assert.equal(await migrate(f.owner,'migrations'),14); assert.equal(await checkMigrations(f.owner,'migrations'),14);
     for(const [i,table] of tables.entries()) {
       const after=await snapshot(table);
       assert.deepEqual(table==='schema_migrations'?after.filter(row=>row.version<=12):table==='tasks'?after.map(({parent_task_id,hierarchy_root,...row})=>{assert.equal(parent_task_id,null);assert.equal(hierarchy_root,true);return row;}):after,before[i],table);

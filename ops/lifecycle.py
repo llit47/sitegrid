@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import pwd
 from pathlib import Path
 import re
 import shutil
@@ -9,7 +10,7 @@ import subprocess
 import tempfile
 import uuid
 from release import SiteGridError, require, command, download, extract_release, read_manifest, atomic_link
-from system import ROOT, STATE, sql, write_json, app_cli, grant_runtime, health
+from system import ROOT, STATE, DB_URL, sql, write_json, app_cli, grant_runtime, health, configure_media_proxy, prepare_media_storage
 
 JOURNAL = STATE / 'deployment.json'
 FINISHED = ('done', 'recovered', 'rejected')
@@ -69,6 +70,8 @@ def backup_database(operation):
     directory.chmod(0o700)
     require(shutil.disk_usage(directory).free > int(sql("SELECT pg_database_size('sitegrid');")) * 2 + 256 * 1024 ** 2,
             'Za mało miejsca na backup DB; migracje nie zostały uruchomione.')
+    if len(schema_state()) >= 14:
+        return media_command('backup', directory / (operation + '.backup'))
     destination = directory / (operation + '.dump')
     with destination.open('xb') as stream:
         os.chmod(destination, 0o600)
@@ -85,6 +88,35 @@ def backup_database(operation):
                           'schema': len(schema_state()), 'dump': str(destination), 'sha256': digest.hexdigest()})
     return {'path': str(destination), 'sha256': digest.hexdigest(), 'metadata': str(metadata)}
 
+
+
+def media_command(action, target=None):
+    release = ROOT / 'current'
+    prepare_media_storage()
+    postgres = pwd.getpwnam('postgres')
+    env = {**os.environ, 'SITEGRID_POSTGRES_UID': str(postgres.pw_uid), 'SITEGRID_POSTGRES_GID': str(postgres.pw_gid),
+           'DATABASE_URL': DB_URL, 'MIGRATION_DATABASE_URL': DB_URL,
+           'FILES_ROOT': '/srv/sitegrid/files', 'MIGRATIONS_ROOT': str(release / 'migrations')}
+    argv = [str(release / 'runtime/bin/node'), str(release / 'dist/server/task-comments/ops-cli.js'), action]
+    if target is not None: argv.append(str(target))
+    return json.loads(command(argv, env=env, cwd=release))
+
+
+def media_operation(args):
+    installed()
+    require(service_state() == 'inactive', 'Najpierw zatrzymaj sitegrid.service; operacje wymagają zatrzymanej usługi.')
+    if args.command == 'backup':
+        result = backup_database(uuid.uuid4().hex)
+    elif args.command == 'restore':
+        require(args.yes or input('Odtworzyć do pustej DB i katalogu files? Wpisz TAK: ').strip() == 'TAK', 'Restore anulowany.')
+        result = media_command('restore', args.backup)
+        grant_runtime()
+        command(['chown', '-R', 'sitegrid:sitegrid', '/srv/sitegrid/files'])
+        require(compatible(ROOT / 'current', schema_state()), 'Restore: schemat niezgodny z kodem; usługa pozostaje zatrzymana.')
+        write_json(JOURNAL, {**journal(), 'phase': 'recovered', 'restored_backup': str(args.backup)})
+    else:
+        result = media_command('cleanup' if args.cleanup else 'check')
+    print(json.dumps(result, indent=2))
 
 def stage(args):
     target = ROOT / 'releases' / args.version
@@ -108,6 +140,9 @@ def stage(args):
 
 
 def activate(target):
+    if read_manifest(target)['schema']['target'] >= 14:
+        prepare_media_storage()
+        configure_media_proxy()
     atomic_link(target, ROOT / 'current')
     command(['systemctl', 'restart', 'sitegrid.service'])
     require(health(target.name), 'Nowe wydanie nie przeszło readiness.')
@@ -169,7 +204,7 @@ def update(args):
     no_pending(state)
     require(re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-z0-9.]+)?', args.version or ''), 'Wymagana przypięta wersja.')
     require(args.version != old.name, 'To wydanie jest już aktywne; użyj sitegrid status.')
-    require(args.yes or input(f'Aktualizować {old.name} do {args.version}, z backupem DB? Wpisz TAK: ').strip() == 'TAK', 'Aktualizacja anulowana.')
+    require(args.yes or input(f'Aktualizować {old.name} do {args.version}, z backupem DB i prywatnych mediów? Wpisz TAK: ').strip() == 'TAK', 'Aktualizacja anulowana.')
     target = stage(args)
     deploy(target, old, state, 'update', migrate=True)
 

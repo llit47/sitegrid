@@ -1,3 +1,4 @@
+import { Discussion } from './task-comments/discussion.js';
 import { ParentContext, ProgressHistory, Subtasks } from './subtasks/hierarchy.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ContractorName, type Contractor } from './contractors.js';
@@ -113,6 +114,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
             writable={details.project.status === 'active'} disabled={busy || ((reloadPending || hierarchyRefreshPending) && !pendingProgress.has(task.id))} onPendingChange={trackProgress} onAccessChanged={status => { void observeAccessFailure(path, status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(path, 404); onGone(); }}
             onConfirmed={confirmed => { setTasks(current => current.map(item => item.id === confirmed.id && item.version <= confirmed.version ? { ...item, ...confirmed } : item)); if (task.parent) setHierarchyRefreshPending(true); }} />
           {details.permissions.manageTasks && details.project.status === 'active' && <button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) { setEditingProject(false); setEditing(task); setShowTaskForm(true); } }}>Edytuj zadanie</button>}
+          <Discussion path={`${path}/tasks/${task.id}`} title={task.title} csrfToken={csrfToken} writable={details.project.status==='active'} onAccessChanged={onAccessChanged} />
           {task.parent && <ProgressHistory path={`${path}/tasks/${task.id}`} version={task.version} onAccessChanged={onAccessChanged} />}
           {details.permissions.manageTasks && !task.parent && <Subtasks task={task} path={`${path}/tasks/${task.id}`} organizationId={scope.organizationId} projectId={scope.projectId} csrfToken={csrfToken} assignees={members.filter(member => member.companyStatus==='active' && member.accountActive)} writable={details.project.status==='active'} disabled={busy} pendingOnly={reloadPending || hierarchyRefreshPending ? pendingProgress : undefined} onPendingChange={trackProgress} onChanged={() => setReloadPending(true)} onProgressConfirmed={() => setHierarchyRefreshPending(true)} onAccessChanged={onAccessChanged} onOpenChange={open => setExpandedRoots(current => {const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next;})} />}
         </article>)}</div>

@@ -1,3 +1,4 @@
+import { DiscussionDrafts } from '../task-comments/drafts.js';
 import { useState } from 'react';
 import { Projects, type Project } from '../projects.js';
 import { ContractorDirectory, useContractorDirectory } from '../contractors.js';
@@ -14,7 +15,7 @@ export function CompanyWorkspace({ active, visited, accountId, organizationId, a
   const directory = useContractorDirectory(organizationId, admin, csrfToken, onAccessChanged);
   const [projects, setProjects] = useState<Project[] | null>(null);
   // Hidden sections remain mounted so drafts, Files and M08 operation IDs survive navigation.
-  return <>
+  return <DiscussionDrafts scope={`${accountId}:${organizationId}`}>
     <div hidden={active !== 'dashboard' && active !== 'tasks'}><>{readTasks ? <Dashboard organizationId={organizationId} projects={projects} manage={manageTasks} csrfToken={csrfToken} onAccessChanged={onAccessChanged} /> : <p role="status">Brak uprawnień do zadań w tej firmie.</p>}</></div>
     <div hidden={active !== 'projects'}><Projects accountId={accountId} organizationId={organizationId} admin={admin} csrfToken={csrfToken} onAccessChanged={onAccessChanged} directory={directory} onSummary={setProjects} /></div>
     {admin && <>
@@ -23,5 +24,5 @@ export function CompanyWorkspace({ active, visited, accountId, organizationId, a
       {visited.has('invitations') && <div hidden={active !== 'invitations'}><p className="hint">Zaproszenie aktywuje konto i członkostwo w firmie. Przypisane zadanie automatycznie udostępnia pracownikowi potrzebny kontekst projektu.</p><InvitationManager organizationId={organizationId} csrfToken={csrfToken} /></div>}
       {visited.has('settings') && <div hidden={active !== 'settings'}><CompanyBranding branding={branding} csrfToken={csrfToken} onSaved={onSaved} onAccessChanged={onAccessChanged} /></div>}
     </>}
-  </>;
+  </DiscussionDrafts>;
 }

@@ -55,3 +55,7 @@ Częściowy zestaw flag jest odrzucany. Tryb manualny może użyć publicznego H
 Testy w repo używają lokalnych podpisanych fixture: autentyczność, checksum, brak Release, retry P1/P2, obce dane, potwierdzenie, update i rollback. Ciężkie testy wykonywać sekwencyjnie na jednorazowym Debianie/systemd. Nie uruchamiać smoke instalacji na istniejących danych.
 
 Proces z tagu, bramka CI, klucz wydawcy i Draft przed publikacją: [RELEASES.md](RELEASES.md). Aktualne wyniki i ograniczenia: [M01_STATUS.md](M01_STATUS.md).
+
+## Prywatne zdjęcia schema14
+
+Storage `/srv/sitegrid/files` (sitegrid, 0700) pozostaje poza release i survives update/restart. Używaj `sitegrid backup`, `sitegrid media-check` oraz `sitegrid restore --backup PATH` przy zatrzymanej usłudze. Nie kopiuj wyłącznie PostgreSQL: schema14 wymaga katalogu `.backup` z dumpem, inventory i zdjęciami. [Sprawdzona procedura backup/restore, kontrola miejsca i safe orphan cleanup](TASK_COMMENTS_MEDIA.md). Nowy proxy include dotyczy wyłącznie endpointu komentarzy; API zachowuje własne ograniczenia.

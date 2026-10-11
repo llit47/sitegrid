@@ -28,11 +28,11 @@ test('PR21 populated schema 11 → 12 preserves every record and checksum, inclu
     const tables=(await f.owner.query('SELECT tablename FROM pg_tables WHERE schemaname=$1 ORDER BY tablename',[f.schema])).rows.map(row=>row.tablename);
     const snapshot=async (table:string)=>(await f.owner.query(`SELECT * FROM ${table} ORDER BY to_jsonb(${table})::text`)).rows;
     const before=await Promise.all(tables.map(snapshot));
-    assert.equal(await migrate(f.owner,'migrations'),13); assert.equal(await migrate(f.owner,'migrations'),13); assert.equal(await checkMigrations(f.owner,'migrations'),13);
+    assert.equal(await migrate(f.owner,'migrations'),14); assert.equal(await migrate(f.owner,'migrations'),14); assert.equal(await checkMigrations(f.owner,'migrations'),14);
     for (const [i,table] of tables.entries()) assert.deepEqual(table==='schema_migrations' ? (await snapshot(table)).filter(row=>row.version<=11) : await snapshot(table),table==='tasks' ? before[i].map(row=>({...row,parent_task_id:null,hierarchy_root:true})) : before[i],table);
     const replay=await f.app.inject({ method:'POST',url:`/api/organizations/${f.organizations.a}/projects/${f.projects[0]}/tasks/${task.id}/commands`,headers:f.headers.worker,payload:{ operationId,schemaVersion:1,action:'start',expectedVersion:1 } });
     assert.equal(replay.statusCode,200); assert.deepEqual(replay.json(),progress.json());
-    assert.equal((await f.app.inject('/health/ready')).json().schema,13);
+    assert.equal((await f.app.inject('/health/ready')).json().schema,14);
   } finally { await f.close(); }
 });
 

@@ -3,6 +3,10 @@ import { useEffect } from 'react';
 // Kept in memory only. Section navigation preserves components; destructive navigation
 // must wait for confirmation, including M08 commands with an ambiguous response.
 const pending = new Set<symbol>();
+const draftGuards = new Set<() => boolean>();
+export function useDraftGuard(hasDraft: () => boolean) {
+  useEffect(() => { draftGuards.add(hasDraft); return () => { draftGuards.delete(hasDraft); }; }, [hasDraft]);
+}
 export function usePendingOperation(active: boolean) {
   useEffect(() => {
     if (!active) return;
@@ -11,6 +15,7 @@ export function usePendingOperation(active: boolean) {
   }, [active]);
 }
 export function hasDirtyForms(root: ParentNode = document): boolean {
+  if ((root === document && [...draftGuards].some(check => check())) || root.querySelector('form[data-unsaved-draft="true"]')) return true;
   return [...root.querySelectorAll('form input, form select, form textarea')].some(element => {
     if (element instanceof HTMLInputElement) {
       if (element.type === 'file') return !!element.files?.length;

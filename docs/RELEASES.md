@@ -61,3 +61,11 @@ Update nadal wymaga backupu przed migracją; rollback do PR20/schema 11 jest blo
 ## PR22 — podzadania
 
 Schemat PostgreSQL **13**, upgrade **0–13**. Addytywna `013_subtasks.sql` zachowuje dane/receipts schematu 12, dodaje jednopoziomową relację i minimalną projekcję rodzica z FORCE RLS. Paczka zawiera `dist/server/subtasks/` i frontend hierarchii. Format M10 pozostaje 1 z opcjonalnymi polami, nowy klient przyjmuje starsze snapshoty; IDB v2 i powłoka PWA pozostają zgodne. Update wymaga backupu przed migracją; rollback do PR21/schema 12 jest blokowany przed zatrzymaniem usługi i wymaga restore. Zgodny rollback nie wykonuje downgrade SQL. Wersja produktu pozostaje 0.1.1, bez tagu/release. [Kontrakt, testy i ograniczenia PR22](SUBTASKS.md).
+
+## PR23 — komentarze i prywatne media
+
+PostgreSQL **14**, upgrade **0–14**; migracja `014_task_comments_media.sql`, FORCE RLS i niezmienna historia. Wersja produktu z latest main pozostaje **0.1.2**, bez tagu/Release. Paczka zawiera `dist/server/task-comments/`, UI, multipart parser i existing sharp; test paczki dekoduje zdjęcie i miniaturę własnym runtime.
+
+Storage `/srv/sitegrid/files` poza release i publicznym webRoot, chroniony sesją i prawami konkretnego zadania. Dla schema14 backup przed migracją obejmuje **DB + referencjonowane originals/thumbnails** z tego samego wyeksportowanego snapshotu. Dotychczasowe DB-only kopie schematów ≤13 pozostają zgodne. Niepełna kopia `.incoming`, brak zdjęcia albo zła suma blokują sukces/migrację. Restore wymaga kompletnej kopii i pustej DB/files, weryfikuje relacje i integralność. [Procedura i kontrakt](TASK_COMMENTS_MEDIA.md).
+
+Updater dodaje w zarządzanym proxy wąską lokalizację multipart (50 MiB, streaming), zachowując konfigurację i pozostałe limity; niestandardowa konfiguracja wymaga jawnego include opisanego przez błąd. Rollback 14→13 jest blokowany przed zatrzymaniem usługi, powrót wymaga restore DB sprzed migracji i zgodnego kodu. Testy obejmują update13→14, guarded rollback oraz aktualny compatible rollback. M08/M10/IDB/PWA nie zmieniają formatów; komentarzy/mediów nie zapisuje się offline.

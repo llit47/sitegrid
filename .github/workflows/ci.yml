@@ -45,6 +45,14 @@ jobs:
             await db.query('CREATE ROLE sitegrid LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS');
           } finally { await db.end(); }
           JS
+      - name: Install matching PostgreSQL 17 clients for actual backup/restore tests
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/sitegrid-pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
       - run: npm run check
       - name: Prepare Playwright/Chromium for production PWA and online browser regressions
         run: |
@@ -60,6 +68,7 @@ jobs:
       - run: node --import tsx tests/workspace-browser.mjs
       - run: node --import tsx tests/task-management-browser.mjs
       - run: node --import tsx tests/subtasks-browser.mjs
+      - run: node --import tsx tests/task-comments-browser.mjs
       - name: Select pinned key (ephemeral fixture only for branch CI)
         run: |
           if [ -f ops/release-public.pem ]; then
@@ -85,6 +94,7 @@ jobs:
       - run: node --check tests/workspace-browser.mjs
       - run: node --check tests/task-management-browser.mjs
       - run: node --check tests/subtasks-browser.mjs
+      - run: node --check tests/task-comments-browser.mjs
       - run: node --check tests/helpers/workspace-browser.mjs
       - run: node --check tests/helpers/task-progress-process.mjs
       - uses: actions/upload-artifact@v4
