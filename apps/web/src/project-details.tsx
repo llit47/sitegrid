@@ -79,7 +79,12 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
     } return false; } finally { if (!signal.aborted) setBusy(false); }
   };
   return <article ref={root} className="project-details">
-    <div className="project-toolbar"><h4>Szczegóły projektu</h4><button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) setRevision(value => value + 1); }}>Wczytaj aktualne dane</button></div>
+    <div className="project-toolbar"><h4>Szczegóły projektu</h4><button className="secondary" disabled={busy} onClick={() => {
+      if (!guardWorkspaceChange(root.current!)) return;
+      setDetails(null); setMembers([]); setTasks([]); setExpandedRoots(new Set());
+      setEditing(null); setEditingProject(null); setShowTaskForm(false); setError('');
+      setRevision(value => value + 1);
+    }}>Wczytaj aktualne dane</button></div>
     {details?.project.status === 'active' && (details.permissions.administer || details.permissions.manageTasks) && <p className="hint">Dane odświeżają się automatycznie z zachowaniem szkiców. Po konflikcie Twoja propozycja pozostaje w formularzu.</p>}
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {!details && !error && <p role="status">Ładowanie projektu i zadań…</p>}

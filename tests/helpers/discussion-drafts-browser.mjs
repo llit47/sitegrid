@@ -23,20 +23,23 @@ export async function sharedDiscussionDrafts({page,f,task,project,width,png}) {
       assert.deepEqual(await view.locator('.photo-previews li > span').allTextContents(),files.map(file=>file.name));
       assert.deepEqual(await view.locator('.photo-previews img').evaluateAll(images=>images.map(image=>image.alt)),files.map(file=>`Podgląd: ${file.name}`));
       // Object URL effects and image decoding can finish after the form has rerendered.
-      const previews=await page.waitForFunction(async({section,expected})=>{
-        try{
-          const actual=await Promise.all([...section.querySelectorAll('.photo-previews img')].map(async image=>{
-            await image.decode();const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
-            const context=canvas.getContext('2d');context.drawImage(image,0,0);
-            const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
-            const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixels)),byte=>byte.toString(16).padStart(2,'0')).join('');
-            return {width:canvas.width,height:canvas.height,hash};
-          }));
-          return JSON.stringify(actual)===JSON.stringify(expected)?actual:false;
-        }catch{return false;}
-      },{section:await view.elementHandle(),expected});
-      assert.deepEqual(await previews.jsonValue(),expected,'Both views display the exact selected image pixels');
-      await previews.dispose();
+      // waitForFunction treats an async predicate's Promise as truthy. Wait on
+      // synchronous decode readiness, then await the pixel hashes explicitly.
+      const section=await view.elementHandle();
+      const ready=await page.waitForFunction(({section,count})=>{
+        const images=[...section.querySelectorAll('.photo-previews img')];
+        return images.length===count && images.every(image=>image.complete && image.naturalWidth>0);
+      },{section,count:files.length});
+      await ready.dispose();
+      const previews=await view.locator('.photo-previews img').evaluateAll(images=>Promise.all(images.map(async image=>{
+        await image.decode();const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+        const context=canvas.getContext('2d');context.drawImage(image,0,0);
+        const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
+        const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixels)),byte=>byte.toString(16).padStart(2,'0')).join('');
+        return {width:canvas.width,height:canvas.height,hash};
+      })));
+      assert.deepEqual(previews,expected,'Both views display the exact selected image pixels');
+      await section.dispose();
     }
   };
   const assertLocked=async(busy,instances=views)=>{
