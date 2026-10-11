@@ -81,11 +81,11 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
     } catch (e) { if (!signal.aborted) failed(e as Error); return false; }
     finally { if (!signal.aborted) setBusy(false); }
   };
-  const assign = async (task: CompanyTask,id: string | null) => {
+  const assign = async (task: CompanyTask,id: string | null, expectedVersion: number) => {
     if (busy || !guardPendingOperations()) return;
     const signal = lifetime.current!.signal; setBusy(true); setError(''); setNotice('');
     try {
-      const data = await request<{ task: Task }>(`${taskPath(task)}/assign`,signal,csrfToken,{ assigneeMembershipId:id,expectedVersion:task.version });
+      const data = await request<{ task: Task }>(`${taskPath(task)}/assign`,signal,csrfToken,{ assigneeMembershipId:id,expectedVersion });
       if (signal.aborted) return;
       if (data.task.assigneeMembershipId !== task.assigneeMembershipId) await invalidatePreparedProject(organizationId,task.projectId);
       if (signal.aborted) return;
@@ -120,7 +120,7 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
         onConfirmed={confirmed => { setTasks(current => current?.map(item => item.id===task.id ? { ...item,...confirmed } : item) ?? null); setNotice(confirmed.status==='in_progress' ? 'Serwer potwierdził rozpoczęcie zadania.' : 'Serwer potwierdził zgłoszenie do odbioru.'); setReloadPending(true); }}
         onAccessChanged={status => { void observeAccessFailure(taskPath(task),status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(taskPath(task),404); setTasks(current => current?.filter(item => item.id!==task.id) ?? null); setError('Zadanie jest już niedostępne. Wczytaj aktualne zadania.'); }} />
         {manage && task.projectStatus==='active' && task.status==='planned' && <button className="secondary" disabled={busy || !!directoryError} onClick={() => changeFilter(() => setAssigning(task.id))}>{task.assigneeMembershipId ? 'Zmień wykonawcę' : 'Przypisz'}</button>}
-        {assigning===task.id && <Assignment current={task.assigneeMembershipId} assignees={assignees} busy={busy} save={id => void assign(task,id)} cancel={() => setAssigning('')} />}
+        {assigning===task.id && <Assignment current={task.assigneeMembershipId} expectedVersion={task.version} assignees={assignees} busy={busy} save={(id, version) => void assign(task,id,version)} cancel={() => setAssigning('')} />}
       </div>
       <Discussion path={taskPath(task)} title={task.title} csrfToken={csrfToken} writable={task.projectStatus==='active'} onAccessChanged={onAccessChanged} />
       {task.parent && <ProgressHistory path={taskPath(task)} version={task.version} onAccessChanged={onAccessChanged} />}

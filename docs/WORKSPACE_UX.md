@@ -6,6 +6,8 @@ Aktywny widok odpytuje autoryzowane dane co 15 sekund, wyłącznie online i w wi
 
 Kompaktowe karty mają statusy **Backlog**, **Do zrobienia**, **W toku**, **Do odbioru** i przyciski co najmniej 44 px. Techniczna wersja pozostaje w API, kontroli współbieżności i historii postępu. Motyw automatycznie śledzi `prefers-color-scheme`, również po zmianie ustawień systemowych; wspólna paleta obejmuje nawigację, pulpit, zadania, formularze, dialogi, dyskusje, zdjęcia i PWA.
 
+Otwarte edytory projektu i przydziału zachowują wersję z chwili otwarcia. Automatyczne odświeżenie karty nie przesuwa tej wersji: równoległa zmiana daje konflikt 409 i zachowuje propozycję użytkownika, zamiast nadpisywać zmianę innej osoby.
+
 PWA pokazuje mały wskaźnik Online/Offline oraz rozwijane instrukcje instalacji i istotne ostrzeżenia. Utrata sieci automatycznie otwiera istniejący viewer tylko do odczytu i ukrywa interfejs online, zachowując go w pamięci. Powrót online ponownie weryfikuje sesję. Nie ma ręcznego przełącznika ani zapisu offline. Szkice nie przetrwają przeładowania, restartu lub unieważnienia konta.
 
 Walidacja: `npm run check`, `tests/task-summary.test.ts`, `tests/ux-refresh-browser.mjs` oraz istniejące regresje zadań, podzadań, M08, dyskusji, workspace, PWA i snapshotów. Nowy test sprawdza dwa konta, interwał, widoczność, reconnect, opóźnione odpowiedzi, szkice/zdjęcia, systemowy motyw i kontrast oraz 1280/768/390 px. Screenshoty syntetycznych danych: `/tmp/sitegrid-pr25-visuals/`. Bez migracji, nowych zależności i zmiany kontraktu wydania.

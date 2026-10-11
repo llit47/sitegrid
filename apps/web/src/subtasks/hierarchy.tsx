@@ -80,8 +80,8 @@ export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignee
           onConfirmed={confirmed=>{setTasks(current=>current?.map(item=>item.id===child.id && item.version<=confirmed.version?{...item,...confirmed}:item) ?? null); (onProgressConfirmed ?? onChanged)();}}
           onAccessChanged={status=>{void observeAccessFailure(path,status); setTasks(null); onAccessChanged();}} onGone={()=>{void observeAccessFailure(path,404); setTasks(null); onAccessChanged();}} />
         {writable && child.status==='planned' && <button className="secondary" disabled={busy || disabled} onClick={()=>{if(guardWorkspaceChange(root.current!)) {setAssigning(child.id); setCreating(false);}}}>{child.assigneeMembershipId?'Zmień wykonawcę podzadania':'Przypisz podzadanie'}</button>}
-        {assigning===child.id && <Assignment current={child.assigneeMembershipId} assignees={assignees} busy={busy} cancel={()=>setAssigning('')}
-          save={id=>void mutate(`${childPath(child.id)}/assign`,{assigneeMembershipId:id,expectedVersion:child.version},child)} />}
+        {assigning===child.id && <Assignment current={child.assigneeMembershipId} expectedVersion={child.version} assignees={assignees} busy={busy} cancel={()=>setAssigning('')}
+          save={(id,version)=>void mutate(`${childPath(child.id)}/assign`,{assigneeMembershipId:id,expectedVersion:version},child)} />}
         <Discussion path={childPath(child.id)} title={child.title} csrfToken={csrfToken} writable={writable} onAccessChanged={onAccessChanged} />
         <ProgressHistory path={childPath(child.id)} version={child.version} onAccessChanged={onAccessChanged} />
       </article>)}</div>

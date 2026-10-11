@@ -158,5 +158,50 @@ try {
   assert.equal(await retained.locator('.status-badge').textContent(),'W toku');
   console.log('PASS a reauthorized card falling outside its status filter preserves the open discussion draft');
   await filtered.context.close();
+
+  // A live card must not silently advance the version of an unsaved editor.
+  const assignmentTask = (await post(`${project}/tasks`, {title:'Szkic przydziału',assigneeMembershipId:f.members.worker})).task;
+  const assignmentChild = (await post(`${project}/tasks/${parent.id}/subtasks`, {title:'Szkic przydziału podzadania',assigneeMembershipId:f.members.worker})).task;
+  const editor = await open('admin', true), editPage = editor.page;
+  const staleSave = async (path, button, checkDraft) => {
+    const pending = editPage.waitForResponse(response => new URL(response.url()).pathname === path && response.request().method() === 'POST');
+    await button.click(); const response = await pending;
+    assert.equal(response.status(), 409, 'Concurrent edits retain the original optimistic version');
+    assert.equal(response.request().postDataJSON().expectedVersion, 1);
+    await checkDraft();
+  };
+  const checkAssignment = async (item, row) => {
+    const taskPath = `${project}/tasks/${item.id}`;
+    await row.getByRole('button', {name:item.parent ? 'Zmień wykonawcę podzadania' : 'Zmień wykonawcę',exact:true}).click();
+    const select = row.locator('.task-assignment select'); await select.selectOption(f.members.other);
+    await post(`${taskPath}/assign`, {assigneeMembershipId:null,expectedVersion:1});
+    await editPage.clock.runFor(15_000); await row.locator('.status-badge').filter({hasText:'Backlog'}).waitFor();
+    await staleSave(`${taskPath}/assign`, row.getByRole('button',{name:'Zapisz przydział',exact:true}), async () => {
+      assert.equal(await select.inputValue(), f.members.other);
+      const current = await f.app.inject({url:taskPath,headers:f.headers.admin});
+      assert.equal(current.json().task.assigneeMembershipId,null);
+    });
+    await select.selectOption(f.members.worker);
+    await row.getByRole('button',{name:'Anuluj przydział',exact:true}).click();
+  };
+  await checkAssignment(assignmentTask, editPage.getByRole('article',{name:assignmentTask.title,exact:true}));
+  const children = editPage.getByRole('article',{name:parent.title,exact:true}).locator('.subtasks');
+  await children.getByRole('button',{name:'Pokaż podzadania',exact:true}).click();
+  await checkAssignment({...assignmentChild,parent:true}, children.getByRole('article',{name:assignmentChild.title,exact:true}));
+  await navigateWorkspace(editPage,'Projekty');
+  await editPage.locator('.project-choice').filter({hasText:'Projekt 1'}).click();
+  await editPage.getByRole('button',{name:'Edytuj projekt',exact:true}).click();
+  const name = editPage.getByLabel('Nazwa projektu',{exact:true}); await name.fill('Zachowany szkic projektu');
+  await post(`${project}/update`, {name:'Zmiana innego administratora',description:'Nowy opis',expectedVersion:1},'admin');
+  await editPage.clock.runFor(15_000);
+  await editPage.locator('.project-details > h4').getByText('Zmiana innego administratora',{exact:true}).waitFor();
+  await staleSave(`${project}/update`, editPage.getByRole('button',{name:'Zapisz projekt',exact:true}), async () => {
+    assert.equal(await name.inputValue(),'Zachowany szkic projektu');
+    const current = await f.app.inject({url:project,headers:f.headers.admin});
+    assert.equal(current.json().project.name,'Zmiana innego administratora');
+  });
+  console.log('PASS task/subtask assignment and project drafts preserve their original versions and reject concurrent overwrites');
+  assert.deepEqual(dialogs, []); assert.deepEqual(errors, []);
+  await editor.context.close();
   await manager.context.close(); await worker.context.close();
 } finally { await browser?.close(); await f.close(); }

@@ -26,7 +26,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const [editing, setEditing] = useState<Task | null>(null);
-  const [editingProject, setEditingProject] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const root = useRef<HTMLElement>(null);
   usePendingOperation(busy);
@@ -34,7 +34,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
   useEffect(() => {
     setDetails(null); setMembers([]); setTasks([]); setExpandedRoots(new Set());
-    setEditing(null); setEditingProject(false); setShowTaskForm(false); setError('');
+    setEditing(null); setEditingProject(null); setShowTaskForm(false); setError('');
   }, [path]);
   useLiveResource(`${path}:${revision}`, async signal => {
     const data = await request<Details>(path, signal);
@@ -70,7 +70,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
     try {
       await request(`${path}${suffix}`, signal, csrfToken, payload);
       if (signal.aborted) return false;
-      setEditing(null); setEditingProject(false); setShowTaskForm(false); setNotice('Zapisano zmianę.'); setRevision(value => value + 1); return true;
+      setEditing(null); setEditingProject(null); setShowTaskForm(false); setNotice('Zapisano zmianę.'); setRevision(value => value + 1); return true;
     } catch (e) { if (!signal.aborted) {
       setError((e as Error).message);
       const status = (e as { status?: number }).status;
@@ -80,7 +80,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
   };
   return <article ref={root} className="project-details">
     <div className="project-toolbar"><h4>Szczegóły projektu</h4><button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) setRevision(value => value + 1); }}>Wczytaj aktualne dane</button></div>
-    {details?.project.status === 'active' && (details.permissions.administer || details.permissions.manageTasks) && <p className="hint">Wczytanie aktualnych danych zastępuje niezapisane formularze. Po konflikcie Twoja propozycja pozostaje w formularzu.</p>}
+    {details?.project.status === 'active' && (details.permissions.administer || details.permissions.manageTasks) && <p className="hint">Dane odświeżają się automatycznie z zachowaniem szkiców. Po konflikcie Twoja propozycja pozostaje w formularzu.</p>}
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {!details && !error && <p role="status">Ładowanie projektu i zadań…</p>}
     {details && <>
@@ -90,8 +90,8 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
       <OfflinePreparation scope={scope} />
       {details.project.status === 'archived' && <p role="status">Projekt archiwalny — historia pozostaje dostępna do odczytu.</p>}
       {details.permissions.administer && details.project.status === 'active' && <>
-        <div className="project-actions"><button className="secondary" disabled={busy} onClick={() => { if (!editingProject && guardWorkspaceChange(root.current!)) { setShowTaskForm(false); setEditing(null); setEditingProject(true); } }}>Edytuj projekt</button></div>
-        {editingProject && <ProjectForm project={details.project} contractors={contractors} busy={busy} save={payload => mutate('/update', payload)} cancel={() => setEditingProject(false)} />}
+        <div className="project-actions"><button className="secondary" disabled={busy} onClick={() => { if (!editingProject && guardWorkspaceChange(root.current!)) { setShowTaskForm(false); setEditing(null); setEditingProject(details.project); } }}>Edytuj projekt</button></div>
+        {editingProject && <ProjectForm project={editingProject} contractors={contractors} busy={busy} save={payload => mutate('/update', payload)} cancel={() => setEditingProject(null)} />}
         <button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) void mutate('/archive', { expectedVersion: details.project.version }); }}>Archiwizuj projekt</button>
       </>}
       {(details.permissions.administer || details.permissions.manageTasks) && <section aria-label="Członkowie projektu">
@@ -105,14 +105,14 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
             {member.status === 'active' ? 'Odbierz przydział' : 'Przydziel'}</button>}
         </div>)}</div>
       </section>}
-      {details.permissions.readTasks ? <section aria-label="Zadania projektu"><div className="project-toolbar"><h4>Zadania</h4>{details.permissions.manageTasks && details.project.status === 'active' && <button disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) { setEditingProject(false); setEditing(null); setShowTaskForm(true); } }}>Nowe zadanie</button>}</div>
+      {details.permissions.readTasks ? <section aria-label="Zadania projektu"><div className="project-toolbar"><h4>Zadania</h4>{details.permissions.manageTasks && details.project.status === 'active' && <button disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) { setEditingProject(null); setEditing(null); setShowTaskForm(true); } }}>Nowe zadanie</button>}</div>
         {!tasks.length && <p role="status">Brak zadań w Twoim zakresie.</p>}
         <div className="task-list">{tasks.filter(task => !task.parent || !expandedRoots.has(task.parent.id)).map(task => <article className="task-row" key={task.id}>
           <div><ParentContext task={task} /><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p><small>{task.assigneeName}</small></div>
           <TaskProgress task={task} path={`${path}/tasks/${encodeURIComponent(task.id)}`} csrfToken={csrfToken}
             writable={details.project.status === 'active'} disabled={busy || ((reloadPending || hierarchyRefreshPending) && !pendingProgress.has(task.id))} onPendingChange={trackProgress} onAccessChanged={status => { void observeAccessFailure(path, status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(path, 404); onGone(); }}
             onConfirmed={confirmed => { setTasks(current => current.map(item => item.id === confirmed.id && item.version <= confirmed.version ? { ...item, ...confirmed } : item)); if (task.parent) setHierarchyRefreshPending(true); }} />
-          {details.permissions.manageTasks && details.project.status === 'active' && <button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) { setEditingProject(false); setEditing(task); setShowTaskForm(true); } }}>Edytuj zadanie</button>}
+          {details.permissions.manageTasks && details.project.status === 'active' && <button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) { setEditingProject(null); setEditing(task); setShowTaskForm(true); } }}>Edytuj zadanie</button>}
           <Discussion path={`${path}/tasks/${task.id}`} title={task.title} csrfToken={csrfToken} writable={details.project.status==='active'} onAccessChanged={onAccessChanged} />
           {task.parent && <ProgressHistory path={`${path}/tasks/${task.id}`} version={task.version} onAccessChanged={onAccessChanged} />}
           {details.permissions.manageTasks && !task.parent && <Subtasks active={active} task={task} path={`${path}/tasks/${task.id}`} organizationId={scope.organizationId} projectId={scope.projectId} csrfToken={csrfToken} assignees={members.filter(member => member.companyStatus==='active' && member.accountActive)} writable={details.project.status==='active'} disabled={busy} pendingOnly={reloadPending || hierarchyRefreshPending ? pendingProgress : undefined} onPendingChange={trackProgress} onChanged={() => setReloadPending(true)} onProgressConfirmed={() => setHierarchyRefreshPending(true)} onAccessChanged={onAccessChanged} onOpenChange={open => setExpandedRoots(current => {const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next;})} />}
