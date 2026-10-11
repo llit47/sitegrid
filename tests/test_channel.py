@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import shlex
 import sys
+import tarfile
 import tempfile
 import time
 import unittest
@@ -270,6 +271,51 @@ class ChannelTests(unittest.TestCase):
         result = subprocess.run(['/bin/bash', '-c', runner], env=env, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(marker.exists())
+
+    def release_notes_fixture(self, version, features=None):
+        repository, output = self.root / 'notes-repository', self.root / 'notes-artifacts'
+        for name in ('scripts/sign-release.py', 'ops/release.py', 'ops/channel.py'):
+            destination = repository / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(Path(name).read_bytes())
+        feature_path = repository / 'docs/releases' / f'v{version}.md'
+        if features is not None:
+            feature_path.parent.mkdir(parents=True)
+            feature_path.write_text(features, encoding='utf-8')
+        output.mkdir()
+        manifest = {**json.loads(Path('release.json').read_text()), 'version': version}
+        with tarfile.open(output / f'sitegrid-{version}-linux-x64.tar.gz', 'w:gz') as archive:
+            for name, data in (('./release.json', json.dumps(manifest).encode()), ('./ops/release-public.pem', self.public.read_bytes())):
+                entry = tarfile.TarInfo(name)
+                entry.size = len(data)
+                archive.addfile(entry, io.BytesIO(data))
+        subprocess.run([sys.executable, 'scripts/build-bootstrap.py', version, '--public-key', str(self.public), '--output', str(output)], check=True, capture_output=True)
+        args = [sys.executable, str(repository / 'scripts/sign-release.py'), version, '--key-file', str(self.private), '--public-key', str(self.public), '--directory', str(output), '--issued-at', '1700000000']
+        # Run outside the repository to exercise repository-relative feature-note lookup.
+        subprocess.run(args, cwd=output, check=True, capture_output=True)
+        notes = (output / 'RELEASE_NOTES.md').read_text()
+        self.assertIn(f'SiteGrid {version} — Debian 13 only', notes)
+        self.assertIn('prebuilt application, Node runtime, installer and signed manifest', notes)
+        self.assertIn('```sh\n' + (output / 'INSTALL_COMMAND.txt').read_text().strip() + '\n```', notes)
+        self.assertIn('After installation: `sitegrid bootstrap-admin`, `sitegrid update`, `sitegrid rollback`.', notes)
+        self.assertIn('Release public key fingerprint (SHA-256 of PEM): ' + hashlib.sha256(self.public.read_bytes()).hexdigest(), notes)
+        return notes, feature_path, output, args
+
+    def test_v013_feature_notes_preserve_generated_installation_and_fingerprint(self):
+        features = Path('docs/releases/v0.1.3.md').read_text(encoding='utf-8')
+        notes, feature_path, output, args = self.release_notes_fixture('0.1.3', features)
+        self.assertIn(features, notes)
+        self.assertEqual(notes.count(features), 1)
+        signed = [(output / name).read_bytes() for name in ('sitegrid-manifest.json', 'sitegrid-manifest.sig')]
+        feature_path.unlink()
+        subprocess.run(args, cwd=output, check=True, capture_output=True)
+        self.assertEqual(notes, (output / 'RELEASE_NOTES.md').read_text() + '\n' + features)
+        self.assertEqual(signed, [(output / name).read_bytes() for name in ('sitegrid-manifest.json', 'sitegrid-manifest.sig')])
+
+    def test_missing_historical_feature_notes_keep_generated_notes(self):
+        notes, feature_path, _, _ = self.release_notes_fixture('0.1.0')
+        self.assertFalse(feature_path.exists())
+        self.assertTrue(notes.endswith(hashlib.sha256(self.public.read_bytes()).hexdigest() + '\n'))
 
 
 if __name__ == '__main__': unittest.main()

@@ -1,4 +1,4 @@
-> **PR22 (bieżąca gałąź):** [Kontrakt podzadań](../SUBTASKS.md), schemat 13, osobne moduły backend/React, invoker i FORCE RLS. Jeden poziom chroniony FK do projekcji korzeni; M08 pozostaje wspólny, M10 odczytuje wyłącznie uprawnioną hierarchię.
+> **PR21–PR23 scalone / przygotowanie v0.1.3:** [Podzadania](../SUBTASKS.md) i [komentarze/prywatne media z backupem DB+files](../TASK_COMMENTS_MEDIA.md), schemat 14, osobne moduły backend/React, invoker i FORCE RLS. Jeden poziom chroniony FK do projekcji korzeni; M08 pozostaje wspólny, M10 odczytuje wyłącznie uprawnioną hierarchię.
 
 # SiteGrid — architektura produktu (PR #2)
 

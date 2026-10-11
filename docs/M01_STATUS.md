@@ -1,5 +1,7 @@
 # SiteGrid M01 — status PR #5
 
+> Dokument historyczny etapu PR5, przed pierwszym wydaniem. Aktualny proces i przygotowanie v0.1.3 po scaleniu PR23: [RELEASES.md](RELEASES.md). Wydania v0.1.0–v0.1.2 są już opublikowane.
+
 Branch: `feat/m01-working-foundation`. Repozytorium `llit47/sitegrid` i planowane Releases są **publiczne**. Instalacja na gotowym Debianie 13/systemd: LXC, VM, bare metal lub host Proxmox VE; miejsce wybiera użytkownik. Pierwszego Release nie opublikowano.
 
 ## Zachowana implementacja i odzyskiwanie

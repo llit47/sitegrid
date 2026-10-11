@@ -1,6 +1,6 @@
 # PR23 — komentarze i prywatne zdjęcia (online)
 
-Kontrakt rozszerza [zadania v2](TASK_MANAGEMENT_V2.md) i [podzadania](SUBTASKS.md). Moduły monolitu: `apps/server/src/task-comments/` i `apps/web/src/task-comments/`. Wersja produktu pozostaje **0.1.2**, zgodnie z aktualnym main; PR nie tworzy tagu ani wydania. PostgreSQL schema **14**, upgrade **0–14**.
+Kontrakt rozszerza [zadania v2](TASK_MANAGEMENT_V2.md) i [podzadania](SUBTASKS.md). Moduły monolitu: `apps/server/src/task-comments/` i `apps/web/src/task-comments/`. PR23 zachował wersję produktu **0.1.2** i nie tworzył tagu ani wydania. Po jego scaleniu przygotowywane jest [v0.1.3](releases/v0.1.3.md), zgodnie z [procesem wydania](RELEASES.md). PostgreSQL schema **14**, upgrade **0–14**.
 
 ## Historia i dostęp
 

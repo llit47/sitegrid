@@ -4,7 +4,7 @@ SiteGrid działa wyłącznie wewnątrz istniejącego Debiana 13 z systemd (LXC, 
 
 ## Jedno polecenie
 
-Pierwszy oficjalny Release **nie został opublikowany**. Nie ma jeszcze działającej komendy pobrania oficjalnej wersji. Przygotowany builder generuje pełną jednolinijkową komendę w `artifacts/INSTALL_COMMAND.txt`: przypięta wersja i SHA-256 bootstrapu, bez wykonywania kodu z main. Docelowy wzorzec jest w README; pełna zweryfikowana komenda trafi do instrukcji po zatwierdzeniu Release.
+[Oficjalne wydania v0.1.0–v0.1.2](https://github.com/llit47/sitegrid/releases) są opublikowane. Użyj `INSTALL_COMMAND.txt` wybranego wydania po sprawdzeniu zaufanej instrukcji: komenda przypina wersję i SHA-256 bootstrapu, bez wykonywania kodu z main. v0.1.3 jest przygotowywane; jego komenda będzie dostępna po zatwierdzeniu i publikacji podpisanego Draft Release. [Proces wydania](RELEASES.md).
 
 Jako root w gotowym Debianie operator wkleja tę jedną komendę. Runner sprawdza root/OS, instaluje narzędzia pobierania z APT, pobiera wersjonowany bootstrap i porównuje przypiętą sumę **przed wykonaniem**. Bootstrap zawiera kod instalatora i przypięty publiczny klucz; weryfikuje Ed25519 manifestu, wersję, architekturę, daty i SHA-256 pakietu z publicznego GitHub Release. Bez wcześniejszego kopiowania `ops/`, archiwum lub instalowania PostgreSQL/Node. Brak opublikowanego wydania, zły podpis lub checksum kończą operację; bez fallbacku.
 

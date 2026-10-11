@@ -1,4 +1,4 @@
-> **PR22 — bieżąca gałąź:** [Podzadania](SUBTASKS.md) mają niezależne komendy/receipts M08 i minimalny kontekst rodzica w M10. Schemat PostgreSQL 13; brak trwałej kolejki offline. W konflikcie stosuj kontrakt PR22 oraz PR21, zamiast poniższego historycznego opisu.
+> **PR21–PR23 scalone / przygotowanie v0.1.3:** PostgreSQL schema 14. [Podzadania](SUBTASKS.md) mają niezależne komendy/receipts M08 i minimalny kontekst rodzica w M10; [komentarze/zdjęcia](TASK_COMMENTS_MEDIA.md) są wyłącznie online. Formaty M08/M10 pozostają zgodne; brak trwałej kolejki offline. Poniżej zachowano historyczny kontrakt tego etapu.
 
 # PR13 — komendy postępu zadania (M08)
 
