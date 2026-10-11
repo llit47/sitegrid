@@ -28,7 +28,7 @@ Data: 2026-10-09. SiteGrid jest niezależnym produktem wielofirmowym, a HERC poz
 | Odbiór lub zwrot zadania przez kierownika | Tak | Tylko online, na aktualnej wersji; wykonawca nie odbiera własnej pracy. |
 | Przełączanie firm | Tak | Wyłącznie do wcześniej przygotowanego, nadal lokalnie ważnego zakresu; brak mieszania kolejek. |
 
-Poza bieżącym zakresem: magazyn/zakupy, biblioteka planów PDF i powiązania rysunków z zadaniami, pinezki, czat, kalendarz, budżety, pełne brygady, raporty zbiorcze z akceptacją, zależności harmonogramu i powiadomienia. **Komentarze ze zdjęciami do zadań i podzadań** są teraz planowane w PR23, przed pilotażem. Nie są warunkami pierwszego pilotażu. Pliki robocze i ich kolejka pojawią się oddzielnie; logo jest częścią MVP.
+Poza bieżącym zakresem: magazyn/zakupy, biblioteka planów PDF i powiązania rysunków z zadaniami, pinezki, czat, kalendarz, budżety, pełne brygady, raporty zbiorcze z akceptacją, zależności harmonogramu i powiadomienia. **Komentarze ze zdjęciami do zadań i podzadań** oraz prywatny magazyn mediów i testowane spójne odtwarzanie DB+plików są **obowiązkowymi warunkami pierwszego pilotażu (PR23)**. Biblioteka planów projektu i innych dokumentów pozostaje poza jego zakresem. Kolejka wysyłania zdjęć offline pojawi się oddzielnie; logo jest częścią MVP.
 
 Pierwsza aktywacja, logowanie na nowym urządzeniu, instalacja/pobranie powłoki oraz przygotowanie projektu wymagają połączenia. UI pokazuje „gotowe offline” dopiero po kompletnym zapisaniu powłoki i danych; nie udaje dostępności niepobranych projektów. Proponowany maksymalny okres dostępu offline: 7 dni od ostatniego potwierdzenia uprawnień online. Po tym czasie blokada dostępu do danych do ponownej autoryzacji, bez automatycznego usunięcia kolejki. Ten limit wymaga akceptacji przy zatwierdzeniu architektury.
 
@@ -42,7 +42,7 @@ flowchart TD
       R --> A[Fastify — systemd]
       A --> D[(PostgreSQL — centralny stan)]
       W[Worker i timer kopii — systemd] --> D
-      A --> F[Pliki robocze — po MVP]
+      A --> F[Prywatne zdjęcia komentarzy — plan PR23]
     end
     D --> B[Szyfrowana kopia poza hostem]
     F --> B
@@ -50,9 +50,9 @@ flowchart TD
 
 Osobne konta systemowe usług; API i PostgreSQL na loopback/socket, użytkownicy przez HTTPS. React budowany w CI i dostarczany jako statyczny artefakt; API/worker z przypiętym runtime i migracjami. Bez Docker-in-LXC/nesting. LXC współdzieli jądro hosta. Panel Proxmoxa i uprawnienia systemowe są oddzielone od panelu administratora platformy.
 
-Początkowa hipoteza zasobów: 4 vCPU, 8 GB RAM, 40 GB systemu plus policzony wolumen danych; wymaga pomiarów. Szablon Debian 13, wersja Proxmoxa, mapowanie UID/GID i zakres backupu rootfs/mount pointów muszą być sprawdzone przed wdrożeniem. Nie zakładać objęcia bind mountów kopią kontenera. Kod w `/opt/sitegrid/releases`, przyszłe pliki w `/srv/sitegrid/files`, sekrety w chronionej konfiguracji usług poza repozytorium.
+Początkowa hipoteza zasobów: 4 vCPU, 8 GB RAM, 40 GB systemu plus policzony wolumen danych; wymaga pomiarów. Szablon Debian 13, wersja Proxmoxa, mapowanie UID/GID i zakres backupu rootfs/mount pointów muszą być sprawdzone przed wdrożeniem. Nie zakładać objęcia bind mountów kopią kontenera. Kod w `/opt/sitegrid/releases`, prywatne zdjęcia komentarzy od PR23 w trwałym `/srv/sitegrid/files` poza wersjonowanym kodem; biblioteka planów nadal później. Sekrety w chronionej konfiguracji usług poza repozytorium.
 
-MVP: kopia PostgreSQL obejmuje także branding i logo. Później spójna kopia DB i plików z manifestem, przy zatrzymaniu zapisów i workera. Proponowane cele RPO 24 h / RTO 4 h wymagają zatwierdzenia i próby odtworzenia do odizolowanego LXC. Snapshot na tym samym hoście nie zastępuje kopii. Monitorować błędy, miejsce, kolejkę serwera i wiek kopii; nie logować payloadów, haseł, tokenów aktywacji ani cookies. Backup serwera nie obejmuje jeszcze niewysłanych zmian urządzenia.
+Do PR22 kopia PostgreSQL obejmuje także branding i logo. **PR23 musi dodać spójny backup PostgreSQL i prywatnych plików zdjęć (z manifestem, właściwą koordynacją zapisów i przetestowanym restore) jeszcze przed pierwszym pilotażem; sam `pg_dump` po wprowadzeniu mediów nie wystarcza.** Inne rodzaje dokumentów/plików pozostają na późniejszy etap. Proponowane cele RPO 24 h / RTO 4 h wymagają zatwierdzenia i próby odtworzenia do odizolowanego LXC. Snapshot na tym samym hoście nie zastępuje kopii. Monitorować błędy, miejsce, kolejkę serwera i wiek kopii; nie logować payloadów, haseł, tokenów aktywacji ani cookies. Backup serwera nie obejmuje jeszcze niewysłanych zmian urządzenia.
 
 ## Instalacja i cykl wydania od pierwszej wersji
 

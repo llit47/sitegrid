@@ -12,7 +12,7 @@ Decyzja biznesowa: głównym scenariuszem jest jedna firma wykonawcza, wielu kon
 
 MVP: fundament wielu izolowanych firm (codzienna praca jednej firmy wykonawczej), provisioning przez platformę, administracja kontami i pracownikami firmy, jednorazowa aktywacja, użytkownik w kilku firmach, branding w PostgreSQL, kontrahenci jako rekordy firmowe bez kont, projekty i indywidualnie przypisane zadania, postęp/przeszkody, własne wpisy pracy oraz odbiór online. Jedna PWA instalowana na Android/iOS. Offline-first dla odczytu przygotowanego zakresu i podstawowych zapisów musi działać przed pierwszym pilotażem, wraz z trwałością kolejki, retry, idempotencją i konfliktami.
 
-Bez magazynu, zakupów, kalendarza, czatu, biblioteki planów PDF/rysunków, kosztów, pełnych brygad i rozbudowanego raportowania. **Komentarze ze zdjęciami** w dostępnych zadaniach i podzadaniach należą teraz do planowanego zakresu przed pilotażem (PR23); przechowywanie prywatnych plików wymaga spójnego backupu DB i wolumenu. Rezygnacja z tych modułów zmniejsza MVP, nie odkłada niezawodności. Administracja, przygotowanie urządzenia i odbiór robót pozostają online zgodnie z macierzą.
+Bez magazynu, zakupów, kalendarza, czatu, biblioteki planów PDF/rysunków, kosztów, pełnych brygad i rozbudowanego raportowania. **Komentarze ze zdjęciami** w dostępnych zadaniach i podzadaniach należą teraz do planowanego zakresu przed pilotażem (PR23); przechowywanie prywatnych plików wymaga spójnego backupu DB i wolumenu. Rezygnacja z pozostałych wymienionych modułów zmniejsza MVP, nie odkłada niezawodności ani wymogu odtworzenia zdjęć. Administracja, przygotowanie urządzenia i odbiór robót pozostają online zgodnie z macierzą.
 
 ## Pierwszy działający przyrost — M01 (historyczny kontrakt tego etapu)
 
@@ -82,7 +82,7 @@ Identyfikatory M01–M15 są pozycjami planu, nie numerami GitHuba. Każdy PR ma
 
 ## Po MVP
 
-Oddzielne decyzje i małe PR-y: eksport raportów godzin dla kontrahentów bez udzielania im dostępu, opcjonalna obsługa wielu wykonawców jednego zadania (bez stałych brygad); dokumenty/zdjęcia z własną kolejką uploadu; magazyn oparty na ruchach; kalendarz; powiadomienia; koszty. Rozrost danych uzasadnia synchronizację przyrostową z bezpiecznym kursorem i tombstones. Każdy moduł definiuje swój zakres offline przed wejściem do pilotażu. Nie planuje się osobnej aplikacji natywnej.
+Oddzielne decyzje i małe PR-y: eksport raportów godzin dla kontrahentów bez udzielania im dostępu, opcjonalna obsługa wielu wykonawców jednego zadania (bez stałych brygad); biblioteka planów/dokumentów projektowych i jej upload; osobna kolejka uploadu offline dla zdjęć komentarzy (same zdjęcia online i ich backup są **wymagane przed pilotażem w PR23**); magazyn oparty na ruchach; kalendarz; powiadomienia; koszty. Rozrost danych uzasadnia synchronizację przyrostową z bezpiecznym kursorem i tombstones. Każdy moduł definiuje swój zakres offline przed wejściem do pilotażu. Nie planuje się osobnej aplikacji natywnej.
 
 Do zatwierdzenia: granice MVP, ważność aktywacji 24 h, dostęp offline do 7 dni, cele RPO/RTO i polityka retencji deduplikacji. Przed implementacją snapshotu określić jego limity i wersje docelowych przeglądarek; przed wdrożeniem domenę/HTTPS, pocztę i parametry hosta. Harmonogram kalendarzowy zależy od zespołu; nie jest deklarowany w tym PR.
 

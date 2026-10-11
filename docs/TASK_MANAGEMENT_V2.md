@@ -17,13 +17,13 @@ Kierownik/brygadzista tworzy pulę planowanych zadań firmy, także bez wykonawc
 | Tworzenie, edycja, przydzielanie i zmiana wykonawcy zadań | Nie | Tak | Tak | Tak | Nie |
 | Podzadania: tworzenie i delegowanie | Nie | Tak | Tak | Tak | Nie |
 | Odczyt własnych przypisanych zadań | Nie domyślnie | Tak | Tak | Tak | Tak, tylko własne |
-| Komentarze i zdjęcia na dostępnym zadaniu | Nie | Tak | Tak | Tak | Tak, tylko własne |
+| Komentarze i zdjęcia na dostępnym zadaniu | Nie | Tak | Tak | Tak | Tak, cała dyskusja na własnym przypisanym zadaniu |
 | Rozpoczęcie i zgłoszenie do odbioru | Nie | Tylko własna rola wykonawcy i własny przydział | Tylko własne przydziały | Tylko własne przydziały | Tylko własne przydziały |
 | Odbiór prac i zwrot do wykonania | Nie | Docelowo, z regułą braku samo-odbioru | Docelowo, z regułą braku samo-odbioru | Do rozstrzygnięcia w etapie odbiorów | Nie |
 
 Każde „Tak” dotyczy **aktywnej firmy**, aktywnego konta/członkostwa oraz właściwej operacji. Dostęp kierownika i brygadzisty nie wymaga osobnego przydzielenia do każdego projektu firmy; nadal jest ograniczony wyłącznie do własnego tenanta. Administrator firmy zarządza zadaniami bez nadawania sobie dodatkowej roli kierownika. Administrator platformy nie dziedziczy dostępu do projektów/zadań. Obsługa kontrahentów bez kont pozostaje bez zmian.
 
-Pracownik widzi wyłącznie zadania przypisane do jego aktywnego członkostwa, także w różnych projektach firmy. Nadanie zadania **zapewnia odczyt tylko niezbędnego kontekstu projektu i danego zadania**, bez ręcznego kroku „przydziel do projektu”, bez ujawnienia pozostałych zadań, listy pracowników, komentarzy czy zdjęć innych osób. Dotyczy także dostępu bezpośrednio przez API, identyfikatory obcych firm i offline snapshot. Cofnięcie przydziału/dostępu zamyka odczyt i zapis; zasady ograniczonego offline i unieważniania dostępu pozostają ważne. Profile pracowników bez kont nie są samodzielnie uwierzytelnionymi wykonawcami.
+Pracownik widzi wyłącznie zadania przypisane do jego aktywnego członkostwa, także w różnych projektach firmy. Nadanie zadania **zapewnia odczyt tylko niezbędnego kontekstu projektu i danego zadania**, bez ręcznego kroku „przydziel do projektu” i bez ujawnienia pozostałych zadań, pełnej listy pracowników ani komentarzy czy zdjęć z **innych zadań**. Na zadaniu przypisanym do pracownika widoczna jest **cała historia komentarzy i wszystkie dołączone do nich zdjęcia, niezależnie od autora**. Nie filtrujemy dyskusji zadania po autorze; odcięcie dostępu do zadania odcina również jego dyskusję i media. Dotyczy także dostępu bezpośrednio przez API, identyfikatory obcych firm i offline snapshot. Cofnięcie przydziału/dostępu zamyka odczyt i zapis; zasady ograniczonego offline i unieważniania dostępu pozostają ważne. Profile pracowników bez kont nie są samodzielnie uwierzytelnionymi wykonawcami.
 
 ## Backlog, wykonawca i postęp
 
@@ -48,7 +48,7 @@ Każde zadanie może mieć dzieci (podzadania) i prezentować ich stan. Podzadan
 
 ## Komentarze i zdjęcia — osobny etap
 
-Dostępne zadanie i podzadanie mają chronologiczną historię komentarzy z autorem, czasem i opcjonalnie wieloma fotografiami; komentarze podlegają bieżącym uprawnieniom zadania. Zdjęcia z aparatu i galerii, miniatury i powiększenie mają działać mobilnie. Każdy odczyt pliku jest uwierzytelniony i sprawdza firmę oraz dostęp do konkretnego zadania; nie wystawiać plików jako publicznych URL. Walidować rozmiar, typ i faktyczną zawartość pliku, nie ufać nazwie/Content-Type, stosować limity i bezpieczne nazwy magazynowe. Domyślnie nie modyfikować/usuwać historii innych osób bez jawnego modelu korekt i audytu.
+Dostępne zadanie i podzadanie mają chronologiczną historię komentarzy z autorem, czasem i opcjonalnie wieloma fotografiami. **Każda osoba uprawniona do odczytu konkretnego zadania (w tym przypisany pracownik) widzi wszystkie jego komentarze i fotografie niezależnie od autora; nie widzi komentarzy/mediów z innych, nieuprawnionych zadań.** API pobierania dyskusji i samych plików musi stosować identyczną autoryzację do wskazanego zadania i aktualnego przydziału, bez filtrowania po autorze. Zdjęcia z aparatu i galerii, miniatury i powiększenie mają działać mobilnie. Każdy odczyt pliku jest uwierzytelniony i sprawdza firmę oraz dostęp do konkretnego zadania; nie wystawiać plików jako publicznych URL. Walidować rozmiar, typ i faktyczną zawartość pliku, nie ufać nazwie/Content-Type, stosować limity i bezpieczne nazwy magazynowe. Domyślnie nie modyfikować/usuwać historii innych osób bez jawnego modelu korekt i audytu.
 
 Pliki w prywatnym trwałym wolumenie poza katalogami wersji (docelowy przykład: `/srv/sitegrid/files`), w PostgreSQL tylko metadane i powiązania. **Backup samego `pg_dump` nie wystarczy**: przed wdrożeniem zdjęć wymagane spójne backup/restore DB+plików, kontrola osieroconych uploadów, limity dysku i test odtworzenia. Obecny updater/rollback nie może usuwać istniejących mediów. W pierwszym etapie upload online; kolejka uploadu offline oddzielnie, bez obietnicy działania zdjęć offline.
 
@@ -57,7 +57,7 @@ Pliki w prywatnym trwałym wolumenie poza katalogami wersji (docelowy przykład:
 - **PR20: dokumentacja** — tylko aktualizacja decyzji, bez zmian runtime.
 - **PR21: backend+frontend backlog, globalna lista zadań i pulpit per rola** — migracja nullable assignee, zadania przekrojowe i autoryzacja na serwerze, szybkie tworzenie/delegowanie, testy funkcjonalne/Playwright, migracji, paczki i rollbacku.
 - **PR22: podzadania** — relacje, kontrola uprawnień, UI, audyt i regresja M08.
-- **PR23: komentarze i zdjęcia** — API, prywatny storage, autoryzacja, miniatury, backup/restore, limity i testy.
+- **PR23: komentarze i zdjęcia** — API, prywatny storage, autoryzacja, miniatury, backup/restore, limity i testy. **Obowiązkowy warunek pierwszego pilotażu**, łącznie ze sprawdzonym odtworzeniem DB i zdjęć.
 - **Po PR23:** kontynuacja M11/M12 (trwałe offline i konflikty) z uwzględnieniem nowych typów danych; odrębny moduł planów PDF/zdjęć projektowych w dalszym terminie. Rzeczywiste numery PR zależą od repozytorium.
 
 **Test odbiorczy PR21:** kierownik/brygadzista firmy A tworzy 10 nieprzypisanych zadań w różnych projektach, widzi je razem w backlogu, przypisuje część dwóm pracownikom bez wcześniejszego projektowego klikania; pracownik X po zalogowaniu widzi na pulpicie tylko swoje, nie może pobrać cudzych przez ID ani poznać ich liczby. Administrator A ma ten sam dostęp zarządczy bez roli manager, administrator platformy nie ma dostępu do zadań A; użytkownik A+B nie miesza danych, a istniejące zadania/statusy pozostają zachowane po migracji.
