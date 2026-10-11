@@ -1,6 +1,6 @@
 > **Aktualizacja decyzji 2026-10-11 (plan, niewdrożony w v0.1.1):** kolejność realizacji zmieniono na PR20 (dokumentacja) → PR21 (backlog, uprawnienia i zadaniowy pulpit) → PR22 (podzadania) → PR23 (komentarze i zdjęcia), następnie M11/M12 (offline). Kanoniczna specyfikacja: [Zarządzanie zadaniami v2](../TASK_MANAGEMENT_V2.md). Wcześniejsze opisy M07–M10 i kolumny historycznych PR-ów dokumentują aktualny kod, nie docelowe uprawnienia. Wymóg niezawodności offline przed pilotażem pozostaje, lecz nie zastępuje użytecznego przepływu zadań.
 
-> **Implementacja PR21:** [backlog i zadaniowy pulpit](../TASK_BACKLOG.md), schema 12; kolejny zakres to PR22. Podzadania, media, M11/M12 i bramki pilotażu pozostają nieukończone.
+> **Implementacja PR22:** PR21 jest scalony; [podzadania](../SUBTASKS.md) w bieżącej gałęzi wymagają schematu 13. Kolejny zakres to PR23 (komentarze i media), potem M11/M12; bramki pilotażu pozostają nieukończone.
 
 # SiteGrid — roadmapa małego MVP offline-first
 
@@ -38,8 +38,8 @@ To **wąski pierwszy przyrost**, nie ukończone MVP. Obsługa wielu firm, zapros
 | PR / status | Cel | Bramka |
 |---|---|---|
 | 20 — scalony | Dokumentacja nowego modelu | Wspólna specyfikacja; bez zmian runtime |
-| 21 — zaimplementowany, do przeglądu | Backlog + lista zadań wszystkich projektów + pulpit per rola | Zadanie bez wykonawcy; kierownik/brygadzista/admin firmy zarządzają całą firmą; pracownik widzi wyłącznie swoje; testy autoryzacji/migracji/UX |
-| 22 | Podzadania | Własne przypisania/statusy, kontrola hierarchii, brak ujawniania rodzeństwa |
+| 21 — scalony | Backlog + lista zadań wszystkich projektów + pulpit per rola | Zadanie bez wykonawcy; kierownik/brygadzista/admin firmy zarządzają całą firmą; pracownik widzi wyłącznie swoje; testy autoryzacji/migracji/UX |
+| 22 — zaimplementowany, do przeglądu | Podzadania | Własne przypisania/statusy, kontrola hierarchii, brak ujawniania rodzeństwa |
 | 23 | Komentarze i fotografie | Historia, prywatne media, autoryzacja i sprawdzony backup/restore plików |
 | Dalej M11–M12 | Trwałe zapisy offline, retry i konflikty | Nie utracić lokalnych operacji ani nowego zakresu dostępów |
 

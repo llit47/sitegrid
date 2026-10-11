@@ -25,10 +25,31 @@ export async function validateSnapshot(value: unknown, scope: SnapshotScope): Pr
   if (!Array.isArray(value.tasks) || value.tasks.length > MAX_SNAPSHOT_TASKS || (value.taskAccess === 'none' && value.tasks.length)) return invalid();
   const ids = new Set<string>();
   for (const task of value.tasks) {
-    if (!keys(task, 'id,title,description,status,version,createdAt,updatedAt,assigneeName') || !timed(task) ||
+    if (!task || typeof task !== 'object' || Array.isArray(task)) return invalid();
+    const hierarchy = Object.hasOwn(task, 'parent') ? ',parent' : '';
+    const progress = Object.hasOwn(task, 'subtaskProgress') ? ',subtaskProgress' : '';
+    if (!keys(task, 'id,title,description,status,version,createdAt,updatedAt,assigneeName' + hierarchy + progress) || !timed(task) ||
       !text(task.title, 200, true) || !text(task.description, 4000) || !['planned','in_progress','submitted'].includes(task.status as string) ||
       (task.assigneeName !== null && !text(task.assigneeName, 254, true)) || ids.has(task.id as string)) return invalid();
+    if (hierarchy && task.parent !== null && (!keys(task.parent, 'id,title') || !validUuid(task.parent.id) || task.parent.id === task.id || !text(task.parent.title, 200, true))) return invalid();
+    if (progress) {
+      const p = task.subtaskProgress;
+      if (value.taskAccess !== 'project' || task.parent !== null || !keys(p, 'total,planned,inProgress,submitted') ||
+        !Object.values(p).every(n => Number.isInteger(n) && Number(n) >= 0 && Number(n) <= MAX_SNAPSHOT_TASKS) ||
+        p.total !== Number(p.planned) + Number(p.inProgress) + Number(p.submitted)) return invalid();
+    }
     ids.add(task.id as string);
+  }
+  for (const task of value.tasks) {
+    if (task.parent) {
+      const parent = value.tasks.find(item => item.id === task.parent.id);
+      if ((value.taskAccess === 'project' && !parent) || (parent && (parent.parent || parent.title !== task.parent.title))) return invalid();
+    }
+    if (task.subtaskProgress) {
+      const children = value.tasks.filter(item => item.parent?.id === task.id), p = task.subtaskProgress;
+      if (p.total !== children.length || p.planned !== children.filter(item => item.status === 'planned').length ||
+        p.inProgress !== children.filter(item => item.status === 'in_progress').length || p.submitted !== children.filter(item => item.status === 'submitted').length) return invalid();
+    }
   }
   if (!keys(value.integrity, 'algorithm,digest,records,bytes') || value.integrity.algorithm !== 'SHA-256' ||
     typeof value.integrity.digest !== 'string' || !/^[a-f0-9]{64}$/.test(value.integrity.digest)) return invalid();

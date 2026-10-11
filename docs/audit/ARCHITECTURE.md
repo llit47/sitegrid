@@ -1,3 +1,5 @@
+> **PR22 (bieżąca gałąź):** [Kontrakt podzadań](../SUBTASKS.md), schemat 13, osobne moduły backend/React, invoker i FORCE RLS. Jeden poziom chroniony FK do projekcji korzeni; M08 pozostaje wspólny, M10 odczytuje wyłącznie uprawnioną hierarchię.
+
 # SiteGrid — architektura produktu (PR #2)
 
 > **Nowa decyzja 2026-10-11 — docelowy model (niezaimplementowany w v0.1.1):** [Zarządzanie zadaniami v2](../TASK_MANAGEMENT_V2.md) zastępuje historyczne ograniczenie projektowego dostępu kierownika/brygadzisty i wymóg natychmiastowego przypisania zadania. PR20 aktualizuje dokumentację; PR21 dostarczy backlog i zadaniowy pulpit, PR22 podzadania, PR23 komentarze z prywatnymi zdjęciami oraz spójny backup DB+plików. **Biblioteka planów projektu/PDF i ich dołączanie do zadań zostaje odłożone.** Offline M11/M12 pozostaje obowiązkowym fundamentem przed pilotażem, realizowanym po dopracowaniu podstawowego przepływu zadań. Poprzednie etapy i założenia „bez zdjęć” w historycznych sekcjach opisują poprzedni zakres, nie obecną decyzję.

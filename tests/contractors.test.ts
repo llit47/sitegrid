@@ -119,25 +119,25 @@ test('M09C contractors, populated schema 10 upgrade and real unprivileged FORCE 
       const tables = (await owner.query('SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename', [schema])).rows.map(row => row.tablename as string);
       const before = await Promise.all(tables.map(snapshot));
       assert.equal((await app.inject('/health/ready')).statusCode, 503);
-      assert.equal(await migrate(owner, 'migrations'), 12); assert.equal(await migrate(owner, 'migrations'), 12);
-      assert.equal(await checkMigrations(owner, 'migrations'), 12);
+      assert.equal(await migrate(owner, 'migrations'), 13); assert.equal(await migrate(owner, 'migrations'), 13);
+      assert.equal(await checkMigrations(owner, 'migrations'), 13);
       for (const [i, table] of tables.entries()) {
         const after = await snapshot(table);
         assert.deepEqual(table === 'schema_migrations' ? after.filter(row => row.version <= 10) : after,
-          table === 'projects' ? before[i].map(row => ({ ...row, contractor_id: null })) : before[i], table);
+          table === 'tasks' ? before[i].map(row => ({ ...row, parent_task_id: null, hierarchy_root: true })) : table === 'projects' ? before[i].map(row => ({ ...row, contractor_id: null })) : before[i], table);
       }
       assert.deepEqual(await snapshot('contractors'), []);
       assert((await get(projectBase())).json().projects.every((item: { contractor: unknown }) => item.contractor === null));
       assert.equal((await app.inject('/health/ready')).statusCode, 200);
-      assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 12, min: 12, max: 12, upgradeMin: 0, upgradeMax: 12 });
+      assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 13, min: 13, max: 13, upgradeMin: 0, upgradeMax: 13 });
       await assert.rejects(checkMigrations(owner, previous), /does not match/);
       await assert.rejects(migrate(owner, previous), /Migration history mismatch/);
     });
-    await t.test('fresh schema installs all twelve migrations and repeats safely', async () => {
+    await t.test('fresh schema installs all thirteen migrations and repeats safely', async () => {
       const fresh = `${schema}_fresh`; await admin.query(`CREATE SCHEMA ${fresh}`);
       const url = new URL(process.env.TEST_DATABASE_URL!); url.searchParams.set('options', `-c search_path=${fresh}`);
       const pool = new pg.Pool({ connectionString: url.href });
-      try { assert.equal(await migrate(pool, 'migrations'), 12); assert.equal(await migrate(pool, 'migrations'), 12); assert.equal(await checkMigrations(pool, 'migrations'), 12); }
+      try { assert.equal(await migrate(pool, 'migrations'), 13); assert.equal(await migrate(pool, 'migrations'), 13); assert.equal(await checkMigrations(pool, 'migrations'), 13); }
       finally { await pool.end(); await admin.query(`DROP SCHEMA ${fresh} CASCADE`); }
     });
     await t.test('administrators create independent directories with overlapping names and no new identities', async () => {

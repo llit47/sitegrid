@@ -86,10 +86,10 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
         await owner.query("INSERT INTO platform_audit_events(actor_id, event, organization_id) VALUES ($1, 'organization_created', $2)", [users.platform, org.a]);
         const tables = (await owner.query('SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename', [schema])).rows.map(row => row.tablename as string);
         const before = await Promise.all(tables.map(snapshot));
-        assert.equal(await migrate(owner, 'migrations'), 12); assert.equal(await migrate(owner, 'migrations'), 12);
-        assert.equal(await checkMigrations(owner, 'migrations'), 12);
+        assert.equal(await migrate(owner, 'migrations'), 13); assert.equal(await migrate(owner, 'migrations'), 13);
+        assert.equal(await checkMigrations(owner, 'migrations'), 13);
         for (const [i, table] of tables.entries()) assert.deepEqual(table === 'schema_migrations' ? (await snapshot(table)).filter(row => row.version <= 8) : await snapshot(table), before[i], table);
-        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 12, min: 12, max: 12, upgradeMin: 0, upgradeMax: 12 });
+        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 13, min: 13, max: 13, upgradeMin: 0, upgradeMax: 13 });
         await assert.rejects(checkMigrations(owner, previous), /does not match/);
       } finally { await rm(previous, { recursive: true, force: true }); }
     });

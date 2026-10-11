@@ -1,3 +1,5 @@
+> **PR22 — bieżąca gałąź:** [Podzadania](SUBTASKS.md) mają niezależne komendy/receipts M08 i minimalny kontekst rodzica w M10. Schemat PostgreSQL 13; brak trwałej kolejki offline. W konflikcie stosuj kontrakt PR22 oraz PR21, zamiast poniższego historycznego opisu.
+
 # PR13 — komendy postępu zadania (M08)
 
 M08 udostępnia jeden endpoint komend online i polskie akcje „Rozpocznij zadanie” oraz „Zgłoś do odbioru”. Dozwolone przejścia to `planned → in_progress → submitted`. Odbiór, odrzucenie i zwrot do pracy należą do M14. Nie ma PWA, IndexedDB, kolejki offline, wpisów pracy ani załączników.

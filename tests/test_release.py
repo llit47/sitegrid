@@ -85,6 +85,9 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(manifest['schema'], json.loads(Path('release.json').read_text())['schema'])
             self.assertTrue((Path(directory) / 'release/migrations/011_contractors.sql').is_file())
             self.assertTrue((Path(directory) / 'release/migrations/012_task_backlog.sql').is_file())
+            self.assertTrue((Path(directory) / 'release/migrations/013_subtasks.sql').is_file())
+            for module in ['persistence', 'routes']:
+                self.assertTrue((Path(directory) / f'release/dist/server/subtasks/{module}.js').is_file())
             for module in ['access', 'project-tasks', 'routes']:
                 self.assertTrue((Path(directory) / f'release/dist/server/task-management/{module}.js').is_file())
             for module in ['domain', 'persistence', 'routes']:

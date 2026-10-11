@@ -105,10 +105,10 @@ test('M08 task progress on real PostgreSQL with unprivileged FORCE RLS', { skip:
       await t.test('schema 9 to current preserves all populated tables, credentials, sessions and task versions', async () => {
         const tables = (await owner.query('SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename', [schema])).rows.map(row => row.tablename as string);
         const before = await Promise.all(tables.map(snapshot));
-        assert.equal(await migrate(owner, 'migrations'), 12); assert.equal(await migrate(owner, 'migrations'), 12);
-        assert.equal(await checkMigrations(owner, 'migrations'), 12);
-        for (const [i, table] of tables.entries()) assert.deepEqual(table === 'schema_migrations' ? (await snapshot(table)).filter(row => row.version <= 9) : await snapshot(table), table === 'projects' ? before[i].map(row => ({ ...row, contractor_id: null })) : before[i], table);
-        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 12, min: 12, max: 12, upgradeMin: 0, upgradeMax: 12 });
+        assert.equal(await migrate(owner, 'migrations'), 13); assert.equal(await migrate(owner, 'migrations'), 13);
+        assert.equal(await checkMigrations(owner, 'migrations'), 13);
+        for (const [i, table] of tables.entries()) assert.deepEqual(table === 'schema_migrations' ? (await snapshot(table)).filter(row => row.version <= 9) : await snapshot(table), table === 'tasks' ? before[i].map(row => ({ ...row, parent_task_id: null, hierarchy_root: true })) : table === 'projects' ? before[i].map(row => ({ ...row, contractor_id: null })) : before[i], table);
+        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 13, min: 13, max: 13, upgradeMin: 0, upgradeMax: 13 });
         await assert.rejects(checkMigrations(owner, previous), /does not match/);
       });
     } finally { await rm(previous, { recursive: true, force: true }); }

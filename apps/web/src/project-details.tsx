@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { ParentContext, ProgressHistory, Subtasks } from './subtasks/hierarchy.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ContractorName, type Contractor } from './contractors.js';
 import { ProjectForm, TaskForm } from './project-forms.js';
 import { request, stateName, type Details, type Project, type Task, type Member } from './project-api.js';
@@ -12,6 +13,10 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
 }) {
   const [details, setDetails] = useState<Details | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [reloadPending,setReloadPending] = useState(false), [pendingProgress,setPendingProgress] = useState<Set<string>>(new Set());
+  const trackProgress = useCallback((id: string, pending: boolean) => setPendingProgress(current => {const next=new Set(current); if(pending) next.add(id); else next.delete(id); return next;}),[]);
+  useEffect(() => {if(reloadPending && pendingProgress.size===0) {setReloadPending(false); setRevision(value => value+1);}},[reloadPending,pendingProgress]);
+  const [expandedRoots,setExpandedRoots] = useState<Set<string>>(new Set());
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -25,7 +30,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
   const lifetime = useRef<AbortController | null>(null);
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
   useEffect(() => {
-    const controller = new AbortController(); setDetails(null); setMembers([]); setTasks([]); setEditing(null); setEditingProject(false); setShowTaskForm(false); setError('');
+    const controller = new AbortController(); setDetails(null); setMembers([]); setTasks([]); setExpandedRoots(new Set()); setEditing(null); setEditingProject(false); setShowTaskForm(false); setError('');
     void request<Details>(path, controller.signal).then(async data => {
       const [roster, taskList] = await Promise.all([
         data.permissions.administer || data.permissions.manageTasks ? request<{ members: Member[] }>(`${path}/members`, controller.signal) : { members: [] },
@@ -80,12 +85,14 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
       </section>}
       {details.permissions.readTasks ? <section aria-label="Zadania projektu"><div className="project-toolbar"><h4>Zadania</h4>{details.permissions.manageTasks && details.project.status === 'active' && <button disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) { setEditingProject(false); setEditing(null); setShowTaskForm(true); } }}>Nowe zadanie</button>}</div>
         {!tasks.length && <p role="status">Brak zadań w Twoim zakresie.</p>}
-        <div className="task-list">{tasks.map(task => <article className="task-row" key={task.id}>
-          <div><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p><small>{task.assigneeName}</small></div>
+        <div className="task-list">{tasks.filter(task => !task.parent || !expandedRoots.has(task.parent.id)).map(task => <article className="task-row" key={task.id}>
+          <div><ParentContext task={task} /><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p><small>{task.assigneeName}</small></div>
           <TaskProgress task={task} path={`${path}/tasks/${encodeURIComponent(task.id)}`} csrfToken={csrfToken}
-            writable={details.project.status === 'active'} disabled={busy} onAccessChanged={status => { void observeAccessFailure(path, status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(path, 404); onGone(); }}
+            writable={details.project.status === 'active'} disabled={busy || (reloadPending && !pendingProgress.has(task.id))} onPendingChange={trackProgress} onAccessChanged={status => { void observeAccessFailure(path, status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(path, 404); onGone(); }}
             onConfirmed={confirmed => setTasks(current => current.map(item => item.id === confirmed.id && item.version <= confirmed.version ? { ...item, ...confirmed } : item))} />
           {details.permissions.manageTasks && details.project.status === 'active' && <button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) { setEditingProject(false); setEditing(task); setShowTaskForm(true); } }}>Edytuj zadanie</button>}
+          {task.parent && <ProgressHistory path={`${path}/tasks/${task.id}`} version={task.version} onAccessChanged={onAccessChanged} />}
+          {details.permissions.manageTasks && !task.parent && <Subtasks task={task} path={`${path}/tasks/${task.id}`} organizationId={scope.organizationId} projectId={scope.projectId} csrfToken={csrfToken} assignees={members.filter(member => member.companyStatus==='active' && member.accountActive)} writable={details.project.status==='active'} disabled={busy} pendingOnly={reloadPending ? pendingProgress : undefined} onPendingChange={trackProgress} onChanged={() => setReloadPending(true)} onAccessChanged={onAccessChanged} onOpenChange={open => setExpandedRoots(current => {const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next;})} />}
         </article>)}</div>
         {showTaskForm && details.permissions.manageTasks && details.project.status === 'active' && <TaskForm key={`${revision}-${editing?.id ?? 'new'}`} task={editing} members={members} busy={busy} cancel={() => { setEditing(null); setShowTaskForm(false); }}
           save={payload => mutate(editing ? `/tasks/${encodeURIComponent(editing.id)}/update` : '/tasks', payload)} />}

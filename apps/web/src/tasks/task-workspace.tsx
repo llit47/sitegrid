@@ -1,3 +1,4 @@
+import { ParentContext, ProgressHistory, Subtasks } from '../subtasks/hierarchy.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request, type Project, type Task } from '../project-api.js';
 import { TaskProgress } from '../task-progress.js';
@@ -15,6 +16,7 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
   const base = `/api/organizations/${organizationId}`;
   const root = useRef<HTMLElement>(null), lifetime = useRef<AbortController | null>(null);
   const listRequest = useRef<AbortController | null>(null);
+  const [expandedRoots,setExpandedRoots] = useState<Set<string>>(new Set());
   const [tasks,setTasks] = useState<CompanyTask[] | null>(null), [assignees,setAssignees] = useState<Assignee[]>([]);
   const [view,setView] = useState(manage ? 'all' : 'mine'), [projectId,setProjectId] = useState(''), [assignee,setAssignee] = useState('');
   const [q,setQ] = useState(''), [search,setSearch] = useState(''), [projectStatus,setProjectStatus] = useState('active');
@@ -37,7 +39,7 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
   }, [reloadPending,pendingProgress,reload]);
   const failed = (e: { message: string; status?: number }) => { setError(e.message); if ([401,403].includes(e.status ?? 0)) { setTasks(null); onAccessChanged(); } };
   useEffect(() => {
-    const controller = new AbortController(); listRequest.current = controller; setTasks(null); setHasMore(false); setError('');
+    const controller = new AbortController(); listRequest.current = controller; setTasks(null); setExpandedRoots(new Set()); setHasMore(false); setError('');
     void request<Result>(`${base}/tasks?${query}`,controller.signal).then(data => { if (!controller.signal.aborted) { setTasks(data.tasks); setHasMore(data.hasMore); } })
       .catch(e => { if (!controller.signal.aborted) failed(e); });
     return () => controller.abort();
@@ -98,8 +100,8 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
     {creating && projects && <QuickTaskForm projects={projects} assignees={assignees} busy={busy} save={create} cancel={() => setCreating(false)} />}
     {!tasks && !error && <p role="status">Ładowanie zadań…</p>}
     {tasks?.length === 0 && <p role="status">{view==='backlog' ? 'Backlog jest pusty. Utwórz zadanie bez wykonawcy.' : manage ? 'Brak zadań dla wybranych filtrów.' : 'Nie masz zadań dla wybranych filtrów.'}</p>}
-    <div className="company-task-list">{tasks?.map(task => <article key={task.id} className="company-task" aria-label={task.title}>
-      <div className="company-task-content"><small>{task.projectName}{task.projectStatus==='archived' ? ' · Archiwalny' : ''}</small><h3>{task.title}</h3>{task.description && <p>{task.description}</p>}
+    <div className="company-task-list">{tasks?.filter(task => !task.parent || !expandedRoots.has(task.parent.id)).map(task => <article key={task.id} className="company-task" aria-label={task.title}>
+      <div className="company-task-content"><small>{task.projectName}{task.projectStatus==='archived' ? ' · Archiwalny' : ''}</small><ParentContext task={task} /><h3>{task.title}</h3>{task.description && <p>{task.description}</p>}
         {manage && <p className="task-assignee-name">{task.assigneeMembershipId ? task.assigneeName : 'Bez wykonawcy · Backlog'}</p>}
       </div><div className="company-task-actions"><TaskProgress task={task} path={taskPath(task)} csrfToken={csrfToken} writable={task.projectStatus==='active'} disabled={busy || !!assigning || (reloadPending && !pendingProgress.has(task.id))} onPendingChange={trackProgress}
         onConfirmed={confirmed => { setTasks(current => current?.map(item => item.id===task.id ? { ...item,...confirmed } : item) ?? null); setNotice(confirmed.status==='in_progress' ? 'Serwer potwierdził rozpoczęcie zadania.' : 'Serwer potwierdził zgłoszenie do odbioru.'); setReloadPending(true); }}
@@ -107,6 +109,8 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
         {manage && task.projectStatus==='active' && task.status==='planned' && <button className="secondary" disabled={busy || !!directoryError} onClick={() => changeFilter(() => setAssigning(task.id))}>{task.assigneeMembershipId ? 'Zmień wykonawcę' : 'Przypisz'}</button>}
         {assigning===task.id && <Assignment current={task.assigneeMembershipId} assignees={assignees} busy={busy} save={id => void assign(task,id)} cancel={() => setAssigning('')} />}
       </div>
+      {task.parent && <ProgressHistory path={taskPath(task)} version={task.version} onAccessChanged={onAccessChanged} />}
+      {manage && !task.parent && <Subtasks task={task} path={taskPath(task)} organizationId={organizationId} projectId={task.projectId} csrfToken={csrfToken} assignees={assignees} writable={task.projectStatus==='active'} disabled={busy || !!assigning} pendingOnly={reloadPending ? pendingProgress : undefined} onChanged={() => setReloadPending(true)} onAccessChanged={onAccessChanged} onPendingChange={trackProgress} onOpenChange={open => setExpandedRoots(current => { const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next; })} />}
     </article>)}</div>
     {hasMore && tasks && <button className="secondary" disabled={busy} onClick={() => void more()}>Pokaż więcej zadań</button>}
   </section>;

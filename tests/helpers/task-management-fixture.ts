@@ -7,7 +7,7 @@ import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-export async function taskFixture({ legacy = false, serveWeb = false } = {}) {
+export async function taskFixture({ legacy = false, legacyVersion = 11, serveWeb = false } = {}) {
   if (!process.env.TEST_DATABASE_URL || !process.env.TEST_RUNTIME_DATABASE_URL) throw new Error('Real owner and unprivileged runtime PostgreSQL URLs required');
   const schema = `tasks_v2_${randomBytes(6).toString('hex')}`, admin = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
   const ownerUrl = new URL(process.env.TEST_DATABASE_URL), runtimeUrl = new URL(process.env.TEST_RUNTIME_DATABASE_URL);
@@ -22,7 +22,7 @@ export async function taskFixture({ legacy = false, serveWeb = false } = {}) {
   try {
     if (legacy) {
       const directory = await mkdtemp(join(tmpdir(),'tasks-schema11-'));
-      try { for (const file of (await migrationFiles('migrations')).filter(file => file.version<=11)) await copyFile(join('migrations',file.name),join(directory,file.name)); await migrate(owner,directory); }
+      try { for (const file of (await migrationFiles('migrations')).filter(file => file.version<=legacyVersion)) await copyFile(join('migrations',file.name),join(directory,file.name)); await migrate(owner,directory); }
       finally { await rm(directory,{ recursive:true,force:true }); }
     } else await migrate(owner,'migrations');
     await owner.query(`GRANT USAGE ON SCHEMA ${schema} TO sitegrid`);

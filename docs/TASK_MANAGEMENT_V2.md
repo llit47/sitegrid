@@ -1,6 +1,6 @@
 # SiteGrid — zarządzanie zadaniami v2 (decyzja produktowa, 2026-10-11)
 
-**Status: PR21 implementuje backlog, uprawnienia i pulpit pracy w bieżącej gałęzi; podzadania (PR22) i komentarze/zdjęcia (PR23) pozostają planem. Publiczne wydanie v0.1.1 nie zawiera tych zmian.** [Kontrakt implementacji PR21](TASK_BACKLOG.md). Historyczne kontrakty M07/M08/M10 opisują działający kod. Wszędzie, gdzie są sprzeczne z niniejszym dokumentem, ten dokument określa **docelowe** zachowanie, ale nie stan wdrożenia. Najpierw zmieniamy dokumentację, następnie backend, API, UI i testy w osobnych PR-ach. Dotychczasowe zasady ochrony firm, audytu, wersjonowania i wydawania paczek obowiązują.
+**Status: PR21 (scalony) implementuje backlog, uprawnienia i pulpit pracy; PR22 implementuje podzadania w bieżącej gałęzi. Komentarze/zdjęcia (PR23) pozostają planem. Publiczne wydanie v0.1.1 nie zawiera tych zmian.** [Kontrakt implementacji PR21](TASK_BACKLOG.md), [kontrakt PR22](SUBTASKS.md). Historyczne kontrakty M07/M08/M10 opisują działający kod. Wszędzie, gdzie są sprzeczne z niniejszym dokumentem, ten dokument określa **docelowe** zachowanie, ale nie stan wdrożenia. Najpierw zmieniamy dokumentację, następnie backend, API, UI i testy w osobnych PR-ach. Dotychczasowe zasady ochrony firm, audytu, wersjonowania i wydawania paczek obowiązują.
 
 ## Główny scenariusz pracy
 
@@ -42,9 +42,9 @@ Pracownik widzi wyłącznie zadania przypisane do jego aktywnego członkostwa, t
 - Szybkie dodawanie wymaga projektu i tytułu; opis oraz wykonawca są opcjonalne. Widok mobilny pozostaje używalny dotykowo, ma jednoznaczne stany pustej listy, błędu, ładowania, braku uprawnień i potwierdzonego wyniku. Liczniki są liczone wyłącznie z autoryzowanego zakresu, bez przecieku statystyk innych firm.
 - Utrzymać ochronę szkiców formularzy, niezakończonych komend M08 i bieżące zachowanie PWA. Zmiana kontekstu firmy nie może pozostawić danych poprzedniej firmy na ekranie.
 
-## Podzadania — osobny etap
+## Podzadania — PR22
 
-Każde zadanie może mieć dzieci (podzadania) i prezentować ich stan. Podzadania należą do tego samego projektu/firmy co rodzic, mogą mieć własnego wykonawcę, opis, status, komentarze i zdjęcia oraz mogą pozostawać nieprzypisane. Relacja rodzic–dziecko musi zapobiegać cyklom i odczytowi obcych rekordów. Przed implementacją należy ustalić maksymalną głębokość hierarchii i reguły delegowania; **nie zakładać**, że nadanie dostępu do podzadania daje prawo odczytu innych dzieci lub pełnej historii rodzica. Pracownik z przypisanym podzadaniem widzi minimum kontekstu rodzica potrzebne do wykonania pracy. Postęp rodzica może wyświetlać zagregowany postęp dzieci, ale **nie oznacza automatycznego odbioru** ani zamknięcia zadania.
+Zadanie główne może zawierać podzadania: maksymalnie jeden poziom, bez podzadań podzadań. Każde podzadanie ma własny tytuł, opis, wykonawcę lub backlog, status, wersję i historię M08. Relacja jest niezmienna i należy do tego samego projektu/firmy; PostgreSQL wymusza głębokość i brak cykli. Zarządzający widzi całą hierarchię swojej firmy. Pracownik widzi wyłącznie przypisane mu rekordy oraz minimum kontekstu rodzica `{id,title}`, bez jego pełnego opisu, rodzeństwa i liczników. Sam przydział rodzica nie udostępnia dzieci. Zagregowany postęp dzieci jest dostępny wyłącznie zarządzającym i nie zmienia statusu ani wersji rodzica. Komentarze i zdjęcia pozostają zakresem PR23. Szczegóły API, FORCE RLS, UI, M10 i migracji: [PR22](SUBTASKS.md).
 
 ## Komentarze i zdjęcia — osobny etap
 

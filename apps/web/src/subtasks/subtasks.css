@@ -1,0 +1,14 @@
+.company-task:has(> .subtasks) { display: grid; grid-template-columns: minmax(0,1fr) minmax(220px,340px); }
+.company-task > .subtasks { grid-column: 1 / -1; }
+.parent-context { color: #526760; font-size: .9rem; margin: .3rem 0; overflow-wrap: anywhere; }
+.subtasks { min-width: 0; width: 100%; border-top: 1px solid #d6e2e0; padding-top: .6rem; }
+.subtask-summary { font-size: .875rem; color: #526760; }
+.subtask-list { display: grid; gap: .6rem; margin-top: .8rem; }
+.subtask-row { border-left: 3px solid #b3ccc6; padding: .8rem; background: #f3f8f6; border-radius: 8px; overflow-wrap: anywhere; }
+.subtask-row h4 { margin: 0 0 .5rem; }
+.subtask-form { padding: .8rem; margin-top: .8rem; border: 1px solid #b3ccc6; border-radius: 8px; }
+.progress-history { margin-top: .5rem; }
+.task-row:has(.progress-history) { flex-wrap: wrap; }
+.task-row:has(> .subtasks) { display: grid; grid-template-columns: minmax(0,1fr) auto auto; }
+.task-row > .subtasks { grid-column: 1 / -1; }
+@media (max-width: 640px) { .company-task:has(> .subtasks), .task-row:has(> .subtasks) { grid-template-columns: minmax(0,1fr); } .subtask-row, .subtask-form { padding: .6rem; } .subtask-row button, .subtask-form button { min-height: 44px; } }
