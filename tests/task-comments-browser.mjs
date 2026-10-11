@@ -4,6 +4,7 @@ import {mkdir} from 'node:fs/promises';
 import sharp from 'sharp';
 import {taskFixture} from './helpers/task-management-fixture.ts';
 import {selectCompany,navigateWorkspace,acceptDiscardDialogs} from './helpers/workspace-browser.mjs';
+import {sharedDiscussionDrafts} from './helpers/discussion-drafts-browser.mjs';
 const {chromium}=await import(process.env.SITEGRID_PLAYWRIGHT_MODULE?pathToFileURL(process.env.SITEGRID_PLAYWRIGHT_MODULE).href:'playwright');
 const f=await taskFixture({serveWeb:true}),errors=[];let browser;
 try{
@@ -44,6 +45,7 @@ try{
   await page.screenshot({path:`/tmp/sitegrid-pr23-visuals/discussion-${width}.png`,fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await discussion.getByLabel('Treść komentarza',{exact:true}).fill('');
   const childDiscussion=card(page,child.title).getByRole('region',{name:`Dyskusja: ${child.title}`,exact:true});await childDiscussion.getByRole('button',{name:'Komentarze i zdjęcia',exact:true}).click();await childDiscussion.getByLabel('Treść komentarza',{exact:true}).fill(`Podzadanie ${width}`);await childDiscussion.getByRole('button',{name:'Wyślij komentarz',exact:true}).click();await childDiscussion.getByText('Serwer potwierdził dodanie komentarza.',{exact:true}).waitFor();
   await navigateWorkspace(page,'Projekty');await page.getByRole('button',{name:/Projekt 1 Aktywny/}).click();const details=page.locator('.project-details');await details.getByRole('region',{name:`Dyskusja: ${own.title}`,exact:true}).getByRole('button',{name:'Komentarze i zdjęcia',exact:true}).click();await details.getByText(`Opis pracy ${width}`,{exact:true}).waitFor();
+  await sharedDiscussionDrafts({page,f,task:own,project,width,png});
   await context.close();console.log(`PASS ${width}px comments + multiple gallery photos + camera + preview + full-size + corrupted/HEIC drafts + lost-response replay + offline + project/subtask integration`);
  }
  const manager=await open('manager',1280),hierarchy=card(manager.page,parent.title).getByRole('region',{name:`Podzadania: ${parent.title}`,exact:true});await hierarchy.getByRole('button',{name:'Pokaż podzadania',exact:true}).click();const nested=hierarchy.getByRole('region',{name:`Dyskusja: ${child.title}`,exact:true});await nested.getByRole('button',{name:'Komentarze i zdjęcia',exact:true}).click();await nested.getByText('Podzadanie 390',{exact:true}).waitFor();

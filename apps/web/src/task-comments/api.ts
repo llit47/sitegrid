@@ -1,6 +1,6 @@
 export type Photo={id:string;width:number;height:number};
 export type Comment={id:string;text:string;authorMembershipId:string;authorName:string;createdAt:string;photos:Photo[]};
-export function sendComment(path:string,csrf:string,text:string,files:File[],id:string,progress:(percent:number)=>void,signal:AbortSignal) {
+export function sendComment(path:string,csrf:string,text:string,files:readonly File[],id:string,progress:(percent:number)=>void,signal:AbortSignal) {
   return new Promise<{comment:Comment}>((resolve,reject)=>{
     const xhr=new XMLHttpRequest(),form=new FormData();form.append('commentId',id);form.append('text',text);for(const file of files)form.append('photos',file);
     xhr.open('POST',path+'/comments');xhr.setRequestHeader('X-CSRF-Token',csrf);xhr.timeout=65000;
