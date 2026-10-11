@@ -1,5 +1,7 @@
 # PR17 / M10 — autoryzowany odczyt offline
 
+> **PR21 — bieżący kod:** Snapshoty M10 stosują [nowy kontrakt backlogu i dostępu do zadań](TASK_BACKLOG.md). Poniżej zachowano historyczny opis wcześniejszego etapu; w konflikcie stosuj PR21.
+
 M10 pobiera **jeden wybrany projekt** i udostępnia potwierdzony, kompletny snapshot wyłącznie do odczytu. Nie implementuje kolejki M11, synchronizacji/konfliktów M12 ani godzin M13. Pełna bramka MVP offline-first pozostaje nieukończona.
 
 ## API i limity robocze

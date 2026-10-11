@@ -84,6 +84,9 @@ class ReleaseTests(unittest.TestCase):
             manifest = extract_release(archive, Path(directory) / 'release', sha, version)
             self.assertEqual(manifest['schema'], json.loads(Path('release.json').read_text())['schema'])
             self.assertTrue((Path(directory) / 'release/migrations/011_contractors.sql').is_file())
+            self.assertTrue((Path(directory) / 'release/migrations/012_task_backlog.sql').is_file())
+            for module in ['access', 'project-tasks', 'routes']:
+                self.assertTrue((Path(directory) / f'release/dist/server/task-management/{module}.js').is_file())
             for module in ['domain', 'persistence', 'routes']:
                 self.assertTrue((Path(directory) / f'release/dist/server/contractors/{module}.js').is_file())
             for module in ['contract', 'serialize', 'routes']:

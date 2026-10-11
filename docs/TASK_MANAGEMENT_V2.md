@@ -1,6 +1,6 @@
 # SiteGrid — zarządzanie zadaniami v2 (decyzja produktowa, 2026-10-11)
 
-**Status: zatwierdzony kierunek produktu, NIEZAIMPLEMENTOWANY w v0.1.1.** Historyczne kontrakty M07/M08/M10 opisują działający kod. Wszędzie, gdzie są sprzeczne z niniejszym dokumentem, ten dokument określa **docelowe** zachowanie, ale nie stan wdrożenia. Najpierw zmieniamy dokumentację, następnie backend, API, UI i testy w osobnych PR-ach. Dotychczasowe zasady ochrony firm, audytu, wersjonowania i wydawania paczek obowiązują.
+**Status: PR21 implementuje backlog, uprawnienia i pulpit pracy w bieżącej gałęzi; podzadania (PR22) i komentarze/zdjęcia (PR23) pozostają planem. Publiczne wydanie v0.1.1 nie zawiera tych zmian.** [Kontrakt implementacji PR21](TASK_BACKLOG.md). Historyczne kontrakty M07/M08/M10 opisują działający kod. Wszędzie, gdzie są sprzeczne z niniejszym dokumentem, ten dokument określa **docelowe** zachowanie, ale nie stan wdrożenia. Najpierw zmieniamy dokumentację, następnie backend, API, UI i testy w osobnych PR-ach. Dotychczasowe zasady ochrony firm, audytu, wersjonowania i wydawania paczek obowiązują.
 
 ## Główny scenariusz pracy
 

@@ -57,7 +57,7 @@ export function Projects({ accountId, organizationId, admin, csrfToken, onAccess
     {!projects && !error && <p role="status">Ładowanie projektów…</p>}
     {projects && <ContractorFilter projects={projects} contractors={directory.contractors} value={contractorFilter} onChange={value => { if (guardWorkspaceChange(root.current!)) { setCreating(false); setContractorFilter(value); setSelected(''); } }} />}
     {projects && <div className="project-list">
-      {!projects.length && <p role="status">Brak dostępnych projektów. Przydziały nadaje administrator firmy.</p>}
+      {!projects.length && <p role="status">Brak dostępnych projektów. Przypisane zadanie udostępnia pracownikowi kontekst projektu.</p>}
       {!!projects.length && contractorFilter && !projects.some(project => (project.contractor?.id ?? 'none') === contractorFilter) && <p role="status">Brak projektów dla wybranego kontrahenta.</p>}
       {projects.filter(project => !contractorFilter || (project.contractor?.id ?? 'none') === contractorFilter).map(project => <button className="secondary project-choice" aria-pressed={selected === project.id} key={project.id} onClick={() => { if (project.id !== selected && guardWorkspaceChange(root.current!)) { setCreating(false); setSelected(project.id); } }}>
         <strong>{project.name}</strong><span>{stateName(project.status)}</span>

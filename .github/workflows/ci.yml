@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: ['**']
+    branches: ['main']
   pull_request:
   workflow_call:
     inputs:
@@ -58,6 +58,7 @@ jobs:
       - run: node --import tsx tests/project-snapshots-browser.mjs
       - run: node --import tsx tests/task-progress-browser.mjs
       - run: node --import tsx tests/workspace-browser.mjs
+      - run: node --import tsx tests/task-management-browser.mjs
       - name: Select pinned key (ephemeral fixture only for branch CI)
         run: |
           if [ -f ops/release-public.pem ]; then
@@ -81,6 +82,7 @@ jobs:
       - run: node --check tests/pwa-browser.mjs
       - run: node --check tests/task-progress-browser.mjs
       - run: node --check tests/workspace-browser.mjs
+      - run: node --check tests/task-management-browser.mjs
       - run: node --check tests/helpers/workspace-browser.mjs
       - run: node --check tests/helpers/task-progress-process.mjs
       - uses: actions/upload-artifact@v4

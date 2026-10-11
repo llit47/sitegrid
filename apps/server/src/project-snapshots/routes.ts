@@ -20,7 +20,7 @@ export function registerProjectSnapshotRoutes(app: FastifyInstance, pool: Pool, 
       if (!project) throw Object.assign(new Error('Projekt jest niedostępny.'), { statusCode: 404 });
       await client.query("SELECT set_config('sitegrid.project_id', $1::uuid::text, true)", [projectId]);
       const access = (await client.query(`SELECT current_setting('sitegrid.user_id') AS "accountId",
-        transaction_timestamp() AS "generatedAt", can_access_project($1,$2,ARRAY['manager','foreman']) AS full,
+        transaction_timestamp() AS "generatedAt", can_manage_tasks($1) AS full,
         can_access_project($1,$2,ARRAY['worker']) AS own`, [id, projectId])).rows[0];
       const tasks = access.full || access.own ? (await client.query(`SELECT id, title, description, status, version,
         created_at AS "createdAt", updated_at AS "updatedAt",

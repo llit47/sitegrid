@@ -94,7 +94,7 @@ export function CompanyMembers({ organizationId, csrfToken, onAccessChanged }: {
         </div>
       </article>)}</div>
       {!visible(members).length && <p>Brak członkostw w wybranym filtrze.</p>}
-      <h4>Profile pracowników bez konta</h4><p className="hint">Profil opisuje pracownika w firmie. Nie tworzy konta logowania. Dostęp do aplikacji przyznaj przez zaproszenie, a następnie przydział do projektu.</p>
+      <h4>Profile pracowników bez konta</h4><p className="hint">Profil opisuje pracownika w firmie. Nie tworzy konta logowania. Dostęp do aplikacji przyznaj przez zaproszenie. Przypisane zadanie udostępnia kontekst projektu.</p>
       <div className="member-list">{visible(employees.filter(employee => !employee.membershipId)).map(employee => <article className="member-row" key={employee.id}>
         <div><strong>{employee.displayName}</strong><p>{[employee.position, employee.phone].filter(Boolean).join(' · ')}</p><p>{states[employee.status]} · Bez konta logowania</p></div>
         <div><button className="secondary" disabled={busy} onClick={event => { if (guardWorkspaceChange(event.currentTarget.closest('section')!)) setEditing(employee); }}>Edytuj profil</button>{statusAction('employees', employee)}</div>

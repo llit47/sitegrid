@@ -1,6 +1,7 @@
 import type { Section } from './layout.js';
 const paths: Record<Section, string> = {
   dashboard: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
+  tasks: 'M9 6h12 M9 12h12 M9 18h12 M3 5l1 1 2-2 M3 11l1 1 2-2 M3 17l1 1 2-2',
   projects: 'M3 7V4h6l2 3h10v13H3z M7 11h10 M7 15h6',
   contractors: 'M3 7h18v13H3z M8 7V3h8v4 M3 12h18 M10 12v3h4v-3',
   members: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M2 21v-3a7 7 0 0 1 14 0v3 M17 4a4 4 0 0 1 0 8 M19 15a5 5 0 0 1 3 5v1',

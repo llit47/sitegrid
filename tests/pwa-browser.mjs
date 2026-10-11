@@ -208,7 +208,7 @@ try {
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     await selectCompany(page, company);
     await page.getByRole('button', { name: 'Poufny projekt A Aktywny Kontrahent: Poufny kontrahent A', exact: true }).click();
-    await page.getByText('Poufne zadanie A', { exact: true }).waitFor();
+    await page.locator('.projects').getByText('Poufne zadanie A', { exact: true }).waitFor();
     await assertMainLandmark(page, 'Projekty');
     await page.getByRole('button', { name: mobile ? 'Zgłoś do odbioru' : 'Rozpocznij zadanie', exact: true }).click();
     await page.getByText(mobile ? 'Serwer potwierdził zgłoszenie do odbioru.' : 'Serwer potwierdził rozpoczęcie zadania.', { exact: true }).waitFor();
@@ -216,7 +216,7 @@ try {
     await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor();
     await selectCompany(page, company);
     await page.getByRole('button', { name: 'Poufny projekt A Aktywny Kontrahent: Poufny kontrahent A', exact: true }).click();
-    await page.getByText('Poufne zadanie A', { exact: true }).waitFor();
+    await page.locator('.projects').getByText('Poufne zadanie A', { exact: true }).waitFor();
     await assertMainLandmark(page, 'Projekty');
     assert.equal(await page.locator('.project-details').getByText('Kontrahent: Poufny kontrahent A', { exact: true }).count(), 1);
     assert.equal(await page.getByText('Niewidoczny katalog kontrahentów A', { exact: true }).count(), 0);
