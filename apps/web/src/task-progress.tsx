@@ -1,3 +1,4 @@
+import { QueueFeedback, useQueuedCommand } from './progress/queue-ui.js';
 import { StatusBadge } from './tasks/status.js';
 import { usePendingOperation } from './workspace/navigation-safety.js';
 import { useEffect, useRef, useState } from 'react';
@@ -11,6 +12,8 @@ export function TaskProgress({ task, path, csrfToken, writable, disabled, onConf
   onConfirmed: (task: ProgressTask) => void; onAccessChanged: (status: number) => void; onGone: () => void;
   onPendingChange?: (taskId: string, pending: boolean) => void;
 }) {
+  const queued = useQueuedCommand(path);
+  const queueBlocked = queued.checking || queued.failed || (!!queued.row && (queued.row.state !== 'confirmed' || queued.row.confirmed!.version > task.version));
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
@@ -28,7 +31,7 @@ export function TaskProgress({ task, path, csrfToken, writable, disabled, onConf
   useEffect(() => { if (!command.current) setConflict(false); }, [task.version]);
   const action = task.status === 'planned' ? 'start' : task.status === 'in_progress' ? 'submit' : null;
   const send = async () => {
-    if (sending.current || disabled || conflict) return;
+    if (sending.current || disabled || conflict || queueBlocked) return;
     if (!command.current) {
       if (!action) return;
       command.current = { operationId: crypto.randomUUID(), schemaVersion: 1, action, expectedVersion: task.version };
@@ -59,11 +62,16 @@ export function TaskProgress({ task, path, csrfToken, writable, disabled, onConf
       }
     } finally { if (!signal.aborted) { sending.current = false; setBusy(false); } }
   };
+  useEffect(() => {
+    if (queued.row?.state === 'confirmed' && queued.row.confirmed!.version > task.version) onConfirmed({ ...task, ...queued.row.confirmed! });
+  }, [queued.row, task, onConfirmed]);
   return <div className="task-progress">
     <StatusBadge task={task} />
-    {writable && task.canProgress && (action || retry) && <button disabled={busy || disabled || conflict} onClick={() => void send()}>
+    {writable && task.canProgress && (action || retry) && <button disabled={busy || disabled || conflict || queueBlocked} onClick={() => void send()}>
       {busy ? 'Oczekiwanie na serwer…' : retry ? 'Ponów operację' : action === 'start' ? 'Rozpocznij zadanie' : 'Zgłoś do odbioru'}
     </button>}
+    {queued.row && (queued.row.state !== 'confirmed' || (!busy && !retry && queued.row.confirmed!.version === task.version)) && <QueueFeedback row={queued.row} />}
+    {queued.failed && <p role="alert" className="error">Wymaga uwagi. Nie udało się sprawdzić kolejki postępu.</p>}
     {feedback && <p role="status">{feedback}</p>}
     {error && <p className="error" role="alert">{error}</p>}
   </div>;

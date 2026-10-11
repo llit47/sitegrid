@@ -58,14 +58,14 @@ export function OfflinePreparation({ scope }: { scope: StorageScope }) {
       if (!current || current.generation !== access.generation) throw new Error('Konto zmieniło się. Projekt nie jest gotowy offline.');
       const shell = await shellIsAvailable();
       setSaved({ format: 1, snapshot, generation: access.generation, authorizedAt }); setReady(shell);
-      setMessage(shell ? 'Projekt gotowy offline — tylko odczyt.' : 'Dane zapisane, ale powłoka offline niedostępna. Projekt nie jest gotowy offline.');
+      setMessage(shell ? 'Projekt gotowy offline.' : 'Dane zapisane, ale powłoka offline niedostępna. Projekt nie jest gotowy offline.');
     } catch (e) {
       if (controller.signal.aborted) setMessage('Przygotowanie anulowane.');
       else { setMessage(''); setError(offlineFailureMessage(e)); }
     } finally { if (operation.current === controller) { operation.current = null; setBusy(false); } }
   };
   return <section className="offline-preparation" aria-label="Przygotowanie projektu offline">
-    <h4>Projekt offline</h4><p className="hint">Pobierz tylko ten projekt do odczytu przez maksymalnie 24 godziny. Dane mogą później zmienić się na serwerze.</p>
+    <h4>Projekt offline</h4><p className="hint">Pobierz ten projekt na maksymalnie 24 godziny. Uprawniony wykonawca może zapisać postęp offline. Dane mogą później zmienić się na serwerze.</p>
     {saved && <p>{ready ? 'Gotowy offline.' : 'Zapisany snapshot.'} {saved.snapshot.tasks.length} zadań · Ostatnie przygotowanie: {new Date(saved.snapshot.generatedAt).toLocaleString('pl-PL')}</p>}
     {saved && error && <p>Odświeżenie nie powiodło się. Poprzedni kompletny snapshot pozostaje zapisany; dostęp zależy od ważności autoryzacji i powłoki.</p>}
     {error && <p className="error" role="alert">{error}</p>}{message && <p role="status">{message}</p>}

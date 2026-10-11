@@ -1,3 +1,4 @@
+import { OfflineProgress } from '../progress/queue-ui.js';
 import { StatusBadge } from '../tasks/status.js';
 import { ParentContext } from '../subtasks/hierarchy.js';
 import { useEffect, useState } from 'react';
@@ -47,13 +48,13 @@ export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
     return () => { disposed = true; controller.abort(); clearInterval(timer); document.removeEventListener('visibilitychange', refreshed); window.removeEventListener('sitegrid-offline-access', refreshed); };
   }, [organization]);
   return <section className="card offline-viewer"><h1>{localOnly ? 'Odczyt lokalny SiteGrid' : 'SiteGrid bez połączenia'}</h1>
-    <p>Przygotowane dane służą wyłącznie do odczytu. Mogły zmienić się na serwerze. Nie zapisujemy ani nie synchronizujemy zmian offline.</p>
+    <p>Dane mogły zmienić się na serwerze. Uprawniony wykonawca może zapisać rozpoczęcie lub zgłoszenie zadania na urządzeniu. Potwierdzenie wymaga połączenia z serwerem.</p>
     <p>Po odzyskaniu sieci aplikacja ponownie sprawdzi sesję.</p>
     {loading && <p role="status">Sprawdzanie lokalnego dostępu…</p>}{error && <p role="alert" className="error">{error}</p>}
     {organizations.length > 1 && <label>Przygotowana firma<select aria-label="Przygotowana firma" value={organization} onChange={event => { setSnapshots([]); setOrganization(event.target.value); }}>
       {organizations.map(id => <option key={id} value={id}>{id}</option>)}</select></label>}
     {!loading && !snapshots.length && <p>Brak pobranych projektów z ważnym dostępem offline. Połącz się z serwerem, aby przygotować wybrany projekt.</p>}
-    {snapshots.map(({ snapshot }) => <article className="offline-project" key={snapshot.scope.projectId}>
+    {snapshots.map(saved => { const { snapshot } = saved; return <article className="offline-project" key={snapshot.scope.projectId}>
       <h2>{snapshot.project.name}</h2><p>{snapshot.project.description || 'Brak opisu projektu.'}</p>
       <p>{snapshot.project.status === 'archived' ? 'Projekt archiwalny' : 'Projekt aktywny'} · Wersja {snapshot.project.version}</p>
       {snapshot.project.contractor && <p>Kontrahent: {snapshot.project.contractor.name}{snapshot.project.contractor.status === 'inactive' ? ' (nieaktywny)' : ''}</p>}
@@ -61,7 +62,7 @@ export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
       {snapshot.taskAccess === 'none' && <p>Przygotowano wyłącznie metadane projektu. Brak dostępu do zadań.</p>}
       {snapshot.tasks.map(task => <article className="task-row" key={task.id}><div><ParentContext task={task} /><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p>
         {task.subtaskProgress && <p>Podzadania: {task.subtaskProgress.total} · Do odbioru: {task.subtaskProgress.submitted}</p>}
-        {task.assigneeName && <small>Wykonawca: {task.assigneeName}</small>}<StatusBadge task={task} /></div></article>)}
-    </article>)}
+        {task.assigneeName && <small>Wykonawca: {task.assigneeName}</small>}<StatusBadge task={task} /><OfflineProgress saved={saved} task={task} /></div></article>)}
+    </article>; })}
   </section>;
 }

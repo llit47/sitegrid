@@ -1,3 +1,4 @@
+import { ProgressQueue } from './progress/queue-ui.js';
 import { DiscussionDraftMemory, clearDiscussionDraftMemory } from './task-comments/drafts.js';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -78,6 +79,7 @@ function App({ invitationToken }: { invitationToken: string }) {
     finally { setBusy(false); }
   };
   return <>
+    {session?.user && <ProgressQueue key={session.user.id} accountId={session.user.id} />}
     {session && window.location.pathname === '/invitations/accept' && <InvitationAcceptance token={invitationToken} csrfToken={session.csrfToken} user={session.user}
       onAccepted={async () => { await load(); setWorkspaceRevision(current => current + 1); }} />}
     {session?.user ? <OrganizationSwitcher key={`${session.user.id}:${workspaceRevision}`} accountId={session.user.id} csrfToken={session.csrfToken}

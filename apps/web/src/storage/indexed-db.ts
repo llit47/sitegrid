@@ -1,5 +1,5 @@
 import { validateSnapshot, validUuid, OFFLINE_ACCESS_MS, type ProjectSnapshot } from './snapshot.js';
-export const STORAGE_SCHEMA_VERSION = 2;
+export const STORAGE_SCHEMA_VERSION = 3;
 export type StorageScope = Readonly<{ accountId: string; organizationId: string; projectId: string }>;
 export type StorageFailure = 'unavailable' | 'blocked' | 'quota' | 'aborted' | 'invalid' | 'failed' | 'expired' | 'stale';
 export class LocalStorageError extends Error {
@@ -53,7 +53,7 @@ export function localTransaction<T>(db: IDBDatabase, stores: string[], mode: IDB
     let result: T;
     let rejected: LocalStorageError | undefined;
     try {
-      tx = db.transaction(stores, mode);
+      tx = db.transaction(stores, mode, mode === 'readwrite' ? { durability: 'strict' } : undefined);
       const cancel = () => { rejected = new LocalStorageError('aborted'); try { tx!.abort(); } catch { /* Already committed. */ } };
       const cleanup = () => signal?.removeEventListener('abort', cancel);
       tx.oncomplete = () => { cleanup(); resolve(result); };
@@ -90,9 +90,11 @@ export async function openProjectStorage(scope: StorageScope, signal?: AbortSign
       const metadata = tx.objectStore('metadata');
       if (metadata.keyPath !== null || metadata.autoIncrement || metadata.indexNames.length) throw new LocalStorageError('invalid');
       const request = metadata.get('owner'); request.onsuccess = () => { if (!ownerMatches(request.result, owner)) tx.abort(); };
-    } else throw new LocalStorageError('invalid');
+    } else if (oldVersion !== 2 || !database.objectStoreNames.contains('metadata') || !database.objectStoreNames.contains('confirmed')) throw new LocalStorageError('invalid');
     // Only add our store. Future queue/draft stores are never deleted or cleared.
-    database.createObjectStore('confirmed');
+    if (oldVersion < 2) database.createObjectStore('confirmed');
+    if (database.objectStoreNames.contains('progress')) throw new LocalStorageError('invalid');
+    database.createObjectStore('progress');
   });
   let closed = false;
   const close = () => { closed = true; db.close(); signal?.removeEventListener('abort', close); };
@@ -101,7 +103,7 @@ export async function openProjectStorage(scope: StorageScope, signal?: AbortSign
   const check = () => {
     try {
       if (closed) throw new LocalStorageError('failed');
-      if (!plainStore(db, 'metadata') || !plainStore(db, 'confirmed')) throw new LocalStorageError('invalid');
+      if (!plainStore(db, 'metadata') || !plainStore(db, 'confirmed') || !plainStore(db, 'progress')) throw new LocalStorageError('invalid');
     }
     catch (error) { throw storageFailure(error); }
   };
@@ -126,6 +128,14 @@ export async function openProjectStorage(scope: StorageScope, signal?: AbortSign
   catch (error) { close(); throw storageFailure(error); }
   // A caller must close and discard this handle on logout or ANY scope change.
   return { verify, close,
+    progressTransaction<T>(work: (tx: IDBTransaction, result: (value: T) => void, invalid: (error?: LocalStorageError) => void) => void) {
+      check();
+      return localTransaction<T>(db, ['metadata', 'confirmed', 'progress'], 'readwrite', (tx, result, invalid) => {
+        const request = tx.objectStore('metadata').get('owner');
+        request.onsuccess = () => { if (!ownerMatches(request.result, owner)) invalid(); };
+        work(tx, result, invalid);
+      }, signal);
+    },
     async read(generation: string): Promise<ConfirmedSnapshot | null> {
       const value = await readRaw(); if (value === undefined) return null;
       await validateRecord(value);

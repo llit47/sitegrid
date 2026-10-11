@@ -87,3 +87,7 @@ Wyniki lokalne 2026-10-10: Node 24.21.0, PostgreSQL 17.11, runtime `sitegrid` be
 ## M10 / PR17 — odczyt offline
 
 [Przygotowany snapshot](PROJECT_SNAPSHOTS.md) pokazuje autoryzowane statusy/wersje wyłącznie do odczytu. Nie udostępnia komend offline, nie utrwala przerwanego M08 requestu i nie odtwarza go po reconnect. Przejścia, receipt, idempotencja, retry w pamięci i dotychczasowe uprawnienia pozostają bez zmian. Trwałość komend będzie osobnym M11.
+
+## M11 / PR26 — kolejka offline
+
+[Trwała kolejka postępu](OFFLINE_PROGRESS.md) dodaje zapis `start`/`submit` z wcześniej przygotowanego snapshotu, jedną nierozstrzygniętą komendę na zadanie i automatyczny replay tego samego payloadu/operationId w aktywnej aplikacji. Bez zmian kontraktu, receipts, audytu i RLS M08. Konflikty pozostają w kolejce do M12.
