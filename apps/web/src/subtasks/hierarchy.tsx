@@ -23,9 +23,9 @@ export function ProgressHistory({ path, version, onAccessChanged }: { path: stri
       {history?.length===0 && <p>Brak zmian postępu.</p>}{history && <ol>{history.map((entry,i)=><li key={i}>{taskStateName(entry.status)} · Wersja {entry.version} · {new Date(entry.createdAt).toLocaleString('pl-PL')}</li>)}</ol>}</>}
   </div>;
 }
-export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignees,writable,disabled,onChanged,onAccessChanged,onPendingChange,onOpenChange,pendingOnly }: {
+export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignees,writable,disabled,onChanged,onProgressConfirmed,onAccessChanged,onPendingChange,onOpenChange,pendingOnly }: {
   task:Task; path:string; organizationId:string; projectId:string; csrfToken:string; assignees:Assignee[]; writable:boolean; disabled:boolean;
-  onChanged:()=>void; onAccessChanged:()=>void; onPendingChange?:(id:string,pending:boolean)=>void; onOpenChange?:(open:boolean)=>void; pendingOnly?:Set<string>;
+  onChanged:()=>void; onProgressConfirmed?:()=>void; onAccessChanged:()=>void; onPendingChange?:(id:string,pending:boolean)=>void; onOpenChange?:(open:boolean)=>void; pendingOnly?:Set<string>;
 }) {
   const root=useRef<HTMLElement>(null), lifetime=useRef<AbortController | null>(null), sending=useRef(false);
   const [open,setOpen]=useState(false),[tasks,setTasks]=useState<Task[] | null>(null),[creating,setCreating]=useState(false),[assigning,setAssigning]=useState('');
@@ -73,7 +73,7 @@ export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignee
       <div className="subtask-list">{tasks?.map(child=><article className="subtask-row" key={child.id} aria-label={child.title}>
         <h4>{child.title}</h4>{child.description && <p>{child.description}</p>}<p>{child.assigneeName || 'Bez wykonawcy · Backlog'}</p>
         <TaskProgress task={child} path={childPath(child.id)} csrfToken={csrfToken} writable={writable} disabled={busy || disabled || !!assigning || (!!pendingOnly && !pendingOnly.has(child.id))} onPendingChange={onPendingChange}
-          onConfirmed={confirmed=>{setTasks(current=>current?.map(item=>item.id===child.id && item.version<=confirmed.version?{...item,...confirmed}:item) ?? null); onChanged();}}
+          onConfirmed={confirmed=>{setTasks(current=>current?.map(item=>item.id===child.id && item.version<=confirmed.version?{...item,...confirmed}:item) ?? null); (onProgressConfirmed ?? onChanged)();}}
           onAccessChanged={status=>{void observeAccessFailure(path,status); setTasks(null); onAccessChanged();}} onGone={()=>{void observeAccessFailure(path,404); setTasks(null); onAccessChanged();}} />
         {writable && child.status==='planned' && <button className="secondary" disabled={busy || disabled} onClick={()=>{if(guardWorkspaceChange(root.current!)) {setAssigning(child.id); setCreating(false);}}}>{child.assigneeMembershipId?'Zmień wykonawcę podzadania':'Przypisz podzadanie'}</button>}
         {assigning===child.id && <Assignment current={child.assigneeMembershipId} assignees={assignees} busy={busy} cancel={()=>setAssigning('')}

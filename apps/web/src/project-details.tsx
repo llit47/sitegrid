@@ -14,6 +14,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
   const [details, setDetails] = useState<Details | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [reloadPending,setReloadPending] = useState(false), [pendingProgress,setPendingProgress] = useState<Set<string>>(new Set());
+  const [hierarchyRefreshPending, setHierarchyRefreshPending] = useState(false);
   const trackProgress = useCallback((id: string, pending: boolean) => setPendingProgress(current => {const next=new Set(current); if(pending) next.add(id); else next.delete(id); return next;}),[]);
   useEffect(() => {if(reloadPending && pendingProgress.size===0) {setReloadPending(false); setRevision(value => value+1);}},[reloadPending,pendingProgress]);
   const [expandedRoots,setExpandedRoots] = useState<Set<string>>(new Set());
@@ -41,6 +42,27 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
     }).catch(e => { if (!controller.signal.aborted) { setError(e.message); if ([401, 403].includes(e.status)) onAccessChanged(); if (e.status === 404) onGone(); } });
     return () => controller.abort();
   }, [path, revision, onSaved, onGone, onAccessChanged]);
+  useEffect(() => {
+    // Keep forms and TaskProgress mounted; unresolved receipts must retain their command for retry.
+    if (!hierarchyRefreshPending || pendingProgress.size || busy || !details) return;
+    const controller = new AbortController();
+    void request<{ tasks: Task[] }>(`${path}/tasks`, controller.signal).then(async data => {
+      if (!controller.signal.aborted) await reconcilePreparedTasks(scope.organizationId, scope.projectId, data.tasks.map(task => task.id));
+      if (!controller.signal.aborted) {
+        setTasks(current => data.tasks.map(task => {
+          const known = current.find(item => item.id === task.id);
+          return known && known.version > task.version ? known : task;
+        }));
+        setHierarchyRefreshPending(false);
+      }
+    }).catch(e => { if (!controller.signal.aborted) {
+      setHierarchyRefreshPending(false); setError(e.message);
+      if ([401, 403, 404].includes(e.status)) { setDetails(null); setTasks([]); setMembers([]); }
+      if ([401, 403].includes(e.status)) onAccessChanged();
+      if (e.status === 404) onGone();
+    } });
+    return () => controller.abort();
+  }, [path, hierarchyRefreshPending, pendingProgress, busy, details, scope.organizationId, scope.projectId, onAccessChanged, onGone]);
   const mutate = async (suffix: string, payload: object) => {
     const signal = lifetime.current!.signal;
     if (busy || !guardPendingOperations()) return false;
@@ -88,11 +110,11 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
         <div className="task-list">{tasks.filter(task => !task.parent || !expandedRoots.has(task.parent.id)).map(task => <article className="task-row" key={task.id}>
           <div><ParentContext task={task} /><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p><small>{task.assigneeName}</small></div>
           <TaskProgress task={task} path={`${path}/tasks/${encodeURIComponent(task.id)}`} csrfToken={csrfToken}
-            writable={details.project.status === 'active'} disabled={busy || (reloadPending && !pendingProgress.has(task.id))} onPendingChange={trackProgress} onAccessChanged={status => { void observeAccessFailure(path, status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(path, 404); onGone(); }}
-            onConfirmed={confirmed => setTasks(current => current.map(item => item.id === confirmed.id && item.version <= confirmed.version ? { ...item, ...confirmed } : item))} />
+            writable={details.project.status === 'active'} disabled={busy || ((reloadPending || hierarchyRefreshPending) && !pendingProgress.has(task.id))} onPendingChange={trackProgress} onAccessChanged={status => { void observeAccessFailure(path, status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(path, 404); onGone(); }}
+            onConfirmed={confirmed => { setTasks(current => current.map(item => item.id === confirmed.id && item.version <= confirmed.version ? { ...item, ...confirmed } : item)); if (task.parent) setHierarchyRefreshPending(true); }} />
           {details.permissions.manageTasks && details.project.status === 'active' && <button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) { setEditingProject(false); setEditing(task); setShowTaskForm(true); } }}>Edytuj zadanie</button>}
           {task.parent && <ProgressHistory path={`${path}/tasks/${task.id}`} version={task.version} onAccessChanged={onAccessChanged} />}
-          {details.permissions.manageTasks && !task.parent && <Subtasks task={task} path={`${path}/tasks/${task.id}`} organizationId={scope.organizationId} projectId={scope.projectId} csrfToken={csrfToken} assignees={members.filter(member => member.companyStatus==='active' && member.accountActive)} writable={details.project.status==='active'} disabled={busy} pendingOnly={reloadPending ? pendingProgress : undefined} onPendingChange={trackProgress} onChanged={() => setReloadPending(true)} onAccessChanged={onAccessChanged} onOpenChange={open => setExpandedRoots(current => {const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next;})} />}
+          {details.permissions.manageTasks && !task.parent && <Subtasks task={task} path={`${path}/tasks/${task.id}`} organizationId={scope.organizationId} projectId={scope.projectId} csrfToken={csrfToken} assignees={members.filter(member => member.companyStatus==='active' && member.accountActive)} writable={details.project.status==='active'} disabled={busy} pendingOnly={reloadPending || hierarchyRefreshPending ? pendingProgress : undefined} onPendingChange={trackProgress} onChanged={() => setReloadPending(true)} onProgressConfirmed={() => setHierarchyRefreshPending(true)} onAccessChanged={onAccessChanged} onOpenChange={open => setExpandedRoots(current => {const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next;})} />}
         </article>)}</div>
         {showTaskForm && details.permissions.manageTasks && details.project.status === 'active' && <TaskForm key={`${revision}-${editing?.id ?? 'new'}`} task={editing} members={members} busy={busy} cancel={() => { setEditing(null); setShowTaskForm(false); }}
           save={payload => mutate(editing ? `/tasks/${encodeURIComponent(editing.id)}/update` : '/tasks', payload)} />}
