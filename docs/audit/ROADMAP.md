@@ -1,16 +1,18 @@
+> **Aktualizacja decyzji 2026-10-11 (plan, niewdrożony w v0.1.1):** kolejność realizacji zmieniono na PR20 (dokumentacja) → PR21 (backlog, uprawnienia i zadaniowy pulpit) → PR22 (podzadania) → PR23 (komentarze i zdjęcia), następnie M11/M12 (offline). Kanoniczna specyfikacja: [Zarządzanie zadaniami v2](../TASK_MANAGEMENT_V2.md). Wcześniejsze opisy M07–M10 i kolumny historycznych PR-ów dokumentują aktualny kod, nie docelowe uprawnienia. Wymóg niezawodności offline przed pilotażem pozostaje, lecz nie zastępuje użytecznego przepływu zadań.
+
 # SiteGrid — roadmapa małego MVP offline-first
 
 Data: 2026-10-09. **Architektura kierunkowa przyjęta w PR #2; kolejne etapy wdrażano w PR-ach (do M10/PR17), lecz pełne MVP offline nadal jest w budowie; limity pozostają do zatwierdzenia.** Źródło decyzji: [architektura](ARCHITECTURE.md) i [macierz uprawnień](PERMISSIONS.md). Historyczny audyt referencji pozostaje w [FUNCTIONALITY.md](FUNCTIONALITY.md). Niniejszy plan zastępuje wcześniejszą kolejność z pilotażem online przed offline; wcześniejsze priorytety backlogu nie wyznaczają już bramki MVP.
 
 ## Aktualizacja modelu firmy i kontrahentów (2026-10-10)
 
-Decyzja biznesowa: głównym scenariuszem jest jedna firma wykonawcza, wielu kontrahentów **bez kont** oraz wspólna pula pracowników przypisywanych indywidualnie do projektów i zadań. Zachowujemy wielofirmową izolację i dotychczasowe API. Bez stałych brygad i bez dostępu kontrahentów do aplikacji. Kontrakt produktu (M09C wdrożone w PR16; godziny i raporty nadal planowane): [MODEL_KONTRAHENTOW](../CONTRACTOR_PROJECT_MODEL.md). M09/PWA pozostaje bez zmian; [M09C/PR16](../CONTRACTORS.md) realizuje kontrahentów; [M10/PR17](../PROJECT_SNAPSHOTS.md) dodaje wyłącznie autoryzowany odczyt offline. Następny etap to M11. M13 musi uwzględniać przedziały czasu i serwerową kontrolę kolizji dla pracownika we wszystkich projektach jego organizacji.
+Decyzja biznesowa: głównym scenariuszem jest jedna firma wykonawcza, wielu kontrahentów **bez kont** oraz wspólna pula pracowników przypisywanych indywidualnie do projektów i zadań. Zachowujemy wielofirmową izolację i dotychczasowe API. Bez stałych brygad i bez dostępu kontrahentów do aplikacji. Kontrakt produktu (M09C wdrożone w PR16; godziny i raporty nadal planowane): [MODEL_KONTRAHENTOW](../CONTRACTOR_PROJECT_MODEL.md). M09/PWA pozostaje bez zmian; [M09C/PR16](../CONTRACTORS.md) realizuje kontrahentów; [M10/PR17](../PROJECT_SNAPSHOTS.md) dodaje wyłącznie autoryzowany odczyt offline. Następny pierwotnie zaplanowany etap M11 zostaje przesunięty za usprawnienia zadań z PR20–PR23. M13 musi uwzględniać przedziały czasu i serwerową kontrolę kolizji dla pracownika we wszystkich projektach jego organizacji.
 
 ## Zakres i bramka pilotażu
 
 MVP: fundament wielu izolowanych firm (codzienna praca jednej firmy wykonawczej), provisioning przez platformę, administracja kontami i pracownikami firmy, jednorazowa aktywacja, użytkownik w kilku firmach, branding w PostgreSQL, kontrahenci jako rekordy firmowe bez kont, projekty i indywidualnie przypisane zadania, postęp/przeszkody, własne wpisy pracy oraz odbiór online. Jedna PWA instalowana na Android/iOS. Offline-first dla odczytu przygotowanego zakresu i podstawowych zapisów musi działać przed pierwszym pilotażem, wraz z trwałością kolejki, retry, idempotencją i konfliktami.
 
-Bez magazynu, zakupów, kalendarza, czatu, PDF/zdjęć, kosztów, pełnych brygad i rozbudowanego raportowania. Rezygnacja z tych modułów zmniejsza MVP, nie odkłada niezawodności. Administracja, przygotowanie urządzenia i odbiór robót pozostają online zgodnie z macierzą.
+Bez magazynu, zakupów, kalendarza, czatu, biblioteki planów PDF/rysunków, kosztów, pełnych brygad i rozbudowanego raportowania. **Komentarze ze zdjęciami** w dostępnych zadaniach i podzadaniach należą teraz do planowanego zakresu przed pilotażem (PR23); przechowywanie prywatnych plików wymaga spójnego backupu DB i wolumenu. Rezygnacja z pozostałych wymienionych modułów zmniejsza MVP, nie odkłada niezawodności ani wymogu odtworzenia zdjęć. Administracja, przygotowanie urządzenia i odbiór robót pozostają online zgodnie z macierzą.
 
 ## Pierwszy działający przyrost — M01 (historyczny kontrakt tego etapu)
 
@@ -28,6 +30,18 @@ Bez magazynu, zakupów, kalendarza, czatu, PDF/zdjęć, kosztów, pełnych bryga
 - **Brama akceptacji M01:** użytkownik wchodzi do już działającego, świeżego Debiana 13, wkleja jedno polecenie (bez wcześniejszego ręcznego transferu plików) i otrzymuje działającą usługę. Tworzy pierwszego administratora lokalnym CLI, loguje się z przeglądarki, wylogowuje, wykonuje prosty `sitegrid update` i bezpieczny `sitegrid rollback`. Kod i testy nie mogą zależeć od dostępu do API Proxmoxa. Publiczne GitHub Releases llit47/sitegrid dostarczają podpisany manifest i paczki bez uwierzytelnienia klienta; bootstrap/klucz są przypięte, a pierwsza publikacja wymaga zatwierdzenia użytkownika.
 
 To **wąski pierwszy przyrost**, nie ukończone MVP. Obsługa wielu firm, zaproszenia, zaawansowane role i pełne offline-first pozostają w M02–M14. Nie wolno na podstawie działającego logowania ogłaszać gotowości do pilotażu z danymi prawdziwych firm.
+
+## Nowa sekwencja task-first — decyzja 2026-10-11
+
+| PR (plan) | Cel | Bramka |
+|---|---|---|
+| 20 | Dokumentacja nowego modelu | Wspólna specyfikacja; bez zmian runtime |
+| 21 | Backlog + lista zadań wszystkich projektów + pulpit per rola | Zadanie bez wykonawcy; kierownik/brygadzista/admin firmy zarządzają całą firmą; pracownik widzi wyłącznie swoje; testy autoryzacji/migracji/UX |
+| 22 | Podzadania | Własne przypisania/statusy, kontrola hierarchii, brak ujawniania rodzeństwa |
+| 23 | Komentarze i fotografie | Historia, prywatne media, autoryzacja i sprawdzony backup/restore plików |
+| Dalej M11–M12 | Trwałe zapisy offline, retry i konflikty | Nie utracić lokalnych operacji ani nowego zakresu dostępów |
+
+Plany projektu, pliki PDF/rysunki i ich podpinanie do zadań są odłożone. M13–M15 nadal obowiązują, lecz terminy i numery PR wymagają ponownego ustalenia po PR23. Historyczna tabela niżej wyraża zależności funkcjonalne M01–M15, a nie aktualną kolejność prac.
 
 ## Małe PR-y implementacyjne po zatwierdzeniu
 
@@ -68,7 +82,7 @@ Identyfikatory M01–M15 są pozycjami planu, nie numerami GitHuba. Każdy PR ma
 
 ## Po MVP
 
-Oddzielne decyzje i małe PR-y: eksport raportów godzin dla kontrahentów bez udzielania im dostępu, opcjonalna obsługa wielu wykonawców jednego zadania (bez stałych brygad); dokumenty/zdjęcia z własną kolejką uploadu; magazyn oparty na ruchach; kalendarz; powiadomienia; koszty. Rozrost danych uzasadnia synchronizację przyrostową z bezpiecznym kursorem i tombstones. Każdy moduł definiuje swój zakres offline przed wejściem do pilotażu. Nie planuje się osobnej aplikacji natywnej.
+Oddzielne decyzje i małe PR-y: eksport raportów godzin dla kontrahentów bez udzielania im dostępu, opcjonalna obsługa wielu wykonawców jednego zadania (bez stałych brygad); biblioteka planów/dokumentów projektowych i jej upload; osobna kolejka uploadu offline dla zdjęć komentarzy (same zdjęcia online i ich backup są **wymagane przed pilotażem w PR23**); magazyn oparty na ruchach; kalendarz; powiadomienia; koszty. Rozrost danych uzasadnia synchronizację przyrostową z bezpiecznym kursorem i tombstones. Każdy moduł definiuje swój zakres offline przed wejściem do pilotażu. Nie planuje się osobnej aplikacji natywnej.
 
 Do zatwierdzenia: granice MVP, ważność aktywacji 24 h, dostęp offline do 7 dni, cele RPO/RTO i polityka retencji deduplikacji. Przed implementacją snapshotu określić jego limity i wersje docelowych przeglądarek; przed wdrożeniem domenę/HTTPS, pocztę i parametry hosta. Harmonogram kalendarzowy zależy od zespołu; nie jest deklarowany w tym PR.
 
