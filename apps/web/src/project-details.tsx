@@ -1,3 +1,4 @@
+import { useLiveResource } from './tasks/live-resource.js';
 import { Discussion } from './task-comments/discussion.js';
 import { ParentContext, ProgressHistory, Subtasks } from './subtasks/hierarchy.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -9,8 +10,8 @@ import { OfflinePreparation } from './offline/preparation.js';
 import { observeAccessFailure, reconcilePreparedTasks } from './offline/account.js';
 import type { StorageScope } from './storage/indexed-db.js';
 import { guardWorkspaceChange, guardPendingOperations, usePendingOperation } from './workspace/navigation-safety.js';
-export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, onGone, onAccessChanged }: {
-  scope: StorageScope; path: string; contractors: Contractor[] | null; csrfToken: string; onSaved: (project: Project) => void; onGone: () => void; onAccessChanged: () => void;
+export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, onGone, onAccessChanged, active = true }: {
+  active?: boolean; scope: StorageScope; path: string; contractors: Contractor[] | null; csrfToken: string; onSaved: (project: Project) => void; onGone: () => void; onAccessChanged: () => void;
 }) {
   const [details, setDetails] = useState<Details | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -32,38 +33,36 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
   const lifetime = useRef<AbortController | null>(null);
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
   useEffect(() => {
-    const controller = new AbortController(); setDetails(null); setMembers([]); setTasks([]); setExpandedRoots(new Set()); setEditing(null); setEditingProject(false); setShowTaskForm(false); setError('');
-    void request<Details>(path, controller.signal).then(async data => {
-      const [roster, taskList] = await Promise.all([
-        data.permissions.administer || data.permissions.manageTasks ? request<{ members: Member[] }>(`${path}/members`, controller.signal) : { members: [] },
-        data.permissions.readTasks ? request<{ tasks: Task[] }>(`${path}/tasks`, controller.signal) : { tasks: [] },
-      ]);
-      if (!controller.signal.aborted) await reconcilePreparedTasks(scope.organizationId, scope.projectId, taskList.tasks.map(task => task.id));
-      if (!controller.signal.aborted) { setDetails(data); setMembers(roster.members); setTasks(taskList.tasks); onSaved(data.project); }
-    }).catch(e => { if (!controller.signal.aborted) { setError(e.message); if ([401, 403].includes(e.status)) onAccessChanged(); if (e.status === 404) onGone(); } });
-    return () => controller.abort();
-  }, [path, revision, onSaved, onGone, onAccessChanged]);
-  useEffect(() => {
-    // Keep forms and TaskProgress mounted; unresolved receipts must retain their command for retry.
-    if (!hierarchyRefreshPending || pendingProgress.size || busy || !details) return;
-    const controller = new AbortController();
-    void request<{ tasks: Task[] }>(`${path}/tasks`, controller.signal).then(async data => {
-      if (!controller.signal.aborted) await reconcilePreparedTasks(scope.organizationId, scope.projectId, data.tasks.map(task => task.id));
-      if (!controller.signal.aborted) {
-        setTasks(current => data.tasks.map(task => {
-          const known = current.find(item => item.id === task.id);
-          return known && known.version > task.version ? known : task;
-        }));
-        setHierarchyRefreshPending(false);
-      }
-    }).catch(e => { if (!controller.signal.aborted) {
-      setHierarchyRefreshPending(false); setError(e.message);
-      if ([401, 403, 404].includes(e.status)) { setDetails(null); setTasks([]); setMembers([]); }
-      if ([401, 403].includes(e.status)) onAccessChanged();
+    setDetails(null); setMembers([]); setTasks([]); setExpandedRoots(new Set());
+    setEditing(null); setEditingProject(false); setShowTaskForm(false); setError('');
+  }, [path]);
+  useLiveResource(`${path}:${revision}`, async signal => {
+    const data = await request<Details>(path, signal);
+    const [roster, taskList] = await Promise.all([
+      data.permissions.administer || data.permissions.manageTasks ? request<{ members: Member[] }>(`${path}/members`, signal) : { members: [] },
+      data.permissions.readTasks ? request<{ tasks: Task[] }>(`${path}/tasks`, signal) : { tasks: [] },
+    ]);
+    if (!signal.aborted) await reconcilePreparedTasks(scope.organizationId, scope.projectId, taskList.tasks.map(task => task.id));
+    return { data, roster, taskList };
+  }, { active, paused: busy || pendingProgress.size > 0 || reloadPending || hierarchyRefreshPending,
+    receive: ({data, roster, taskList}) => {
+      setDetails(data); setMembers(roster.members); setError('');
+      setTasks(current => taskList.tasks.map(task => {
+        const known = current.find(item => item.id === task.id);
+        return known && known.version > task.version ? known : task;
+      })); onSaved(data.project);
+    }, failed: e => {
+      setError(e.message);
+      if ([401,403,404].includes(e.status ?? 0)) { setDetails(null); setTasks([]); setMembers([]); }
+      if ([401,403].includes(e.status ?? 0)) onAccessChanged();
       if (e.status === 404) onGone();
-    } });
-    return () => controller.abort();
-  }, [path, hierarchyRefreshPending, pendingProgress, busy, details, scope.organizationId, scope.projectId, onAccessChanged, onGone]);
+    },
+  });
+  useEffect(() => {
+    if (hierarchyRefreshPending && !pendingProgress.size && !busy) {
+      setHierarchyRefreshPending(false); setRevision(value => value + 1);
+    }
+  }, [hierarchyRefreshPending,pendingProgress,busy]);
   const mutate = async (suffix: string, payload: object) => {
     const signal = lifetime.current!.signal;
     if (busy || !guardPendingOperations()) return false;
@@ -71,7 +70,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
     try {
       await request(`${path}${suffix}`, signal, csrfToken, payload);
       if (signal.aborted) return false;
-      setNotice('Zapisano zmianę.'); setRevision(value => value + 1); return true;
+      setEditing(null); setEditingProject(false); setShowTaskForm(false); setNotice('Zapisano zmianę.'); setRevision(value => value + 1); return true;
     } catch (e) { if (!signal.aborted) {
       setError((e as Error).message);
       const status = (e as { status?: number }).status;
@@ -92,7 +91,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
       {details.project.status === 'archived' && <p role="status">Projekt archiwalny — historia pozostaje dostępna do odczytu.</p>}
       {details.permissions.administer && details.project.status === 'active' && <>
         <div className="project-actions"><button className="secondary" disabled={busy} onClick={() => { if (!editingProject && guardWorkspaceChange(root.current!)) { setShowTaskForm(false); setEditing(null); setEditingProject(true); } }}>Edytuj projekt</button></div>
-        {editingProject && <ProjectForm key={`project-${revision}`} project={details.project} contractors={contractors} busy={busy} save={payload => mutate('/update', payload)} cancel={() => setEditingProject(false)} />}
+        {editingProject && <ProjectForm project={details.project} contractors={contractors} busy={busy} save={payload => mutate('/update', payload)} cancel={() => setEditingProject(false)} />}
         <button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) void mutate('/archive', { expectedVersion: details.project.version }); }}>Archiwizuj projekt</button>
       </>}
       {(details.permissions.administer || details.permissions.manageTasks) && <section aria-label="Członkowie projektu">
@@ -116,9 +115,9 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
           {details.permissions.manageTasks && details.project.status === 'active' && <button className="secondary" disabled={busy} onClick={() => { if (guardWorkspaceChange(root.current!)) { setEditingProject(false); setEditing(task); setShowTaskForm(true); } }}>Edytuj zadanie</button>}
           <Discussion path={`${path}/tasks/${task.id}`} title={task.title} csrfToken={csrfToken} writable={details.project.status==='active'} onAccessChanged={onAccessChanged} />
           {task.parent && <ProgressHistory path={`${path}/tasks/${task.id}`} version={task.version} onAccessChanged={onAccessChanged} />}
-          {details.permissions.manageTasks && !task.parent && <Subtasks task={task} path={`${path}/tasks/${task.id}`} organizationId={scope.organizationId} projectId={scope.projectId} csrfToken={csrfToken} assignees={members.filter(member => member.companyStatus==='active' && member.accountActive)} writable={details.project.status==='active'} disabled={busy} pendingOnly={reloadPending || hierarchyRefreshPending ? pendingProgress : undefined} onPendingChange={trackProgress} onChanged={() => setReloadPending(true)} onProgressConfirmed={() => setHierarchyRefreshPending(true)} onAccessChanged={onAccessChanged} onOpenChange={open => setExpandedRoots(current => {const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next;})} />}
+          {details.permissions.manageTasks && !task.parent && <Subtasks active={active} task={task} path={`${path}/tasks/${task.id}`} organizationId={scope.organizationId} projectId={scope.projectId} csrfToken={csrfToken} assignees={members.filter(member => member.companyStatus==='active' && member.accountActive)} writable={details.project.status==='active'} disabled={busy} pendingOnly={reloadPending || hierarchyRefreshPending ? pendingProgress : undefined} onPendingChange={trackProgress} onChanged={() => setReloadPending(true)} onProgressConfirmed={() => setHierarchyRefreshPending(true)} onAccessChanged={onAccessChanged} onOpenChange={open => setExpandedRoots(current => {const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next;})} />}
         </article>)}</div>
-        {showTaskForm && details.permissions.manageTasks && details.project.status === 'active' && <TaskForm key={`${revision}-${editing?.id ?? 'new'}`} task={editing} members={members} busy={busy} cancel={() => { setEditing(null); setShowTaskForm(false); }}
+        {showTaskForm && details.permissions.manageTasks && details.project.status === 'active' && <TaskForm key={editing?.id ?? 'new'} task={editing} members={members} busy={busy} cancel={() => { setEditing(null); setShowTaskForm(false); }}
           save={payload => mutate(editing ? `/tasks/${encodeURIComponent(editing.id)}/update` : '/tasks', payload)} />}
       </section> : <p role="status">Dostęp do zadań wymaga roli administratora firmy, kierownika, brygadzisty lub przypisanego pracownika.</p>}
     </>}

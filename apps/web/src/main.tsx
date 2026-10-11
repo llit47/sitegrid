@@ -2,6 +2,7 @@ import { DiscussionDraftMemory, clearDiscussionDraftMemory } from './task-commen
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
+import './theme.css';
 import { PwaShell } from './pwa/shell.js';
 import { announceAccountChange } from './pwa/lifecycle.js';
 import { Organizations } from './platform-administration.js';
@@ -41,7 +42,12 @@ function App({ invitationToken }: { invitationToken: string }) {
     setSession(next);
     setOverview(next.user?.platformAdmin ? await api<Overview>('/api/admin/overview') : null);
   };
-  useEffect(() => { void load().catch(e => { if (!sessionRequest.current?.signal.aborted) setError(e.message); }); return () => sessionRequest.current?.abort(); }, []);
+  useEffect(() => {
+    const verify = () => { if (navigator.onLine) void load().then(() => setError('')).catch(e => { if (!sessionRequest.current?.signal.aborted) setError(e.message); }); };
+    const restored = (event: PageTransitionEvent) => { if (event.persisted) verify(); };
+    verify(); window.addEventListener('online', verify); window.addEventListener('pageshow', restored);
+    return () => { sessionRequest.current?.abort(); window.removeEventListener('online', verify); window.removeEventListener('pageshow', restored); };
+  }, []);
   const login = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!session || busy) return;

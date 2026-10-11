@@ -9,24 +9,29 @@ import { offlineFailureMessage } from './messages.js';
 export function OfflinePreparation({ scope }: { scope: StorageScope }) {
   const [saved, setSaved] = useState<ConfirmedSnapshot | null>(null), [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [error, setError] = useState('');
-  const operation = useRef<AbortController | null>(null);
+  const operation = useRef<AbortController | null>(null), verification = useRef(0);
   useEffect(() => {
     const controller = new AbortController();
-    void (async () => {
+    const check = async () => {
+      const current = ++verification.current;
       const access = await readOfflineAccess();
-      if (!access || access.accountId !== scope.accountId || controller.signal.aborted) return;
+      if (controller.signal.aborted || current !== verification.current) return;
+      if (!access || access.accountId !== scope.accountId) { setSaved(null); setReady(false); return; }
       const handle = await openProjectStorage(scope, controller.signal);
       try {
         const existing = access.scopes.some(item => item.organizationId === scope.organizationId && item.projectId === scope.projectId) ? await handle.read(access.generation) : null;
         const shell = await shellIsAvailable();
-        if (!controller.signal.aborted) { setSaved(existing); setReady(shell && !!existing); }
+        if (!controller.signal.aborted && current === verification.current) { setSaved(existing); setReady(shell && !!existing); }
       } finally { handle.close(); }
-    })().catch(error => { if (!controller.signal.aborted) setError(offlineFailureMessage(error)); });
-    return () => { controller.abort(); operation.current?.abort(); };
+    };
+    const refresh = () => { void check().catch(error => { if (!controller.signal.aborted) { setSaved(null); setReady(false); setError(offlineFailureMessage(error)); } }); };
+    const invalidated = () => { verification.current++; setSaved(null); setReady(false); setMessage(''); if (!operation.current) refresh(); };
+    refresh(); window.addEventListener('sitegrid-offline-access', invalidated);
+    return () => { controller.abort(); operation.current?.abort(); window.removeEventListener('sitegrid-offline-access', invalidated); };
   }, [scope.accountId, scope.organizationId, scope.projectId]);
   const prepare = async () => {
     if (busy) return;
-    const controller = new AbortController(); operation.current = controller;
+    const controller = new AbortController(); operation.current = controller; verification.current++;
     const authorizedAt = Date.now(); setBusy(true); setError(''); setMessage('Pobieranie kompletnego projektu…');
     try {
       const access = await readOfflineAccess();

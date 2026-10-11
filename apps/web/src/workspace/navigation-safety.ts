@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 // Kept in memory only. Section navigation preserves components; destructive navigation
 // must wait for confirmation, including M08 commands with an ambiguous response.
 const pending = new Set<symbol>();
+export const hasPendingOperations = () => pending.size > 0;
 const draftGuards = new Set<() => boolean>();
 export function useDraftGuard(hasDraft: () => boolean) {
   useEffect(() => { draftGuards.add(hasDraft); return () => { draftGuards.delete(hasDraft); }; }, [hasDraft]);
@@ -11,7 +12,7 @@ export function usePendingOperation(active: boolean) {
   useEffect(() => {
     if (!active) return;
     const token = Symbol(); pending.add(token);
-    return () => { pending.delete(token); };
+    return () => { pending.delete(token); if (!pending.size) queueMicrotask(() => window.dispatchEvent(new Event('sitegrid-operations-settled'))); };
   }, [active]);
 }
 export function hasDirtyForms(root: ParentNode = document): boolean {

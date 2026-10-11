@@ -1,9 +1,18 @@
-# Workspace UX (PR18)
+# Workspace UX (PR25)
 
-> **PR21 — bieżący kod:** Pulpit i nawigacja stosują [nowy kontrakt backlogu i dostępu do zadań](TASK_BACKLOG.md). Poniżej zachowano historyczny opis wcześniejszego etapu; w konflikcie stosuj PR21.
+Pulpit i Zadania są osobnymi ekranami. Pulpit pokazuje pełne liczniki zadań i podzadań aktywnych projektów oraz do 8 pozycji wymagających uwagi. `/api/organizations/:id/task-summary` agreguje dane w jednym zapytaniu z istniejącym runtime RLS: administrator/kierownik/brygadzista widzą zakres firmy, pracownik własne zadania. Liczniki nie zależą od paginacji listy. Zadania zachowują filtry, tworzenie, przydziały, dyskusje i podzadania.
 
-> **Nowy kontrakt produktu 2026-10-11 — docelowy UX, niewdrożony w v0.1.1:** [Zarządzanie zadaniami v2](TASK_MANAGEMENT_V2.md). Pulpit ma pokazywać rzeczywiste, autoryzowane zadania: administrator/kierownik/brygadzista — zadania całej firmy z backlogiem i filtrami; pracownik — wyłącznie własne. Osobna zakładka „Zadania”, szybkie tworzenie bez wymaganego wykonawcy i przypisywanie z listy należą do PR21. Podzadania (PR22), komentarze/zdjęcia (PR23) następują osobno; planów PDF na razie nie realizujemy. Poniższa specyfikacja PR18 jest **historycznym opisem interfejsu v0.1.1**; jej „brak globalnych zadań” i powitalny pulpit nie są docelowym UX. W czasie implementacji zachować ochronę szkiców, niestabilnych komend M08, izolację firmy i PWA.
+Aktywny widok odpytuje autoryzowane dane co 15 sekund, wyłącznie online i w widocznej karcie. Powrót do karty, sekcji lub sieci odświeża dane natychmiast. Odświeżenie zachowuje zamontowane karty, rozwinięcia, formularze, zdjęcia i szkice dyskusji; odpowiedzi nie zastępują nowszej wersji. Jedno zapytanie danego zasobu może być w toku; zmiana zakresu anuluje poprzednie. Podczas zapisu lub niejednoznacznego wyniku M08 polling trwa, ale zastąpienie danych czeka na rozstrzygnięcie operacji. Pobrane strony listy są ponownie odczytywane; jawna zmiana filtrów/zapis resetuje paginację. Otwarta karta wypadająca poza filtr/stronę jest ponownie autoryzowana i zachowana z oznaczeniem, aby nie utracić szkicu. Ochrona dostępu ma pierwszeństwo przed zachowaniem stanu.
 
+Kompaktowe karty mają statusy **Backlog**, **Do zrobienia**, **W toku**, **Do odbioru** i przyciski co najmniej 44 px. Techniczna wersja pozostaje w API, kontroli współbieżności i historii postępu. Motyw automatycznie śledzi `prefers-color-scheme`, również po zmianie ustawień systemowych; wspólna paleta obejmuje nawigację, pulpit, zadania, formularze, dialogi, dyskusje, zdjęcia i PWA.
+
+PWA pokazuje mały wskaźnik Online/Offline oraz rozwijane instrukcje instalacji i istotne ostrzeżenia. Utrata sieci automatycznie otwiera istniejący viewer tylko do odczytu i ukrywa interfejs online, zachowując go w pamięci. Powrót online ponownie weryfikuje sesję. Nie ma ręcznego przełącznika ani zapisu offline. Szkice nie przetrwają przeładowania, restartu lub unieważnienia konta.
+
+Walidacja: `npm run check`, `tests/task-summary.test.ts`, `tests/ux-refresh-browser.mjs` oraz istniejące regresje zadań, podzadań, M08, dyskusji, workspace, PWA i snapshotów. Nowy test sprawdza dwa konta, interwał, widoczność, reconnect, opóźnione odpowiedzi, szkice/zdjęcia, systemowy motyw i kontrast oraz 1280/768/390 px. Screenshoty syntetycznych danych: `/tmp/sitegrid-pr25-visuals/`. Bez migracji, nowych zależności i zmiany kontraktu wydania.
+
+## Historyczny opis PR18
+
+Poniżej zachowano opis wcześniejszego UX; bieżące zachowanie definiuje PR25 powyżej.
 
 Nawigacja działa w pamięci zakładki na istniejącej trasie `/`. Nie dodaje routera, tras serwera ani zmian do allowlist PWA. Aktywacja zaproszeń nadal używa `/invitations/accept`.
 

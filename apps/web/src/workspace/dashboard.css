@@ -1,0 +1,8 @@
+.dashboard-counters { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 16px 0 24px; }
+.dashboard-counters > div { padding: 16px; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 10px; }
+.dashboard-counters dd { font-size: 28px; font-weight: 750; margin: 4px 0 0; }
+.dashboard-attention { list-style: none; padding: 0; display: grid; gap: 8px; }
+.dashboard-attention li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.dashboard-attention small { display: block; color: var(--text-muted); margin-top: 4px; }
+@media(max-width:700px) { .dashboard-counters { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:400px) { .dashboard-attention li { align-items: flex-start; flex-direction: column; } }

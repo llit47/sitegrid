@@ -90,7 +90,7 @@ async function invitationRegression(mobile, offlineLaunch, issuer) {
     });
     const page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message));
     await page.goto(config.origin);
-    await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
+    await page.waitForFunction(async () => !!navigator.serviceWorker.controller && await (await navigator.serviceWorker.ready).active);
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     await assertMainLandmark(page, 'Zaloguj się.');
     if (offlineLaunch) await context.setOffline(true);
@@ -204,7 +204,7 @@ try {
     let ownSessionReads = 0;
     page.on('request', request => { if (new URL(request.url()).pathname === '/api/auth/session') ownSessionReads++; });
     await page.goto(config.origin);
-    await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
+    await page.waitForFunction(async () => !!navigator.serviceWorker.controller && await (await navigator.serviceWorker.ready).active);
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     await selectCompany(page, company);
     await page.getByRole('button', { name: 'Poufny projekt A Aktywny Kontrahent: Poufny kontrahent A', exact: true }).click();
@@ -244,12 +244,12 @@ try {
     await context.setOffline(true);
     await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
     await assertMainLandmark(page, 'SiteGrid bez połączenia');
-    assert.equal(await page.getByText('Poufne zadanie A', { exact: true }).count(), 0);
-    assert.equal(await page.getByText('Kontrahent: Poufny kontrahent A', { exact: true }).count(), 0);
-    assert.equal(await page.locator('.account').count(), 0);
+    assert.equal(await page.getByText('Poufne zadanie A', { exact: true }).filter({visible:true}).count(), 0);
+    assert.equal(await page.getByText('Kontrahent: Poufny kontrahent A', { exact: true }).filter({visible:true}).count(), 0);
+    assert.equal(await page.locator('.account:visible').count(), 0);
     await page.reload(); await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
     await assertMainLandmark(page, 'SiteGrid bez połączenia');
-    await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
+    await page.waitForFunction(async () => !!navigator.serviceWorker.controller && await (await navigator.serviceWorker.ready).active);
     assert.equal(await page.locator('#email').count(), 0);
     await page.screenshot({ path: `/tmp/sitegrid-pr15-${mobile ? 'mobile' : 'desktop'}-offline.png`, fullPage: true });
     await context.setOffline(false); await page.getByText('first@example.test', { exact: true }).waitFor();

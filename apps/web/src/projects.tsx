@@ -6,8 +6,8 @@ import { request, stateName, type Project } from './project-api.js';
 import { reconcilePreparedProjects } from './offline/account.js';
 import { guardWorkspaceChange, guardPendingOperations, usePendingOperation } from './workspace/navigation-safety.js';
 export type { Project } from './project-api.js';
-export function Projects({ accountId, organizationId, admin, csrfToken, onAccessChanged, directory, onSummary }: {
-  accountId: string; organizationId: string; admin: boolean; csrfToken: string; onAccessChanged: () => void; directory: Directory; onSummary: (projects: Project[] | null) => void;
+export function Projects({ accountId, organizationId, admin, csrfToken, onAccessChanged, directory, onSummary, active = true }: {
+  active?: boolean; accountId: string; organizationId: string; admin: boolean; csrfToken: string; onAccessChanged: () => void; directory: Directory; onSummary: (projects: Project[] | null) => void;
 }) {
   const path = `/api/organizations/${encodeURIComponent(organizationId)}/projects`;
   const [creating, setCreating] = useState(false);
@@ -65,6 +65,6 @@ export function Projects({ accountId, organizationId, admin, csrfToken, onAccess
       </button>)}
     </div>}
     {creating && <ProjectForm contractors={directory.contractors} busy={busy} save={create} cancel={() => setCreating(false)} />}
-    {selected && <ProjectDetails key={selected} scope={{ accountId, organizationId, projectId: selected }} path={`${path}/${encodeURIComponent(selected)}`} contractors={directory.contractors} csrfToken={csrfToken} onSaved={changed} onGone={gone} onAccessChanged={onAccessChanged} />}
+    {selected && <ProjectDetails active={active} key={selected} scope={{ accountId, organizationId, projectId: selected }} path={`${path}/${encodeURIComponent(selected)}`} contractors={directory.contractors} csrfToken={csrfToken} onSaved={changed} onGone={gone} onAccessChanged={onAccessChanged} />}
   </section>;
 }

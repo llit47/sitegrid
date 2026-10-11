@@ -116,12 +116,12 @@ export async function sharedDiscussionDrafts({page,f,task,project,width,png}) {
     await projectView.getByRole('button',{name:'Ponów komentarz',exact:true}).waitFor();
     await assertDraft(retryText,retryFiles);await assertLocked(false);
     for(const view of views)assert.equal(await view.locator('button[type=submit]').textContent(),'Ponów komentarz');
-    // Reconnect remounts the workspace; the uncertain payload stays in page memory.
+    // Reconnect retains both editors and the exact uncertain payload in page memory.
     await page.context().setOffline(true);
-    await page.getByText('Brak połączenia. Odczyt tylko wcześniej przygotowanych projektów z ważnym dostępem.',{exact:true}).waitFor();
-    assert.equal(await page.locator('.comment-form').count(),0);
+    await page.getByRole('status').getByText('Offline',{exact:true}).waitFor();
+    assert.equal(await page.locator('.comment-form:visible').count(),0);
     await page.context().setOffline(false);await selectCompany(page,f.organizations.a,'Zadania');
-    await taskView.getByRole('button',{name:'Komentarze i zdjęcia',exact:true}).click();
+    assert(await taskView.getByRole('button',{name:'Zwiń dyskusję',exact:true}).isVisible());
     // The existing pending-operation guard blocks opening another project until replay.
     await assertDraft(retryText,retryFiles,[taskView]);await assertLocked(false,[taskView]);
     await taskView.getByRole('button',{name:'Ponów komentarz',exact:true}).click();
@@ -136,7 +136,7 @@ export async function sharedDiscussionDrafts({page,f,task,project,width,png}) {
     assert.equal(payloads[0].text,retryText);
     assert.deepEqual(payloads[0].photos,retryFiles.map(file=>({name:file.name,bytes:file.buffer})));
     await navigateWorkspace(page,'Projekty');await page.getByRole('button',{name:/Projekt 1 Aktywny/}).click();
-    await projectView.getByRole('button',{name:'Komentarze i zdjęcia',exact:true}).click();
+    const reopen=projectView.getByRole('button',{name:'Komentarze i zdjęcia',exact:true});if(await reopen.count())await reopen.click();
     await assertSaved(retryText,retryFiles,payloads[0].id);
   }finally{await page.unroute(pattern);}
   // Leaving the organization discards its in-memory draft after the existing guard.

@@ -15,7 +15,7 @@ try {
   const page=await context.newPage();acceptDiscardDialogs(page);page.on('pageerror',e=>errors.push(e.message));await page.goto(f.config.origin);await selectCompany(page,f.organizations.a,'Zadania');return {page,context};
  };
  const top=(page,title)=>page.locator('.company-task').filter({has:page.getByRole('heading',{name:title,exact:true})});
- const expand=async page=>{await top(page,'Praca główna').getByRole('button',{name:'Pokaż podzadania',exact:true}).click();await page.locator('.subtasks').getByRole('button',{name:'Dodaj podzadanie',exact:true}).waitFor();};
+ const expand=async page=>{await top(page,'Praca główna').waitFor();const show=top(page,'Praca główna').getByRole('button',{name:'Pokaż podzadania',exact:true});if(await show.count())await show.click();await page.locator('.subtasks').getByRole('button',{name:'Dodaj podzadanie',exact:true}).waitFor();};
  for(const width of [1280,768,390]) {
   const manager=await open('manager',width);await top(manager.page,'Praca główna').waitFor();await expand(manager.page);
   await manager.page.locator('.subtasks').getByRole('button',{name:'Dodaj podzadanie',exact:true}).click();const form=manager.page.locator('.subtask-form');
@@ -26,7 +26,7 @@ try {
   assert(await child.evaluate(element=>element.getBoundingClientRect().right<=innerWidth),'nested child remains inside viewport');
   await manager.page.screenshot({path:`/tmp/sitegrid-pr22-visuals/manager-${width}.png`,fullPage:true});
   const worker=await open('worker',width);const own=top(worker.page,title);await own.waitFor();assert.equal(await worker.page.locator('.subtasks').count(),0);assert.equal(await worker.page.getByText('POUFNY OPIS RODZICA',{exact:true}).count(),0);assert.equal(await worker.page.locator('.subtask-summary').count(),0);assert(await own.getByText('Podzadanie · Praca główna',{exact:true}).isVisible());
-  await own.getByRole('button',{name:'Rozpocznij zadanie',exact:true}).click();await own.getByRole('button',{name:'Zgłoś do odbioru',exact:true}).waitFor();await own.getByRole('button',{name:'Zgłoś do odbioru',exact:true}).click();await own.getByText('Zgłoszone do odbioru · Wersja 4',{exact:true}).waitFor();
+  await own.getByRole('button',{name:'Rozpocznij zadanie',exact:true}).click();await own.getByRole('button',{name:'Zgłoś do odbioru',exact:true}).waitFor();await own.getByRole('button',{name:'Zgłoś do odbioru',exact:true}).click();await own.getByText('Do odbioru',{exact:true}).waitFor();
   await own.getByRole('button',{name:'Historia postępu',exact:true}).click();await own.locator('.progress-history li').first().waitFor();assert.equal(await own.locator('.progress-history li').count(),2);
   await worker.page.screenshot({path:`/tmp/sitegrid-pr22-visuals/worker-${width}.png`,fullPage:true});
   for(const page of [worker.page,manager.page]) assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -78,7 +78,7 @@ try {
   await page.route(`**/tasks/${children[1].id}/commands`,async route=>{requests.push(route.request().postDataJSON());if(!lost){lost=true;const response=await route.fetch();assert.equal(response.status(),200);await route.abort('failed');}else await route.continue();});
   await row(children[1].title).getByRole('button',{name:'Rozpocznij zadanie',exact:true}).click();await row(children[1].title).getByRole('button',{name:'Ponów operację',exact:true}).waitFor();
   const before=reads;
-  await row(children[0].title).getByRole('button',{name:'Zgłoś do odbioru',exact:true}).click();await row(children[0].title).getByText('Zgłoszone do odbioru · Wersja 3',{exact:true}).waitFor();
+  await row(children[0].title).getByRole('button',{name:'Zgłoś do odbioru',exact:true}).click();await row(children[0].title).getByText('Do odbioru',{exact:true}).waitFor();
   // Let effects run: no GET/reset may occur while the other receipt is unresolved.
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   assert.equal(reads,before);assert(await summary(0,0,1,0).isVisible());await assertDraft();assert(await row(children[1].title).getByRole('button',{name:'Ponów operację',exact:true}).isEnabled());

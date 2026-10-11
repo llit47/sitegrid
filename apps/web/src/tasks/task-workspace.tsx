@@ -8,15 +8,18 @@ import { guardPendingOperations, guardWorkspaceChange, usePendingOperation } fro
 import { QuickTaskForm, type Assignee } from './task-form.js';
 import { Assignment } from './assignment.js';
 import './tasks.css';
-export type CompanyTask = Task & { projectId: string; projectName: string; projectStatus: string };
+import { useLiveResource } from './live-resource.js';
+import { retainOpenCards } from './retained-cards.js';
+export type CompanyTask = Task & { projectId: string; projectName: string; projectStatus: string; retained?: boolean };
 type Result = { tasks: CompanyTask[]; hasMore: boolean; permissions: { manageTasks: boolean } };
-const views = [['all','Wszystkie'],['mine','Moje'],['backlog','Backlog'],['todo','Do zrobienia'],['in_progress','W trakcie'],['submitted','Do odbioru']];
-export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onAccessChanged }: {
-  organizationId: string; projects: Project[] | null; manage: boolean; csrfToken: string; onAccessChanged: () => void;
+const views = [['all','Wszystkie'],['mine','Moje'],['backlog','Backlog'],['todo','Do zrobienia'],['in_progress','W toku'],['submitted','Do odbioru']];
+export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onAccessChanged, active = true }: {
+  active?: boolean; organizationId: string; projects: Project[] | null; manage: boolean; csrfToken: string; onAccessChanged: () => void;
 }) {
   const base = `/api/organizations/${organizationId}`;
   const root = useRef<HTMLElement>(null), lifetime = useRef<AbortController | null>(null);
-  const listRequest = useRef<AbortController | null>(null);
+  const pages = useRef(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [expandedRoots,setExpandedRoots] = useState<Set<string>>(new Set());
   const [tasks,setTasks] = useState<CompanyTask[] | null>(null), [assignees,setAssignees] = useState<Assignee[]>([]);
   const [view,setView] = useState(manage ? 'all' : 'mine'), [projectId,setProjectId] = useState(''), [assignee,setAssignee] = useState('');
@@ -33,18 +36,30 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
   usePendingOperation(busy);
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
   const query = new URLSearchParams({ view, q:search, projectStatus, ...(projectId ? { projectId } : {}), ...(assignee ? { assigneeMembershipId:assignee } : {}) }).toString();
-  const reload = useCallback(() => { listRequest.current?.abort(); setRevision(value => value+1); }, []);
+  const reload = useCallback(() => { pages.current = 1; setLoadingMore(false); setRevision(value => value+1); }, []);
   useEffect(() => {
     // Keep every unresolved M08 component/operation ID mounted until its result is known.
     if (reloadPending && pendingProgress.size === 0) { setReloadPending(false); reload(); }
   }, [reloadPending,pendingProgress,reload]);
   const failed = (e: { message: string; status?: number }) => { setError(e.message); if ([401,403].includes(e.status ?? 0)) { setTasks(null); onAccessChanged(); } };
-  useEffect(() => {
-    const controller = new AbortController(); listRequest.current = controller; setTasks(null); setExpandedRoots(new Set()); setHasMore(false); setError('');
-    void request<Result>(`${base}/tasks?${query}`,controller.signal).then(data => { if (!controller.signal.aborted) { setTasks(data.tasks); setHasMore(data.hasMore); } })
-      .catch(e => { if (!controller.signal.aborted) failed(e); });
-    return () => controller.abort();
-  }, [base,query,revision]);
+  useEffect(() => { setTasks(null); setExpandedRoots(new Set()); setHasMore(false); pages.current = 1; }, [base,query]);
+  const refreshData = useLiveResource(`${base}?${query}:${revision}`, async signal => {
+    const loaded: CompanyTask[] = []; let hasMore = false;
+    for (let page = 0; page < pages.current; page++) {
+      const data = await request<Result>(`${base}/tasks?${query}&offset=${page * 100}`, signal);
+      loaded.push(...data.tasks); hasMore = data.hasMore;
+      if (!hasMore) break;
+    }
+    return { tasks: await retainOpenCards(loaded, tasks, root.current, base, signal), hasMore };
+  }, { active, paused: busy || pendingProgress.size > 0 || reloadPending,
+    receive: data => {
+      setTasks(current => data.tasks.map(task => {
+        const previous = current?.find(item => item.id === task.id);
+        return previous && previous.version > task.version ? previous : task;
+      }));
+      setHasMore(data.hasMore); setLoadingMore(false); setError('');
+    }, failed: e => { setLoadingMore(false); failed(e); },
+  });
   useEffect(() => {
     if (!manage) return;
     const controller = new AbortController(); setDirectoryError('');
@@ -78,13 +93,9 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
     } catch (e) { if (!signal.aborted) failed(e as Error); }
     finally { if (!signal.aborted) setBusy(false); }
   };
-  const more = async () => {
-    if (busy || !tasks || !guardPendingOperations()) return;
-    const signal = listRequest.current?.signal; if (!signal || signal.aborted) return;
-    setBusy(true);
-    try { const data = await request<Result>(`${base}/tasks?${query}&offset=${tasks.length}`,signal);
-      if (!signal.aborted) { setTasks(current => [...(current ?? []),...data.tasks.filter(item => !current?.some(existing => existing.id === item.id))]); setHasMore(data.hasMore); }
-    } catch (e) { if (!signal.aborted) failed(e as Error); } finally { if (!signal.aborted) setBusy(false); }
+  const more = () => {
+    if (busy || loadingMore || !tasks || !guardPendingOperations()) return;
+    pages.current++; setLoadingMore(true); refreshData();
   };
   return <section ref={root} className="task-workspace" aria-label={manage ? 'Zadania firmy' : 'Moje zadania'}>
     <div className="project-toolbar"><h2>{manage ? 'Zadania firmy' : 'Moje zadania'}</h2><div className="project-actions">
@@ -101,9 +112,10 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
     {creating && projects && <QuickTaskForm projects={projects} assignees={assignees} busy={busy} save={create} cancel={() => setCreating(false)} />}
     {!tasks && !error && <p role="status">Ładowanie zadań…</p>}
     {tasks?.length === 0 && <p role="status">{view==='backlog' ? 'Backlog jest pusty. Utwórz zadanie bez wykonawcy.' : manage ? 'Brak zadań dla wybranych filtrów.' : 'Nie masz zadań dla wybranych filtrów.'}</p>}
-    <div className="company-task-list">{tasks?.filter(task => !task.parent || !expandedRoots.has(task.parent.id)).map(task => <article key={task.id} className="company-task" aria-label={task.title}>
+    <div className="company-task-list">{tasks?.filter(task => !task.parent || !expandedRoots.has(task.parent.id)).map(task => <article key={task.id} data-task-id={task.id} className="company-task" aria-label={task.title}>
       <div className="company-task-content"><small>{task.projectName}{task.projectStatus==='archived' ? ' · Archiwalny' : ''}</small><ParentContext task={task} /><h3>{task.title}</h3>{task.description && <p>{task.description}</p>}
         {manage && <p className="task-assignee-name">{task.assigneeMembershipId ? task.assigneeName : 'Bez wykonawcy · Backlog'}</p>}
+        {task.retained && <p className="hint">Zachowano otwarty widok. Zadanie jest poza bieżącą listą.</p>}
       </div><div className="company-task-actions"><TaskProgress task={task} path={taskPath(task)} csrfToken={csrfToken} writable={task.projectStatus==='active'} disabled={busy || !!assigning || (reloadPending && !pendingProgress.has(task.id))} onPendingChange={trackProgress}
         onConfirmed={confirmed => { setTasks(current => current?.map(item => item.id===task.id ? { ...item,...confirmed } : item) ?? null); setNotice(confirmed.status==='in_progress' ? 'Serwer potwierdził rozpoczęcie zadania.' : 'Serwer potwierdził zgłoszenie do odbioru.'); setReloadPending(true); }}
         onAccessChanged={status => { void observeAccessFailure(taskPath(task),status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(taskPath(task),404); setTasks(current => current?.filter(item => item.id!==task.id) ?? null); setError('Zadanie jest już niedostępne. Wczytaj aktualne zadania.'); }} />
@@ -112,8 +124,8 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
       </div>
       <Discussion path={taskPath(task)} title={task.title} csrfToken={csrfToken} writable={task.projectStatus==='active'} onAccessChanged={onAccessChanged} />
       {task.parent && <ProgressHistory path={taskPath(task)} version={task.version} onAccessChanged={onAccessChanged} />}
-      {manage && !task.parent && <Subtasks task={task} path={taskPath(task)} organizationId={organizationId} projectId={task.projectId} csrfToken={csrfToken} assignees={assignees} writable={task.projectStatus==='active'} disabled={busy || !!assigning} pendingOnly={reloadPending ? pendingProgress : undefined} onChanged={() => setReloadPending(true)} onAccessChanged={onAccessChanged} onPendingChange={trackProgress} onOpenChange={open => setExpandedRoots(current => { const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next; })} />}
+      {manage && !task.parent && <Subtasks active={active} task={task} path={taskPath(task)} organizationId={organizationId} projectId={task.projectId} csrfToken={csrfToken} assignees={assignees} writable={task.projectStatus==='active'} disabled={busy || !!assigning} pendingOnly={reloadPending ? pendingProgress : undefined} onChanged={() => setReloadPending(true)} onAccessChanged={onAccessChanged} onPendingChange={trackProgress} onOpenChange={open => setExpandedRoots(current => { const next=new Set(current); if(open) next.add(task.id); else next.delete(task.id); return next; })} />}
     </article>)}</div>
-    {hasMore && tasks && <button className="secondary" disabled={busy} onClick={() => void more()}>Pokaż więcej zadań</button>}
+    {hasMore && tasks && <button className="secondary" disabled={busy || loadingMore} onClick={more}>Pokaż więcej zadań</button>}
   </section>;
 }

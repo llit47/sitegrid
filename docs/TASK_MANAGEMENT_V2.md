@@ -35,7 +35,7 @@ Pracownik widzi wyłącznie zadania przypisane do jego aktywnego członkostwa, t
 
 ## Pulpit i nawigacja
 
-- **Pulpit jest ekranem pracy**, a nie powitaniem. Po wybraniu firmy ładuje listę zadań i ich realne stany, nie tylko liczbę projektów i przyciski prowadzące dalej.
+- **Pulpit jest ekranem podsumowania pracy** (PR25): pełne autoryzowane liczniki statusów w aktywnych projektach i maksymalnie 8 zadań wymagających uwagi. Osobne **Zadania** udostępniają pełną listę i zarządzanie.
 - Administrator firmy/kierownik/brygadzista: zadania ze wszystkich projektów tej firmy; zakładki/filtry **Wszystkie, Moje, Backlog, Do zrobienia, W trakcie, Do odbioru**, opcjonalnie projekt i wykonawca; szybkie **Nowe zadanie**, **Przypisz / Zmień wykonawcę**.
 - Pracownik: tylko **Moje zadania**, z tytułem, projektem, bieżącym statusem i akcją przejścia do zadania. Nie pokazujemy pustych sekcji administracyjnych ani cudzych zadań.
 - Osobna pozycja **Zadania** w nawigacji daje pełną listę, filtry, wyszukiwanie i działania. **Projekty** służą kontekstowi i organizacji, ale nie są obowiązkową drogą do utworzenia/odczytania zadania.

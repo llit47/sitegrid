@@ -1,0 +1,33 @@
+/* CSS follows the OS immediately, including native controls and dialogs. */
+:root {
+  color-scheme: light dark;
+  --page: #f2f5f3; --surface: #ffffff; --surface-muted: #f3f7f5;
+  --surface-hover: #eaf1ed; --surface-selected: #e1ede6;
+  --text: #163638; --text-muted: #50685e; --border: #d0ded6; --control-border: #92aa9c;
+  --primary: #174d48; --primary-hover: #24534f; --on-primary: #ffffff;
+  --focus: #23795c; --link: #23644f; --success: #28733d;
+  --error-surface: #fff0ef; --error-text: #9a302b; --error-border: #df9b94; --warning-text: #7d412a;
+  --backlog-bg: #edf0f4; --backlog-text: #455164;
+  --todo-bg: #e7f1fb; --todo-text: #1b5489;
+  --progress-bg: #fff0cc; --progress-text: #795100;
+  --submitted-bg: #e2f4e8; --submitted-text: #20603c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #101917; --surface: #192622; --surface-muted: #20322b;
+    --surface-hover: #2a4136; --surface-selected: #304c3e;
+    --text: #e3efe9; --text-muted: #b1c5ba; --border: #40584b; --control-border: #7a9988;
+    --primary: #a3dfc2; --primary-hover: #c0efd8; --on-primary: #142f23;
+    --focus: #b0ebce; --link: #a3dfc2; --success: #a3dfc2;
+    --error-surface: #422725; --error-text: #ffbcb5; --error-border: #b86d66; --warning-text: #f3c295;
+    --backlog-bg: #303b49; --backlog-text: #d4deed;
+    --todo-bg: #253e56; --todo-text: #b6dcff;
+    --progress-bg: #4c3e1e; --progress-text: #ffe1a1;
+    --submitted-bg: #224b35; --submitted-text: #b6edce;
+  }
+}
+.status-badge { display: inline-flex; align-items: center; width: fit-content; min-height: 28px; padding: 3px 10px; border-radius: 6px; font-size: 13px; font-weight: 750; line-height: 1.4; }
+.status-backlog { background: var(--backlog-bg); color: var(--backlog-text); }
+.status-todo { background: var(--todo-bg); color: var(--todo-text); }
+.status-in_progress { background: var(--progress-bg); color: var(--progress-text); }
+.status-submitted { background: var(--submitted-bg); color: var(--submitted-text); }
