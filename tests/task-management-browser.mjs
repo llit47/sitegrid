@@ -11,10 +11,11 @@ try {
   browser=await chromium.launch({headless:true,...(process.env.SITEGRID_CHROMIUM_PATH?{executablePath:process.env.SITEGRID_CHROMIUM_PATH}:{})});
   await mkdir('/tmp/sitegrid-pr21-visuals',{recursive:true});
   const open=async(actor,width=1280)=>{
-    const context=await browser.newContext({serviceWorkers:'block',viewport:{width,height:900}});
+    const context=await browser.newContext({serviceWorkers:'block',viewport:{width,height:width===390?844:900}});
     await context.addCookies([{name:'sitegrid',value:f.tokens[actor],url:f.config.origin,httpOnly:true,sameSite:'Strict'}]);
     const page=await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror',e=>errors.push(e.message));
     await page.goto(f.config.origin); await selectCompany(page,f.organizations.a,'Pulpit');
+    await page.waitForFunction(()=>document.querySelector('.workspace-sidebar')?.classList.contains('is-open')===false);
     await page.getByRole('heading',{name:actor==='worker' || actor==='other' ? 'Moje zadania':'Zadania firmy',exact:true}).waitFor();
     return {page,context};
   };
@@ -88,7 +89,8 @@ try {
   for(const [actor,width] of [['manager',768],['foreman',390],['worker',390]]) {
     const user=await open(actor,width); await user.page.locator('.company-task').first().waitFor();
     assert(await user.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No viewport overflow');
-    if(width===390) { assert((await user.page.locator('.company-task').first().boundingBox()).y<900,'Work is visible on the initial mobile screen'); await workspace(user.page).locator('summary').click(); assert(await workspace(user.page).getByLabel('Projekt',{exact:true}).isVisible()); await workspace(user.page).locator('summary').click(); }
+    if(width===390) { const title=await user.page.locator('.company-task').first().getByRole('heading').boundingBox(); assert(title && title.y+title.height<user.page.viewportSize().height,'The task title is fully visible on the initial mobile screen'); await workspace(user.page).locator('summary').click(); assert(await workspace(user.page).getByLabel('Projekt',{exact:true}).isVisible()); await workspace(user.page).locator('summary').click(); }
+    if(actor==='foreman' && width===390) { await workspace(user.page).getByRole('button',{name:'Do odbioru',exact:true}).click(); await user.page.waitForFunction(()=>document.querySelectorAll('.company-task').length===1); await card(user.page,'Praca 3').waitFor(); await workspace(user.page).getByRole('button',{name:'Wszystkie',exact:true}).click(); await user.page.waitForFunction(()=>document.querySelectorAll('.company-task').length===10); }
     for(const button of await workspace(user.page).getByRole('button').all()) { const box=await button.boundingBox(); if(box) assert(box.height>=44,'Touch controls at least 44px'); }
     await user.page.screenshot({path:`/tmp/sitegrid-pr21-visuals/${actor}-${width}.png`,fullPage:true}); await user.context.close();
   }

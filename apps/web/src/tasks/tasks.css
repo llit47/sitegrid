@@ -18,3 +18,12 @@
 .task-filter-panel summary { cursor: pointer; min-height: 44px; padding: .6rem 0; color: #526760; }
 .task-filter-panel[open] summary { margin-bottom: .6rem; }
 .task-search input { width: 100%; }
+
+@media (max-width: 640px) {
+  .task-workspace .project-toolbar { display: block; }
+  .task-workspace .project-toolbar h2 { margin: 0 0 .75rem; font-size: 1.25rem; }
+  .task-workspace .project-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .task-workspace .project-actions button { padding: .6rem .5rem; font-size: .875rem; }
+  .task-views { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .25rem; }
+  .task-views button { flex: 0 0 auto; padding: .6rem .75rem; font-size: .875rem; white-space: nowrap; }
+}
