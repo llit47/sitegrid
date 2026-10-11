@@ -1,3 +1,5 @@
+> **PR22 — bieżąca gałąź:** [Podzadania](SUBTASKS.md) rozszerzają ten kontrakt. Schemat 13, lista firmowa obejmuje każde autoryzowane zadanie/podzadanie dokładnie raz. Poniższy opis pozostaje dokumentacją PR21/schema 12.
+
 # PR21 — backlog, zadania firmy i pulpit pracy
 
 Implementacja kontraktu [Task Management v2](TASK_MANAGEMENT_V2.md), oparta na `main` po PR20 (`1ac7942`). Modularny monolit: `server/task-management/` współdzieli autoryzację istniejących projektów, modułów M08/M10 i nowych ścieżek; React `tasks/` rozdziela listę pracy, szybki formularz i przydział. Bez dodatkowych zależności, podzadań, komentarzy, zdjęć, planów lub kolejki M11.

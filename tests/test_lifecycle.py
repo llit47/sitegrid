@@ -200,6 +200,33 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(self.events, [])
         self.assertEqual((self.root / 'current').resolve(), self.new)
 
+    def test_pr22_update_from_schema12_backs_up_before_schema13_activation(self):
+        self.schema_release(self.new, 13)
+        self.schema_release(self.old, 12)
+        self.rows = self.history(self.old)
+        with patch.object(lc, 'sql', return_value='170000'):
+            lc.can_upgrade(self.new, self.rows)
+        def migrate_schema13(*args):
+            self.events.append('migrate')
+            self.rows = self.history(self.new)
+        with patch.object(lc, 'app_cli', side_effect=migrate_schema13):
+            lc.deploy(self.new, self.old, {}, 'update', migrate=True)
+        self.assertEqual(len(self.rows), 13)
+        self.assertLess(self.events.index('backup'), self.events.index('migrate'))
+        self.assertEqual((self.root / 'current').resolve(), self.new)
+        self.assertEqual(lc.journal()['phase'], 'done')
+
+    def test_pr22_schema13_blocks_pr21_rollback_before_stopping_service(self):
+        self.schema_release(self.new, 13)
+        self.schema_release(self.old, 12)
+        self.rows = self.history(self.new)
+        atomic_link(self.new, self.root / 'current')
+        write_json(lc.JOURNAL, {'phase': 'done', 'completed_versions': ['0.1.0', '0.1.1']})
+        with self.assertRaisesRegex(SiteGridError, 'Rollback zablokowany'):
+            lc.rollback(argparse.Namespace(version='0.1.0', yes=True))
+        self.assertEqual(self.events, [])
+        self.assertEqual((self.root / 'current').resolve(), self.new)
+
     def test_default_rollback_uses_immediately_previous_active_release(self):
         latest = self.release('0.1.2')
         atomic_link(latest, self.root / 'current')

@@ -1,3 +1,4 @@
+import { parentColumns, withSubtaskProgress } from '../subtasks/persistence.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import type { Config } from '../config.js';
@@ -27,7 +28,7 @@ export function registerCompanyTaskRoutes(app: FastifyInstance, pool: Pool, conf
     const projectId = f.projectId ? identifier(f.projectId) : null;
     const assignee = f.assigneeMembershipId ? identifier(f.assigneeMembershipId) : null;
     const rows = (await client.query(`SELECT t.id, t.project_id AS "projectId", p.name AS "projectName", p.status AS "projectStatus",
-      t.title, t.description, t.assignee_membership_id AS "assigneeMembershipId", t.status, t.version,
+      ${parentColumns('t')}, t.title, t.description, t.assignee_membership_id AS "assigneeMembershipId", t.status, t.version,
       t.created_at AS "createdAt", t.updated_at AS "updatedAt",
       (t.assignee_membership_id = $2::uuid AND $3::boolean) AS "canProgress",
       (SELECT COALESCE(e.display_name,u.email) FROM organization_memberships m JOIN users u ON u.id=m.user_id
@@ -43,7 +44,7 @@ export function registerCompanyTaskRoutes(app: FastifyInstance, pool: Pool, conf
       ORDER BY t.created_at DESC,t.id LIMIT $9 OFFSET $10`, [request.params.id, actor.membershipId,
       actor.roles.some(role => ['worker','foreman','manager'].includes(role)), projectId, assignee,
       f.view ?? (manage ? 'all' : 'mine'), f.projectStatus ?? 'active', text(f.q ?? '',200), limit + 1, offset])).rows;
-    return { tasks: rows.slice(0,limit), hasMore: rows.length > limit, permissions: { manageTasks: manage }, membershipId: actor.membershipId };
+    return { tasks: await withSubtaskProgress(client,request.params.id,rows.slice(0,limit)), hasMore: rows.length > limit, permissions: { manageTasks: manage }, membershipId: actor.membershipId };
   }));
   app.get<{ Params: Params }>(`${base}/task-assignees`, { schema: params() }, request => scope(request, false, false, async client => {
     if (!(await client.query('SELECT can_manage_tasks($1) AS allowed',[request.params.id])).rows[0].allowed) throw failure(403);

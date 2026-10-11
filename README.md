@@ -33,3 +33,5 @@ Tryb manualny update nadal działa z `--bundle`, `--version` i `--sha256`. Rollb
 - [Rekomendacje](docs/audit/IMPROVEMENTS.md)
 
 HERC pozostaje osobną aplikacją referencyjną: [audyt funkcjonalny](docs/audit/FUNCTIONALITY.md) i [ocena UX](docs/audit/UX_REVIEW.md).
+
+PR22: [podzadania, niezależny postęp i minimalny kontekst rodzica](docs/SUBTASKS.md), schemat 13 w bieżącej gałęzi. Komentarze, zdjęcia i trwała kolejka offline pozostają osobnymi etapami.

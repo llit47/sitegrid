@@ -1,3 +1,4 @@
+import { parentColumns } from '../subtasks/persistence.js';
 import { lockOrganization } from '../common/organization-lock.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
@@ -11,7 +12,7 @@ export const failure = (statusCode: number) => Object.assign(new Error('Invalid 
 export const projectColumns = `id, name, description, status, version, created_at AS "createdAt", updated_at AS "updatedAt",
   (SELECT json_build_object('id', c.id, 'name', c.name, 'status', c.status) FROM contractors c
     WHERE (c.organization_id, c.id) = (projects.organization_id, projects.contractor_id)) AS contractor`;
-export const taskColumns = 'id, title, description, assignee_membership_id AS "assigneeMembershipId", author_membership_id AS "authorMembershipId", status, version, created_at AS "createdAt", updated_at AS "updatedAt", can_progress_assignment(organization_id, project_id, assignee_membership_id) AS "canProgress"';
+export const taskColumns = 'id, title, description, assignee_membership_id AS "assigneeMembershipId", author_membership_id AS "authorMembershipId", status, version, created_at AS "createdAt", updated_at AS "updatedAt", can_progress_assignment(organization_id, project_id, assignee_membership_id) AS "canProgress", ' + parentColumns();
 export type Params = { id: string; projectId: string; membershipId: string; taskId: string };
 export type Project = { id: string; name: string; description: string; status: string; version: number; contractor: { id: string; name: string; status: string } | null };
 export function fields(request: FastifyRequest, allowed: string[]) {

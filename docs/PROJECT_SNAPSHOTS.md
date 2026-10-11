@@ -1,3 +1,5 @@
+> **PR22 — bieżąca gałąź:** [Podzadania](SUBTASKS.md) mają niezależne komendy/receipts M08 i minimalny kontekst rodzica w M10. Schemat PostgreSQL 13; brak trwałej kolejki offline. W konflikcie stosuj kontrakt PR22 oraz PR21, zamiast poniższego historycznego opisu.
+
 # PR17 / M10 — autoryzowany odczyt offline
 
 > **PR21 — bieżący kod:** Snapshoty M10 stosują [nowy kontrakt backlogu i dostępu do zadań](TASK_BACKLOG.md). Poniżej zachowano historyczny opis wcześniejszego etapu; w konflikcie stosuj PR21.

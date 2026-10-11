@@ -12,6 +12,7 @@ import { withTransaction } from '../organization-context.js';
 import { registerCompanyMemberRoutes } from '../company-member-routes.js';
 import { registerTaskProgressRoutes } from '../task-progress/routes.js';
 import { registerProjectTaskRoutes } from '../task-management/project-tasks.js';
+import { registerSubtaskRoutes } from '../subtasks/routes.js';
 import { registerCompanyTaskRoutes } from '../task-management/routes.js';
 import { registerProjectRoutes } from '../project-routes.js';
 import { registerProjectSnapshotRoutes } from '../project-snapshots/routes.js';
@@ -74,6 +75,7 @@ export async function registerAuth(app: FastifyInstance, pool: Pool, config: Con
   registerProjectRoutes(app, pool, config, checkCsrf);
   registerProjectTaskRoutes(app, pool, config, checkCsrf);
   registerCompanyTaskRoutes(app, pool, config, checkCsrf);
+  registerSubtaskRoutes(app, pool, config, checkCsrf);
   registerProjectSnapshotRoutes(app, pool, config);
   registerContractorRoutes(app, pool, config, checkCsrf);
   registerTaskProgressRoutes(app, pool, config, checkCsrf);

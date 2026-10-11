@@ -1,3 +1,4 @@
+import { ParentContext } from '../subtasks/hierarchy.js';
 import { useEffect, useState } from 'react';
 import { readOfflineAccess, offlineAccessDenied } from '../storage/offline-access.js';
 import { openProjectStorage, type ConfirmedSnapshot } from '../storage/indexed-db.js';
@@ -58,7 +59,8 @@ export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
       {snapshot.project.contractor && <p>Kontrahent: {snapshot.project.contractor.name}{snapshot.project.contractor.status === 'inactive' ? ' (nieaktywny)' : ''}</p>}
       <p>Ostatnie przygotowanie: {new Date(snapshot.generatedAt).toLocaleString('pl-PL')} · {snapshot.tasks.length} zadań</p>
       {snapshot.taskAccess === 'none' && <p>Przygotowano wyłącznie metadane projektu. Brak dostępu do zadań.</p>}
-      {snapshot.tasks.map(task => <article className="task-row" key={task.id}><div><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p>
+      {snapshot.tasks.map(task => <article className="task-row" key={task.id}><div><ParentContext task={task} /><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p>
+        {task.subtaskProgress && <p>Podzadania: {task.subtaskProgress.total} · Do odbioru: {task.subtaskProgress.submitted}</p>}
         {task.assigneeName && <small>Wykonawca: {task.assigneeName}</small>}<p>{taskStatus[task.status]} · Wersja {task.version}</p></div></article>)}
     </article>)}
   </section>;

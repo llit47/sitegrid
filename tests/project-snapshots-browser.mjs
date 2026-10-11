@@ -76,8 +76,9 @@ try {
   const projectB = (await api(`/api/organizations/${companyB}/projects`, { name: 'Projekt obcej firmy', contractorId: foreign.id }, 'administratorB')).project;
   for (const project of [projectOne, projectTwo]) {
     for (const actor of ['administrator', 'worker', 'foreman']) await api(`${projectPath}/${project.id}/members/${members[actor]}`, { status: 'active', expectedVersion: 0 });
-    await api(`${projectPath}/${project.id}/tasks`, { title: `Własne zadanie ${project.name}`, assigneeMembershipId: members.worker });
-    await api(`${projectPath}/${project.id}/tasks`, { title: 'Cudze zadanie kierownika', assigneeMembershipId: members.administrator });
+    const parent=(await api(`${projectPath}/${project.id}/tasks`, {title:`Kontekst ${project.name}`,description:'Poufny opis rodzica PR22',assigneeMembershipId:members.administrator})).task;
+    await api(`${projectPath}/${project.id}/tasks/${parent.id}/subtasks`, { title: `Własne zadanie ${project.name}`, assigneeMembershipId: members.worker });
+    await api(`${projectPath}/${project.id}/tasks/${parent.id}/subtasks`, { title: 'Cudze zadanie kierownika', assigneeMembershipId: members.administrator });
   }
   await api(`/api/organizations/${companyB}/projects/${projectB.id}/members/${members.workerB}`, { status: 'active', expectedVersion: 0 }, 'administratorB');
   await api(`/api/organizations/${companyB}/projects/${projectB.id}/tasks`, {title:'Zadanie w firmie B',assigneeMembershipId:members.workerB}, 'administratorB');
@@ -226,11 +227,13 @@ try {
     const authSecrets=[(await page.evaluate(async()=>(await(await fetch('/api/auth/session')).json()).csrfToken)),password,...(await context.cookies()).filter(cookie=>cookie.name==='sitegrid').map(cookie=>cookie.value)];
     await context.setOffline(true); await page.getByRole('heading',{name:'SiteGrid bez połączenia'}).waitFor();
     await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor(); assert.equal(await page.getByText(temporary.title,{exact:true}).count(),0);
+    await page.locator('.offline-project').getByText('Podzadanie · Kontekst Projekt Alfa',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Poufny opis rodzica PR22',{exact:true}).count(),0);assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);assert.equal(await page.locator('.subtask-summary').count(),0);
     assert.equal(await page.getByText('Projekt Beta',{exact:true}).count(),0); assert.equal(await page.getByText('Projekt obcej firmy',{exact:true}).count(),0);
     assert.equal(await page.getByRole('button').count(),0); assert.equal(await page.locator('form').count(),0);
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await page.close(); page=await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror',error=>errors.push(error.message)); await page.goto(config.origin);
-    await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor(); assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);
+    await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor(); assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);await page.locator('.offline-project').getByText('Podzadanie · Kontekst Projekt Alfa',{exact:true}).waitFor();assert.equal(await page.getByText('Poufny opis rodzica PR22',{exact:true}).count(),0);
     await page.getByLabel('Przygotowana firma',{exact:true}).selectOption(companyB); await page.getByRole('heading',{name:'Projekt obcej firmy',exact:true}).waitFor();
     assert.equal(await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).count(),0);
     const secrets=[temporary.title,'Projekt Alfa','Klient Alfa',users.worker,cookies.worker,csrf.worker,password];

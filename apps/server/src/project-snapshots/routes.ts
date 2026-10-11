@@ -1,3 +1,4 @@
+import { parentColumns, withSubtaskProgress } from '../subtasks/persistence.js';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import type { Config } from '../config.js';
@@ -22,7 +23,7 @@ export function registerProjectSnapshotRoutes(app: FastifyInstance, pool: Pool, 
       const access = (await client.query(`SELECT current_setting('sitegrid.user_id') AS "accountId",
         transaction_timestamp() AS "generatedAt", can_manage_tasks($1) AS full,
         can_access_project($1,$2,ARRAY['worker']) AS own`, [id, projectId])).rows[0];
-      const tasks = access.full || access.own ? (await client.query(`SELECT id, title, description, status, version,
+      const tasks = access.full || access.own ? (await client.query(`SELECT ${parentColumns()}, id, title, description, status, version,
         created_at AS "createdAt", updated_at AS "updatedAt",
         (SELECT COALESCE(e.display_name, u.email) FROM organization_memberships m JOIN users u ON u.id = m.user_id
          LEFT JOIN employee_profiles e ON (e.organization_id,e.membership_id) = (m.organization_id,m.id)
@@ -32,7 +33,7 @@ export function registerProjectSnapshotRoutes(app: FastifyInstance, pool: Pool, 
       const body = JSON.parse(JSON.stringify({ format: 1, complete: true,
         scope: { accountId: access.accountId, organizationId: id.toLowerCase(), projectId: projectId.toLowerCase() },
         generatedAt: access.generatedAt, expiresAt: new Date(access.generatedAt.getTime() + OFFLINE_ACCESS_MS),
-        taskAccess: access.full ? 'project' : access.own ? 'own' : 'none', project, tasks })) as ProjectSnapshotBody;
+        taskAccess: access.full ? 'project' : access.own ? 'own' : 'none', project, tasks: await withSubtaskProgress(client,id,tasks,projectId) })) as ProjectSnapshotBody;
       return serializeSnapshot(body);
     }, [], { isolation: 'repeatable read', readOnly: true }); }
     catch (error) {
