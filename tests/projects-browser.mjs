@@ -172,14 +172,14 @@ try {
   const foreman = await login('foreman'); await foreman.page.locator('.projects').getByRole('button', { name: 'Budowa A Aktywny Bez kontrahenta', exact: true }).click();
   await foreman.page.locator('.task-row').filter({ hasText: 'Z innej karty' }).waitFor(); assert.equal(await foreman.page.locator('.task-row').count(), 2); assert.equal(await foreman.page.locator('.task-form').count(), 0); await foreman.context.close();
   const adminOnly = await login('adminOnly', true); await adminOnly.page.locator('.projects').getByRole('button', { name: 'Budowa A Aktywny Bez kontrahenta', exact: true }).click();
-  await adminOnly.page.locator('.project-details').getByText('Dostęp do zadań wymaga', { exact: false }).waitFor(); assert.equal(await adminOnly.page.locator('.task-row').count(), 0);
+  await adminOnly.page.locator('.task-row').first().waitFor(); assert.equal(await adminOnly.page.locator('.task-row').count(), 2); assert.equal(await adminOnly.page.getByRole('button',{name:'Rozpocznij zadanie',exact:true}).count(),0);
   assert(await adminOnly.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   await adminOnly.page.screenshot({ path: '/tmp/sitegrid-pr12-admin-mobile.png', fullPage: true });
   const version = (await api(projectPath)).project.version;
   await adminOnly.page.getByRole('button', { name: 'Archiwizuj projekt', exact: true }).click();
   await adminOnly.page.getByText('Projekt archiwalny', { exact: false }).waitFor(); assert.equal((await api(projectPath)).project.version, version + 1);
   await adminOnly.context.close();
-  console.log('PASS mobile worker scope, foreman read scope, admin metadata-only scope and archive');
+  console.log('PASS mobile worker scope, foreman read scope, admin company task scope and archive');
   assert.deepEqual(errors, []); assert.deepEqual(cspErrors, []);
   console.log('PASS no browser runtime or CSP errors');
 } finally {

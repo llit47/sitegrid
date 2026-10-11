@@ -22,24 +22,24 @@ export function ProjectForm({ project, contractors, busy, save, cancel }: { proj
 export function TaskForm({ task, members, busy, save, cancel }: {
   task: Task | null; members: Member[]; busy: boolean; save: (payload: object) => Promise<boolean>; cancel: () => void;
 }) {
-  const eligible = members.filter(member => member.status === 'active' && member.companyStatus === 'active' && member.accountActive);
+  const eligible = members.filter(member => member.companyStatus === 'active' && member.accountActive);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget, values = new FormData(form);
-    if (await save({ title: values.get('title'), description: values.get('description'), assigneeMembershipId: values.get('assigneeMembershipId'),
+    if (await save({ title: values.get('title'), description: values.get('description'), assigneeMembershipId: task && task.status !== 'planned' ? task.assigneeMembershipId : values.get('assigneeMembershipId') || null,
       ...(task ? { expectedVersion: task.version } : {}) })) { form.reset(); cancel(); }
   };
   return <form className="task-form" onSubmit={event => void submit(event)}>
     <h4>{task ? 'Edytuj zadanie' : 'Nowe zadanie'}</h4>
     <label>Tytuł zadania<input name="title" defaultValue={task?.title} required maxLength={200} disabled={busy} /></label>
     <label>Opis zadania (opcjonalnie)<input name="description" defaultValue={task?.description} maxLength={4000} disabled={busy} /></label>
-    <label>Wykonawca<select aria-label="Wykonawca" name="assigneeMembershipId" defaultValue={task?.assigneeMembershipId ?? ''} required disabled={busy || !eligible.length}>
-      <option value="">Wybierz wykonawcę…</option>
-      {task && !eligible.some(member => member.membershipId === task.assigneeMembershipId) && <option value={task.assigneeMembershipId} disabled>Poprzedni wykonawca utracił dostęp — wybierz nowego</option>}
+    <label>Wykonawca<select aria-label="Wykonawca" name="assigneeMembershipId" defaultValue={task?.assigneeMembershipId ?? ''} disabled={busy || (!!task && task.status !== 'planned')}>
+      <option value="">Bez wykonawcy — backlog</option>
+      {task?.assigneeMembershipId && !eligible.some(member => member.membershipId === task.assigneeMembershipId) && <option value={task.assigneeMembershipId} disabled>Poprzedni wykonawca utracił dostęp — wybierz nowego</option>}
       {eligible.map(member => <option key={member.membershipId} value={member.membershipId}>{member.displayName}</option>)}
     </select></label>
-    {!eligible.length && <p role="status">Brak aktywnych członków projektu. Administrator firmy musi najpierw dodać przydziały.</p>}
-    <div className="project-actions"><button disabled={busy || !eligible.length}>{busy ? 'Zapisywanie…' : task ? 'Zapisz zadanie' : 'Utwórz zadanie'}</button>
+    {!eligible.length && <p role="status">Brak aktywnych wykonawców. Możesz utworzyć zadanie w backlogu.</p>}
+    <div className="project-actions"><button disabled={busy}>{busy ? 'Zapisywanie…' : task ? 'Zapisz zadanie' : 'Utwórz zadanie'}</button>
       <button type="button" className="secondary" disabled={busy} onClick={event => { if (guardWorkspaceChange(event.currentTarget.form!)) cancel(); }}>Anuluj formularz zadania</button></div>
   </form>;
 }

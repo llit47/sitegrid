@@ -119,8 +119,8 @@ test('M09C contractors, populated schema 10 upgrade and real unprivileged FORCE 
       const tables = (await owner.query('SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename', [schema])).rows.map(row => row.tablename as string);
       const before = await Promise.all(tables.map(snapshot));
       assert.equal((await app.inject('/health/ready')).statusCode, 503);
-      assert.equal(await migrate(owner, 'migrations'), 11); assert.equal(await migrate(owner, 'migrations'), 11);
-      assert.equal(await checkMigrations(owner, 'migrations'), 11);
+      assert.equal(await migrate(owner, 'migrations'), 12); assert.equal(await migrate(owner, 'migrations'), 12);
+      assert.equal(await checkMigrations(owner, 'migrations'), 12);
       for (const [i, table] of tables.entries()) {
         const after = await snapshot(table);
         assert.deepEqual(table === 'schema_migrations' ? after.filter(row => row.version <= 10) : after,
@@ -129,15 +129,15 @@ test('M09C contractors, populated schema 10 upgrade and real unprivileged FORCE 
       assert.deepEqual(await snapshot('contractors'), []);
       assert((await get(projectBase())).json().projects.every((item: { contractor: unknown }) => item.contractor === null));
       assert.equal((await app.inject('/health/ready')).statusCode, 200);
-      assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 11, min: 11, max: 11, upgradeMin: 0, upgradeMax: 11 });
+      assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 12, min: 12, max: 12, upgradeMin: 0, upgradeMax: 12 });
       await assert.rejects(checkMigrations(owner, previous), /does not match/);
       await assert.rejects(migrate(owner, previous), /Migration history mismatch/);
     });
-    await t.test('fresh schema installs all eleven migrations and repeats safely', async () => {
+    await t.test('fresh schema installs all twelve migrations and repeats safely', async () => {
       const fresh = `${schema}_fresh`; await admin.query(`CREATE SCHEMA ${fresh}`);
       const url = new URL(process.env.TEST_DATABASE_URL!); url.searchParams.set('options', `-c search_path=${fresh}`);
       const pool = new pg.Pool({ connectionString: url.href });
-      try { assert.equal(await migrate(pool, 'migrations'), 11); assert.equal(await migrate(pool, 'migrations'), 11); assert.equal(await checkMigrations(pool, 'migrations'), 11); }
+      try { assert.equal(await migrate(pool, 'migrations'), 12); assert.equal(await migrate(pool, 'migrations'), 12); assert.equal(await checkMigrations(pool, 'migrations'), 12); }
       finally { await pool.end(); await admin.query(`DROP SCHEMA ${fresh} CASCADE`); }
     });
     await t.test('administrators create independent directories with overlapping names and no new identities', async () => {
@@ -193,12 +193,12 @@ test('M09C contractors, populated schema 10 upgrade and real unprivileged FORCE 
     await t.test('authorized project metadata and filters expose no directory or extra project/task permissions', async () => {
       for (const actor of ['manager', 'foreman', 'worker']) {
         const response = await get(projectBase(), actor); assert.equal(response.statusCode, 200);
-        assert.deepEqual(response.json().projects.map((item: { id: string }) => item.id).sort(), [projects.one, projects.two].sort());
-        for (const item of response.json().projects) assert.deepEqual(Object.keys(item.contractor).sort(), ['id', 'name', 'status']);
-        assert.equal((await get(projectPath(projects.hidden), actor)).statusCode, 404);
-        assert.equal((await get(`${projectBase()}?contractorId=${contractors.hidden}`, actor)).json().projects.length, 0);
+        assert.deepEqual(response.json().projects.map((item: { id: string }) => item.id).sort(), (actor==='worker' ? [projects.one,projects.two] : (await owner.query('SELECT id FROM projects WHERE organization_id=$1',[org.a])).rows.map(row=>row.id)).sort());
+        for (const item of response.json().projects) if(item.contractor) assert.deepEqual(Object.keys(item.contractor).sort(), ['id', 'name', 'status']);
+        assert.equal((await get(projectPath(projects.hidden), actor)).statusCode, actor==='worker'?404:200);
+        assert.equal((await get(`${projectBase()}?contractorId=${contractors.hidden}`, actor)).json().projects.length, actor==='worker'?0:1);
         assert.equal((await get(`${projectBase()}?contractorId=${contractors.b}`, actor)).json().projects.length, 0);
-        assert.equal((await get(`${projectBase()}?contractorId=${contractors.one}`, actor)).json().projects.length, 1);
+        assert.equal((await get(`${projectBase()}?contractorId=${contractors.one}`, actor)).json().projects.length, actor==='worker'?1:2);
       }
       assert.equal((await get(`${projectBase()}?contractorId=none`, 'worker')).json().projects.length, 0);
       assert.equal((await get(`${projectBase()}?contractorId=bad`)).statusCode, 400);
@@ -206,8 +206,8 @@ test('M09C contractors, populated schema 10 upgrade and real unprivileged FORCE 
       assert.equal((await get(projectBase(), 'platform')).json().projects.length, 0);
       assert.equal((await get(`${projectPath()}/tasks`, 'worker')).json().tasks.length, 1);
       assert.equal((await get(`${projectPath()}/tasks`, 'manager')).json().tasks.length, 2);
-      assert.equal((await get(`${projectPath()}/tasks`)).statusCode, 404); // metadata administration never grants task access
-      assert.equal((await get(projectBase(org.b), 'worker')).json().projects[0].contractor.id, contractors.b);
+      assert.equal((await get(`${projectPath()}/tasks`)).statusCode, 200); // PR21 administration grants company task management
+      assert.deepEqual((await get(projectBase(org.b), 'worker')).json().projects,[]); // no assigned task in B
     });
     await t.test('deactivation preserves history, rejects new assignments and allows unrelated edits/archival', async () => {
       const before = await project(), original = await current();
@@ -285,7 +285,7 @@ test('M09C contractors, populated schema 10 upgrade and real unprivileged FORCE 
       assert(flags.relrowsecurity && flags.relforcerowsecurity && flags.active); assert(!flags.owns && !flags.delete && !flags.truncate);
       assert.deepEqual((await runtime.query('SELECT * FROM contractors')).rows, []);
       for (const actor of ['manager', 'foreman', 'worker']) await asActor(actor, org.a, async client => {
-        assert.deepEqual((await client.query('SELECT id FROM contractors ORDER BY id')).rows.map(row => row.id), [contractors.one, contractors.two].sort());
+        assert.deepEqual((await client.query('SELECT id FROM contractors ORDER BY id')).rows.map(row => row.id), (actor==='worker' ? [contractors.one,contractors.two] : [contractors.one,contractors.two,contractors.hidden]).sort());
         assert.equal((await client.query("UPDATE contractors SET name='Denied', version=version+1")).rowCount, 0);
       });
       for (const actor of ['unassigned', 'platform']) assert.deepEqual(await asActor(actor, org.a, async client => (await client.query('SELECT * FROM contractors')).rows), []);
@@ -333,10 +333,10 @@ test('M09C contractors, populated schema 10 upgrade and real unprivileged FORCE 
       const task = (await get(`${projectPath()}/tasks`, 'worker')).json().tasks[0]; assert.equal(task.status, 'submitted'); assert.equal(task.version, 3);
       assert.equal((await get(`${projectPath(projects.two)}/tasks`, 'worker')).json().tasks[0].status, 'in_progress');
       await owner.query("UPDATE project_memberships SET status='inactive',version=version+1 WHERE organization_id=$1 AND project_id=$2 AND membership_id=$3", [org.a, projects.one, members.worker]);
-      assert.equal((await get(projectPath(), 'worker')).statusCode, 404); assert.equal((await progress(tasks.one, projects.one)).statusCode, 404);
+      assert.equal((await get(projectPath(), 'worker')).statusCode, 200); assert.equal((await progress(tasks.one, projects.one)).statusCode, 200);
       assert.equal((await get(projectPath(projects.two), 'worker')).statusCode, 200);
       assert.equal((await get(base(), 'worker')).statusCode, 403);
-      assert.deepEqual(await asActor('worker', org.a, async client => (await client.query('SELECT id FROM contractors')).rows.map(row => row.id)), [contractors.two]);
+      assert.deepEqual(await asActor('worker', org.a, async client => (await client.query('SELECT id FROM contractors ORDER BY id')).rows.map(row => row.id)), [contractors.one,contractors.two].sort());
     });
   } finally {
     await rm(previous, { recursive: true, force: true }); await app.close(); await runtime.end(); await owner.end();

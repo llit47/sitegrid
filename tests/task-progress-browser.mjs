@@ -64,7 +64,7 @@ try {
   assert.equal(await row(manager.page, 'Potwierdzenie').getByRole('button', { name: 'Rozpocznij zadanie' }).count(), 0);
   await manager.context.close();
   const foreman = await open('foreman'); assert.equal(await foreman.page.getByRole('button', { name: 'Rozpocznij zadanie' }).count(), 1); await foreman.context.close();
-  const companyAdmin = await open('admin'); assert.equal(await companyAdmin.page.locator('.task-row').count(), 0); await companyAdmin.context.close();
+  const companyAdmin = await open('admin'); assert.equal(await companyAdmin.page.locator('.task-row').count(), 8); await companyAdmin.context.close();
   console.log('PASS manager/foreman controls are limited to own tasks; admin role has no progress access');
   const { page, context } = await open('worker');
   const url = title => `${config.origin}${path}/tasks/${tasks[title].id}/commands`;
@@ -142,7 +142,7 @@ try {
   assert(await mobile.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await mobile.page.screenshot({ path: '/tmp/sitegrid-pr13-mobile.png', fullPage: true });
   // A current row becomes unauthorized before a progress request.
-  await owner.query("UPDATE project_memberships SET status = 'inactive', version = version + 1 WHERE project_id = $1 AND membership_id = $2", [project.id, members.worker]);
+  await owner.query("UPDATE organization_memberships SET status='inactive' WHERE organization_id=$1 AND id=$2", [company, members.worker]);
   await row(mobile.page, 'Konflikt').getByRole('button', { name: 'Zgłoś do odbioru' }).click();
   await mobile.page.waitForFunction(() => document.querySelectorAll('.task-row').length === 0);
   assert.equal(await mobile.page.getByText('Serwer potwierdził', { exact: false }).count(), 0); await mobile.context.close();

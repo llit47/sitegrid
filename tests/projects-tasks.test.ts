@@ -86,10 +86,10 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
         await owner.query("INSERT INTO platform_audit_events(actor_id, event, organization_id) VALUES ($1, 'organization_created', $2)", [users.platform, org.a]);
         const tables = (await owner.query('SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename', [schema])).rows.map(row => row.tablename as string);
         const before = await Promise.all(tables.map(snapshot));
-        assert.equal(await migrate(owner, 'migrations'), 11); assert.equal(await migrate(owner, 'migrations'), 11);
-        assert.equal(await checkMigrations(owner, 'migrations'), 11);
+        assert.equal(await migrate(owner, 'migrations'), 12); assert.equal(await migrate(owner, 'migrations'), 12);
+        assert.equal(await checkMigrations(owner, 'migrations'), 12);
         for (const [i, table] of tables.entries()) assert.deepEqual(table === 'schema_migrations' ? (await snapshot(table)).filter(row => row.version <= 8) : await snapshot(table), before[i], table);
-        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 11, min: 11, max: 11, upgradeMin: 0, upgradeMax: 11 });
+        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 12, min: 12, max: 12, upgradeMin: 0, upgradeMax: 12 });
         await assert.rejects(checkMigrations(owner, previous), /does not match/);
       } finally { await rm(previous, { recursive: true, force: true }); }
     });
@@ -110,7 +110,7 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
         projects[key] = project.id;
       }
       assert.equal((await snapshot('project_memberships')).length, 0);
-      assert.equal((await get(base())).json().projects.length, 0);
+      assert.equal((await get(base())).json().projects.length, 2);
       assert.equal((await get(base(), 'adminA')).json().projects.length, 2);
     });
     await t.test('explicit assignments require active local company members and preserve revocation versions', async () => {
@@ -125,10 +125,10 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
       assert.equal((await assign(projects.p1, 'worker', 'active', 2)).json().membership.version, 3);
       const roster = await get(`${path()}/members`); assert.equal(roster.statusCode, 200, roster.body);
       assert(!roster.body.includes('private-phone')); assert(!roster.body.includes('adminb@example.test'));
-      for (const actor of ['worker', 'foreman', 'roleless', 'manager2']) assert.equal((await get(`${path()}/members`, actor)).statusCode, 404, actor);
+      for (const actor of ['worker', 'roleless']) assert.equal((await get(`${path()}/members`, actor)).statusCode, 404, actor);
     });
-    await t.test('task planning is limited to assigned managers; company and platform roles confer no task access', async () => {
-      for (const actor of ['adminA', 'manager2', 'foreman', 'worker', 'roleless', 'platform', 'adminB']) {
+    await t.test('task planning follows company management roles without project assignment; platform roles confer no access', async () => {
+      for (const actor of ['worker', 'roleless', 'platform', 'adminB']) {
         const result = await post(`${path()}/tasks`, payload(), actor);
         assert.equal(result.statusCode, ['platform', 'adminB'].includes(actor) ? 403 : 404, actor);
       }
@@ -142,31 +142,31 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
         assert.equal(created.authorMembershipId, memberships[actor === 'shared' ? 'sharedB' : actor]);
         assert(created.createdAt && created.updatedAt);
       }
-      assert.equal((await get(path(), 'adminA')).json().permissions.readTasks, false);
+      assert.equal((await get(path(), 'adminA')).json().permissions.readTasks, true);
       assert.equal((await get(path(), 'dual')).json().permissions.manageTasks, true);
-      assert.equal((await get(`${path()}/tasks`, 'adminA')).statusCode, 404);
+      assert.equal((await get(`${path()}/tasks`, 'adminA')).statusCode, 200);
       assert.equal((await get(`${path()}/tasks`, 'roleless')).statusCode, 404);
     });
-    await t.test('workers read only own tasks; foremen and managers read their assigned project scope', async () => {
+    await t.test('workers read only own tasks; foremen and managers read all company projects', async () => {
       for (const actor of ['manager', 'foreman', 'dual']) {
         const response = await get(`${path()}/tasks`, actor); assert.equal(response.statusCode, 200, response.body);
         assert.deepEqual(response.json().tasks.map((row: { id: string }) => row.id).sort(), [tasks.worker, tasks.worker2].sort());
         assert.equal(response.headers['cache-control'], 'no-store');
-        assert.equal((await get(`${path(projects.p2)}/tasks`, actor)).statusCode, 404);
+        assert.equal((await get(`${path(projects.p2)}/tasks`, actor)).statusCode, 200);
       }
       assert.deepEqual((await get(`${path()}/tasks`, 'worker')).json().tasks.map((row: { id: string }) => row.id), [tasks.worker]);
       assert.equal((await get(`${path()}/tasks/${tasks.worker2}`, 'worker')).statusCode, 404);
       assert.equal((await get(`${path()}/tasks/${tasks.worker}`, 'worker')).statusCode, 200);
-      assert.equal((await get(`${path()}/tasks`, 'shared')).json().tasks.length, 0);
+      assert.equal((await get(`${path()}/tasks`, 'shared')).statusCode, 404);
       assert.equal((await get(`${path(projects.b, org.b)}/tasks`, 'shared')).json().tasks.length, 1);
       assert.equal((await get(base(), 'worker')).json().projects.length, 1);
       assert.equal((await get(base(), 'worker2')).json().projects.length, 2);
     });
     await t.test('foreign company/project/task substitutions and unauthorized assignments are rejected', async () => {
       for (const url of [base(org.b), path(projects.b, org.b), `${path(projects.b, org.b)}/tasks`]) assert.equal((await get(url)).statusCode, 403);
-      for (const url of [path(projects.b), path(randomUUID()), `${path(projects.p2)}/tasks`, `${path()}/tasks/${tasks.p2}`, `${path()}/tasks/${tasks.b}`]) assert.equal((await get(url)).statusCode, 404, url);
+      for (const url of [path(projects.b), path(randomUUID()), `${path()}/tasks/${tasks.p2}`, `${path()}/tasks/${tasks.b}`]) assert.equal((await get(url)).statusCode, 404, url);
       assert.equal((await post(`${path(projects.b)}/update`, { name: 'Wrong', expectedVersion: 1 })).statusCode, 404);
-      for (const member of ['adminB', 'pending', 'inactive', 'blocked', 'manager2', 'workerB']) {
+      for (const member of ['adminB', 'pending', 'inactive', 'blocked', 'workerB']) {
         assert.equal((await post(`${path()}/tasks`, payload(member), 'manager')).statusCode, 400, member);
       }
       assert.equal((await post(`${path()}/tasks`, { ...payload(), assigneeMembershipId: randomUUID() }, 'manager')).statusCode, 400);
@@ -178,10 +178,10 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
       const response = await post(`${path()}/tasks/${tasks.worker}/update`, { ...payload('worker2', 'Nowy tytuł'), expectedVersion: before.version }, 'manager');
       assert.equal(response.statusCode, 200, response.body); assert.equal(response.json().task.version, before.version + 1);
       assert.equal(response.json().task.authorMembershipId, before.authorMembershipId); assert.equal(response.json().task.status, 'planned');
-      assert.equal((await get(`${path()}/tasks`, 'worker')).json().tasks.length, 0);
+      assert.equal((await get(`${path()}/tasks`, 'worker')).statusCode, 404);
       assert.equal((await get(`${path()}/tasks`, 'worker2')).json().tasks.length, 2);
       const restored = await post(`${path()}/tasks/${tasks.worker}/update`, { ...payload(), expectedVersion: before.version + 1 }, 'dual'); assert.equal(restored.statusCode, 200);
-      for (const actor of ['worker', 'foreman', 'adminA']) assert.equal((await post(`${path()}/tasks/${tasks.worker}/update`, { ...payload(), expectedVersion: before.version + 2 }, actor)).statusCode, 404);
+      for (const actor of ['worker', 'roleless']) assert.equal((await post(`${path()}/tasks/${tasks.worker}/update`, { ...payload(), expectedVersion: before.version + 2 }, actor)).statusCode, 404);
     });
     await t.test('raw input validates UUIDs, text, versions and immutable context/actor fields', async () => {
       for (const invalid of [null, [], {}, { name: '' }, { name: 'X'.repeat(201) }, { name: 'A\nB' }, { name: 5 }, { name: 'A', description: null }, { name: 'A', description: 'X'.repeat(4001) }, { name: 'A', organizationId: org.b }, { name: 'A', actorId: users.adminB }, { name: 'A', status: 'archived' }]) assert.equal((await post(base(), invalid)).statusCode, 400);
@@ -245,7 +245,7 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
       for (const row of audit) { assert(row.actor_id && row.organization_id && row.subject_id); assert.equal(row.details.afterVersion, row.details.beforeVersion + 1); }
       assert(audit.some(row => row.event === 'task_updated' && row.details.beforeAssignee !== row.details.afterAssignee));
     });
-    await t.test('FORCE RLS, project context, composite foreign keys and immutable records protect direct runtime SQL', async () => {
+    await t.test('FORCE RLS, company reads, project write context, composite FK and immutable records protect SQL', async () => {
       assert.deepEqual((await runtime.query('SELECT current_user, session_user, rolsuper, rolbypassrls, rolcreaterole FROM pg_roles WHERE rolname = current_user')).rows[0],
         { current_user: 'sitegrid', session_user: 'sitegrid', rolsuper: false, rolbypassrls: false, rolcreaterole: false });
       const flags = (await runtime.query(`SELECT relname, relrowsecurity, relforcerowsecurity, row_security_active(c.oid) AS active,
@@ -255,21 +255,21 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
       assert.equal(flags.length, 3); for (const row of flags) { assert(row.relrowsecurity && row.relforcerowsecurity && row.active); assert(!row.owns && !row.delete && !row.truncate); }
       for (const table of ['projects', 'project_memberships', 'tasks']) assert.deepEqual((await runtime.query(`SELECT * FROM ${table}`)).rows, []);
       await asActor(org.a, 'manager', projects.p1, async client => {
-        assert.equal((await client.query('SELECT * FROM tasks')).rows.length, 2);
-        assert.equal((await client.query('SELECT * FROM tasks WHERE project_id = $1 OR organization_id = $2', [projects.p2, org.b])).rows.length, 0);
-        assert.equal((await client.query('SELECT * FROM project_memberships WHERE project_id = $1', [projects.p2])).rows.length, 0);
+        assert.equal((await client.query('SELECT * FROM tasks')).rows.length, 3);
+        assert.equal((await client.query('SELECT * FROM tasks WHERE project_id = $1 OR organization_id = $2', [projects.p2, org.b])).rows.length, 1);
+        assert.equal((await client.query('SELECT * FROM project_memberships WHERE project_id = $1', [projects.p2])).rows.length, 2);
       });
-      await asActor(org.a, 'manager', projects.p2, async client => { assert.equal((await client.query('SELECT * FROM tasks')).rows.length, 0); });
+      await asActor(org.a, 'manager', projects.p2, async client => { assert.equal((await client.query('SELECT * FROM tasks')).rows.length, 3); });
       await asActor(org.a, 'worker', projects.p1, async client => { assert.deepEqual((await client.query('SELECT id FROM tasks')).rows.map(row => row.id), [tasks.worker]); });
-      for (const actor of ['adminA', 'roleless', 'platform']) await asActor(org.a, actor, projects.p1, async client => { assert.equal((await client.query('SELECT * FROM tasks')).rows.length, 0); });
-      await asActor(org.a, 'manager', null, async client => { assert.equal((await client.query('SELECT * FROM tasks')).rows.length, 0); });
+      for (const actor of ['roleless', 'platform']) await asActor(org.a, actor, projects.p1, async client => { assert.equal((await client.query('SELECT * FROM tasks')).rows.length, 0); });
+      await asActor(org.a, 'manager', null, async client => { assert.equal((await client.query('SELECT * FROM tasks')).rows.length, 3); });
       await assert.rejects(asActor(org.a, 'adminA', projects.p1, client => client.query("INSERT INTO projects(organization_id, name) VALUES ($1, 'Foreign')", [org.b])), { code: '42501' });
-      await assert.rejects(asActor(org.a, 'adminA', projects.p1, client => client.query("INSERT INTO tasks(organization_id, project_id, title, assignee_membership_id, author_membership_id) VALUES ($1, $2, 'Denied', $3, $4)", [org.a, projects.p1, memberships.worker, memberships.adminA])), { code: '42501' });
+      await assert.rejects(asActor(org.a, 'roleless', projects.p1, client => client.query("INSERT INTO tasks(organization_id, project_id, title, assignee_membership_id, author_membership_id) VALUES ($1, $2, 'Denied', $3, $4)", [org.a, projects.p1, memberships.worker, memberships.roleless])), { code: '42501' });
       await assert.rejects(owner.query("INSERT INTO project_memberships(organization_id, project_id, membership_id, status) VALUES ($1, $2, $3, 'inactive')", [org.a, projects.p1, memberships.adminB]), { code: '23503' });
       // Disable only user triggers as migration owner to exercise the actual FK independently of eligibility guards.
       await owner.query('ALTER TABLE tasks DISABLE TRIGGER USER');
       try {
-        for (const [tenant, projectId, assignee, author] of [[org.a, projects.p1, memberships.workerB, memberships.manager], [org.a, projects.p2, memberships.worker, memberships.manager2], [org.a, projects.b, memberships.workerB, memberships.sharedB]]) {
+        for (const [tenant, projectId, assignee, author] of [[org.a, projects.p1, memberships.workerB, memberships.manager], [org.a, projects.p2, memberships.worker, memberships.adminB], [org.a, projects.b, memberships.workerB, memberships.sharedB]]) {
           await assert.rejects(owner.query("INSERT INTO tasks(organization_id, project_id, title, assignee_membership_id, author_membership_id) VALUES ($1, $2, 'Bad FK', $3, $4)", [tenant, projectId, assignee, author]), { code: '23503' });
         }
       } finally { await owner.query('ALTER TABLE tasks ENABLE TRIGGER USER'); }
@@ -294,18 +294,21 @@ test('PR12 M07 projects and tasks with real unprivileged PostgreSQL FORCE RLS', 
         await blocker.query('BEGIN'); await lockOrganization(blocker, org.a);
         const waiting = Promise.resolve(post(`${path()}/tasks`, payload(), 'manager'));
         await waitForLock();
-        await blocker.query("UPDATE project_memberships SET status = 'inactive', version = version + 1 WHERE organization_id = $1 AND project_id = $2 AND membership_id = $3", [org.a, projects.p1, memberships.manager]);
+        await blocker.query("DELETE FROM membership_roles WHERE organization_id=$1 AND membership_id=$2 AND role='manager'",[org.a,memberships.manager]);
         await blocker.query('COMMIT'); assert.equal((await waiting).statusCode, 404);
       } finally { await blocker.query('ROLLBACK'); blocker.release(); }
       assert.equal((await get(`${path()}/tasks`)).statusCode, 404);
-      assert.equal((await get(path())).statusCode, 404);
+      assert.equal((await get(path())).statusCode, 200);
+      await owner.query("INSERT INTO membership_roles(organization_id,membership_id,role) VALUES ($1,$2,'manager')",[org.a,memberships.manager]);
+      assert.equal((await assign(projects.p1, 'manager', 'inactive', 1)).statusCode,200);
+      assert.equal((await get(`${path()}/tasks`)).statusCode,200);
       assert.equal((await assign(projects.p1, 'manager', 'active', 2)).statusCode, 200);
       await owner.query("DELETE FROM membership_roles WHERE organization_id = $1 AND membership_id = $2 AND role = 'manager'", [org.a, memberships.manager]);
       assert.equal((await post(`${path()}/tasks`, payload(), 'manager')).statusCode, 404);
       await owner.query("INSERT INTO membership_roles(organization_id, membership_id, role) VALUES ($1, $2, 'manager')", [org.a, memberships.manager]);
       assert.equal((await assign(projects.p1, 'worker', 'inactive', 3)).statusCode, 200);
-      assert.equal((await get(`${path()}/tasks`, 'worker')).statusCode, 404);
-      assert.equal((await post(`${path()}/tasks`, payload(), 'manager')).statusCode, 400);
+      assert.equal((await get(`${path()}/tasks`, 'worker')).statusCode, 200);
+      assert.equal((await post(`${path()}/tasks`, payload('inactive'), 'manager')).statusCode, 400);
       assert.equal((await assign(projects.p1, 'worker', 'active', 4)).statusCode, 200);
       await owner.query("UPDATE organization_memberships SET status = 'inactive' WHERE organization_id = $1 AND id = $2", [org.a, memberships.shared]);
       assert.equal((await get(`${path()}/tasks`, 'shared')).statusCode, 403);

@@ -2,9 +2,9 @@
 
 Data: 2026-10-09. Normatywna propozycja własnego produktu powiązana z [architekturą](ARCHITECTURE.md); nie opis uprawnień referencyjnego HERC. Wszystkie operacje podlegają autoryzacji API i izolacji danych. Ukrycie przycisku nie jest zabezpieczeniem.
 
-## Docelowe uprawnienia zadań — decyzja 2026-10-11 (jeszcze niewdrożone)
+## Uprawnienia zadań — PR21 (bieżąca gałąź)
 
-**Źródło prawdy dla nowych PR-ów:** [Zarządzanie zadaniami v2](../TASK_MANAGEMENT_V2.md). Poniższa historyczna macierz opisuje istniejący kod v0.1.1 i nie może być stosowana jako docelowe wymaganie PR21–PR23.
+**Implementacja backlogu/pulpitu:** [PR21](../TASK_BACKLOG.md). Podzadania i dyskusje nadal planowane. **Źródło prawdy dla nowych PR-ów:** [Zarządzanie zadaniami v2](../TASK_MANAGEMENT_V2.md). Poniższa historyczna macierz opisuje istniejący kod v0.1.1 i nie może być stosowana jako docelowe wymaganie PR21–PR23.
 
 | Operacja | Administrator firmy | Kierownik | Brygadzista | Pracownik |
 |---|---|---|---|---|

@@ -1,7 +1,7 @@
 import { observeAccessFailure } from './offline/account.js';
 import type { ProjectContractor } from './contractors.js';
 export type Project = { id: string; name: string; description: string; status: string; version: number; createdAt: string; updatedAt: string; contractor: ProjectContractor | null };
-export type Task = { id: string; title: string; description: string; assigneeMembershipId: string; assigneeName?: string; canProgress?: boolean; status: string; version: number };
+export type Task = { id: string; title: string; description: string; assigneeMembershipId: string | null; assigneeName?: string | null; canProgress?: boolean; status: string; version: number };
 export type Member = { membershipId: string; displayName: string; companyStatus: string; accountActive: boolean; status: string | null; version: number };
 export type Details = { project: Project; permissions: { administer: boolean; readTasks: boolean; manageTasks: boolean } };
 export async function request<T>(path: string, signal: AbortSignal, csrfToken?: string, payload?: unknown): Promise<T> {

@@ -45,7 +45,7 @@ test('M10 complete project snapshots use real PostgreSQL 17 and unprivileged FOR
   const get = (actor = 'worker', organization = orgA, project = projectA) => app.inject({ url: `/api/organizations/${organization}/projects/${project}/snapshot`, headers: headers[actor] });
   await admin.query(`CREATE SCHEMA ${schema}`);
   try {
-    assert.equal(await migrate(owner, 'migrations'), 11); await owner.query(`GRANT USAGE ON SCHEMA ${schema} TO sitegrid`);
+    assert.equal(await migrate(owner, 'migrations'), 12); await owner.query(`GRANT USAGE ON SCHEMA ${schema} TO sitegrid`);
     await owner.query('GRANT SELECT ON installation, schema_migrations, users, credentials, platform_admins TO sitegrid');
     await owner.query('GRANT SELECT, INSERT, DELETE ON sessions TO sitegrid'); await owner.query('GRANT SELECT, INSERT, UPDATE, DELETE ON auth_rate_limits TO sitegrid');
     for (const [id, name] of [[orgA, 'Firma A'], [orgB, 'Firma B']]) await owner.query('INSERT INTO organizations(id,name) VALUES ($1,$2)', [id, name]);
@@ -85,10 +85,10 @@ test('M10 complete project snapshots use real PostgreSQL 17 and unprivileged FOR
       assert(!response.body.includes('Ukryty kontrahent')); assert(!response.body.includes('other@example.test')); assert(!response.body.includes('csrf'));
       assert.equal((await app.inject({ url: '/api/auth/session', headers: headers.worker })).json().user.id, users.worker);
     });
-    await t.test('manager/foreman scopes and administrative metadata remain separate, including shared account', async () => {
+    await t.test('company management sees project tasks; worker and shared-account scopes stay isolated', async () => {
       for (const actor of ['manager','foreman']) { const body = (await get(actor)).json(); assert.equal(body.taskAccess,'project'); assert.equal(body.tasks.length,2); }
-      const admin = (await get('admin')).json(); assert.equal(admin.taskAccess,'none'); assert.deepEqual(admin.tasks,[]);
-      const shared = (await get('worker',orgB,projectB)).json(); assert.equal(shared.scope.accountId,users.worker); assert.equal(shared.taskAccess,'none'); assert.deepEqual(shared.tasks,[]);
+      const admin = (await get('admin')).json(); assert.equal(admin.taskAccess,'project'); assert.equal(admin.tasks.length,2);
+      const shared = (await get('worker',orgB,projectB)).json(); assert.equal(shared.scope.accountId,users.worker); assert.equal(shared.taskAccess,'project'); assert.deepEqual(shared.tasks,[]);
       assert.equal((await get('platform')).statusCode,404); assert.equal((await get('unassigned')).statusCode,404);
       assert.equal((await get('worker',orgA,hidden)).statusCode,404); assert.equal((await get('worker',orgB,projectA)).statusCode,404);
       assert.equal((await app.inject({ url:`/api/organizations/${orgA}/projects/${projectA}/snapshot` })).statusCode,401);
@@ -117,10 +117,10 @@ test('M10 complete project snapshots use real PostgreSQL 17 and unprivileged FOR
       const next = (await get()).json(); assert.equal(next.project.name,'Projekt nowy'); assert.equal(next.project.contractor.name,'Klient nowy'); assert.equal(next.tasks[0].title,'Zadanie nowe');
       const pooled = await runtime.connect(); try { const state = (await pooled.query("SELECT current_setting('sitegrid.user_id',true) AS actor,current_setting('sitegrid.organization_id',true) AS org,current_setting('transaction_isolation') AS isolation")).rows[0]; assert(!state.actor); assert(!state.org); assert.equal(state.isolation,'read committed'); } finally { pooled.release(); }
     });
-    await t.test('blocked account and revoked project/company/role access are never bypassed', async () => {
+    await t.test('account/company/role revocation blocks access; legacy project membership is unnecessary', async () => {
       await owner.query('UPDATE users SET blocked_at=now() WHERE id=$1',[users.worker]); assert.equal((await get()).statusCode,401);
       await owner.query('UPDATE users SET blocked_at=NULL WHERE id=$1',[users.worker]);
-      await owner.query("UPDATE project_memberships SET status='inactive',version=version+1 WHERE membership_id=$1",[members.worker]); assert.equal((await get()).statusCode,404);
+      await owner.query("UPDATE project_memberships SET status='inactive',version=version+1 WHERE membership_id=$1",[members.worker]); assert.equal((await get()).statusCode,200);
       await owner.query("UPDATE project_memberships SET status='active',version=version+1 WHERE membership_id=$1",[members.worker]);
       await owner.query("UPDATE organization_memberships SET status='inactive' WHERE id=$1",[members.worker]); assert.equal((await get()).statusCode,403);
       await owner.query("UPDATE organization_memberships SET status='active' WHERE id=$1",[members.worker]);
@@ -137,7 +137,7 @@ test('M10 complete project snapshots use real PostgreSQL 17 and unprivileged FOR
         await edit.query("UPDATE tasks SET description='',version=version+1 WHERE title='Bulk'"); await edit.query('COMMIT'); } finally { edit.release(); }
       assert.equal((await get()).json().tasks.length,500);
       const writer2=await owner.connect(); try { await writer2.query('BEGIN'); await writer2.query("SELECT set_config('sitegrid.user_id',$1,true)",[users.manager]); await writer2.query("INSERT INTO tasks(organization_id,project_id,title,assignee_membership_id,author_membership_id) VALUES ($1,$2,'Overflow',$3,$4)",[orgA,projectA,members.worker,members.manager]); await writer2.query('COMMIT'); } finally { writer2.release(); }
-      assert.equal((await get()).statusCode,413); assert.equal((await get('admin')).statusCode,200);
+      assert.equal((await get()).statusCode,413); assert.equal((await get('admin')).statusCode,413);
     });
     await t.test('inactive contractor and archived project retain authorized read-only history', async () => {
       await owner.query("DELETE FROM tasks WHERE title IN ('Bulk','Overflow')");

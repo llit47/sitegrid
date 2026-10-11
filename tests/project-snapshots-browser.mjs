@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { buildApp } from '../apps/server/src/app.ts';
 import { readConfig } from '../apps/server/src/config.ts';
+import { withOrganization } from '../apps/server/src/organization-context.ts';
 import { migrate } from '../apps/server/src/migrations.ts';
 import { hashPassword } from '../apps/server/src/auth/password.ts';
 const { chromium } = await import(process.env.SITEGRID_PLAYWRIGHT_MODULE ? pathToFileURL(process.env.SITEGRID_PLAYWRIGHT_MODULE).href : 'playwright');
@@ -79,6 +80,7 @@ try {
     await api(`${projectPath}/${project.id}/tasks`, { title: 'Cudze zadanie kierownika', assigneeMembershipId: members.administrator });
   }
   await api(`/api/organizations/${companyB}/projects/${projectB.id}/members/${members.workerB}`, { status: 'active', expectedVersion: 0 }, 'administratorB');
+  await api(`/api/organizations/${companyB}/projects/${projectB.id}/tasks`, {title:'Zadanie w firmie B',assigneeMembershipId:members.workerB}, 'administratorB');
   browser = await chromium.launch({ headless: true, ...(process.env.SITEGRID_CHROMIUM_PATH ? { executablePath: process.env.SITEGRID_CHROMIUM_PATH } : {}) });
   const open = async mobile => {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
@@ -186,7 +188,7 @@ try {
     const { context, page: initialPage } = await open(mobile); let page = initialPage;
     const suffix = mobile ? 'mobile' : 'desktop';
     const temporary = (await api(`${projectPath}/${projectOne.id}/tasks`, { title: `Zadanie do usunięcia ${suffix}`, assigneeMembershipId: members.worker })).task;
-    await page.getByRole('button',{name:'Wczytaj aktualne dane',exact:true}).click(); await page.getByText(temporary.title,{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Wczytaj aktualne dane',exact:true}).click(); await page.locator('.project-details').getByText(temporary.title,{exact:true}).waitFor();
     let downloads=0; page.on('request',request=>{if(request.url().endsWith('/snapshot')) downloads++;});
     await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();
     await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor(); assert.equal(downloads,1);
@@ -200,7 +202,7 @@ try {
       snapshotMode=mode; await page.getByRole('button',{name:'Odśwież offline',exact:true}).click();
       await page.getByText('Odświeżenie nie powiodło się.',{exact:false}).waitFor();
       if(mode==='limit') assert(await page.getByRole('alert').filter({hasText:'500 zadań lub 2 MiB'}).isVisible());
-      await context.setOffline(true); await page.getByText(temporary.title,{exact:true}).waitFor(); await context.setOffline(false);
+      await context.setOffline(true); await page.locator('.offline-project').getByText(temporary.title,{exact:true}).waitFor(); await context.setOffline(false);
       await selectCompany(page, companyA); await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click();
       await page.getByRole('button',{name:'Odśwież offline',exact:true}).waitFor(); snapshotMode='';
     }
@@ -251,7 +253,7 @@ try {
     await context.setOffline(false); await selectCompany(page, companyA);
     await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click(); await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();
     await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
-    const other=await context.newPage(); await other.goto(config.origin); await other.getByText('worker@example.test',{exact:true}).waitFor();
+    const other=await context.newPage(); await other.goto(config.origin); await other.locator('.workspace-account').getByText('worker@example.test',{exact:true}).waitFor();
     await page.evaluate(()=>{Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});window.dispatchEvent(new Event('offline'));}); await page.getByRole('heading',{name:'SiteGrid bez połączenia'}).waitFor();
     if(!mobile)await other.evaluate(()=>{
       window.originalAccessDelete=IDBObjectStore.prototype.delete;window.originalAccessPut=IDBObjectStore.prototype.put;
@@ -266,20 +268,20 @@ try {
       await other.evaluate(()=>{IDBObjectStore.prototype.delete=window.originalAccessDelete;IDBObjectStore.prototype.put=window.originalAccessPut;});await context.setOffline(false);
     }
     await other.locator('#email').fill('administratorb@example.test');await other.locator('#password').fill(password);await other.getByRole('button',{name:'Zaloguj się',exact:true}).click();
-    await other.getByText('administratorb@example.test',{exact:true}).waitFor();
+    await other.locator('.workspace-account').getByText('administratorb@example.test',{exact:true}).waitFor();
     await selectCompany(other, companyB);await other.getByRole('button',{name:'Projekt obcej firmy Aktywny Kontrahent: Klient Alfa',exact:true}).click();
     await other.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await other.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
-    await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'Projekt obcej firmy',exact:true}).waitFor();await page.getByText('Przygotowano wyłącznie metadane projektu.',{exact:false}).waitFor();
-    assert.equal(await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).count(),0);assert.equal(await page.locator('.task-row').count(),0);
+    await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'Projekt obcej firmy',exact:true}).waitFor();await page.getByText('Zadanie w firmie B',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).count(),0);assert.equal(await page.locator('.task-row').count(),1);
     if(!mobile){
-      await context.setOffline(false);await page.reload();await page.getByText('administratorb@example.test',{exact:true}).waitFor();
+      await context.setOffline(false);await page.reload();await page.locator('.workspace-account').getByText('administratorb@example.test',{exact:true}).waitFor();
       const originalWorker=servedWorker, configMatch=JSON.parse(originalWorker.match(/const shell = (.*);/)[1]);
       servedWorker=originalWorker.replace(JSON.stringify(configMatch),JSON.stringify({...configMatch,version:'c'.repeat(64)}));
       await page.evaluate(async()=>{await(await navigator.serviceWorker.getRegistration('/')).update();});
       await page.getByText('Nowa wersja gotowa.',{exact:false}).waitFor();await other.close();await page.close();
       page=await context.newPage();await page.goto(config.origin);await page.waitForFunction(async()=>(await caches.keys()).includes('sitegrid-shell-v1-'+'c'.repeat(64)));
       await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'Projekt obcej firmy',exact:true}).waitFor();
-      console.log('PASS failed cleanup denial persists through offline restart; metadata-only account has no prior account tasks; worker update/rollback preserves valid snapshots');
+      console.log('PASS failed cleanup denial persists through offline restart; company administrator sees only the new company tasks, with no prior account data; worker update/rollback preserves valid snapshots');
       await context.setOffline(false);servedWorker=originalWorker;await page.reload();await page.evaluate(async()=>{await(await navigator.serviceWorker.getRegistration('/')).update();});
       await page.getByText('Nowa wersja gotowa.',{exact:false}).waitFor();await page.close();page=await context.newPage();await page.goto(config.origin);
       await page.waitForFunction(async version=>(await caches.keys()).includes('sitegrid-shell-v1-'+version),configMatch.version);
@@ -362,10 +364,10 @@ try {
   await inFlight.context.close(); console.log('PASS in-flight snapshot read never republishes a project revoked by another tab with unchanged account generation');
   // Confirmed revocation invalidates the prepared project before another offline launch.
   const revoked=await open(false); await revoked.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click(); await revoked.page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
-  await owner.query("UPDATE project_memberships SET status='inactive',version=version+1 WHERE organization_id=$1 AND project_id=$2 AND membership_id=$3",[companyA,projectOne.id,members.worker]);
+  await withOrganization(owner,companyA,async client=>{ await client.query("SELECT set_config('sitegrid.user_id',$1,true)",[users.administrator]); await client.query("UPDATE tasks SET assignee_membership_id=NULL,version=version+1 WHERE organization_id=$1 AND project_id=$2 AND assignee_membership_id=$3",[companyA,projectOne.id,members.worker]); });
   await revoked.page.getByRole('button',{name:'Wczytaj aktualne dane',exact:true}).click(); await revoked.page.locator('.project-details').waitFor({state:'detached'});
   await revoked.context.setOffline(true); await revoked.page.reload(); await revoked.page.getByText('Brak pobranych projektów',{exact:false}).waitFor();assert.equal(await revoked.page.locator('.offline-project').count(),0);await revoked.context.close();
-  await owner.query("UPDATE project_memberships SET status='active',version=version+1 WHERE organization_id=$1 AND project_id=$2 AND membership_id=$3",[companyA,projectOne.id,members.worker]);
+  await withOrganization(owner,companyA,async client=>{ await client.query("SELECT set_config('sitegrid.user_id',$1,true)",[users.administrator]); await client.query("UPDATE tasks SET assignee_membership_id=$3,version=version+1 WHERE organization_id=$1 AND project_id=$2 AND assignee_membership_id IS NULL",[companyA,projectOne.id,members.worker]); });
   const legacy=await open(false);await legacy.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await legacy.page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
   const legacyTab=await legacy.context.newPage();await legacyTab.goto(config.origin);
   await legacy.page.evaluate(()=>{Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});window.dispatchEvent(new Event('offline'));});await legacy.page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor();

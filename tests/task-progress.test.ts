@@ -105,10 +105,10 @@ test('M08 task progress on real PostgreSQL with unprivileged FORCE RLS', { skip:
       await t.test('schema 9 to current preserves all populated tables, credentials, sessions and task versions', async () => {
         const tables = (await owner.query('SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename', [schema])).rows.map(row => row.tablename as string);
         const before = await Promise.all(tables.map(snapshot));
-        assert.equal(await migrate(owner, 'migrations'), 11); assert.equal(await migrate(owner, 'migrations'), 11);
-        assert.equal(await checkMigrations(owner, 'migrations'), 11);
+        assert.equal(await migrate(owner, 'migrations'), 12); assert.equal(await migrate(owner, 'migrations'), 12);
+        assert.equal(await checkMigrations(owner, 'migrations'), 12);
         for (const [i, table] of tables.entries()) assert.deepEqual(table === 'schema_migrations' ? (await snapshot(table)).filter(row => row.version <= 9) : await snapshot(table), table === 'projects' ? before[i].map(row => ({ ...row, contractor_id: null })) : before[i], table);
-        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 11, min: 11, max: 11, upgradeMin: 0, upgradeMax: 11 });
+        assert.deepEqual(JSON.parse(await readFile('release.json', 'utf8')).schema, { target: 12, min: 12, max: 12, upgradeMin: 0, upgradeMax: 12 });
         await assert.rejects(checkMigrations(owner, previous), /does not match/);
       });
     } finally { await rm(previous, { recursive: true, force: true }); }
@@ -256,10 +256,22 @@ test('M08 task progress on real PostgreSQL with unprivileged FORCE RLS', { skip:
           if (scenario === 'session') await blocker.query('DELETE FROM sessions WHERE user_id = $1', [users.worker]);
           if (scenario === 'assignee') {
             await blocker.query("SELECT set_config('sitegrid.user_id', $1, true)", [users.manager]);
-            await blocker.query('UPDATE tasks SET assignee_membership_id = $2, version = version + 1 WHERE id = $1', [task, members.other]);
+            if(replay) await blocker.query('SAVEPOINT assignment_guard');
+            if(replay) await assert.rejects(blocker.query('UPDATE tasks SET assignee_membership_id = $2, version = version + 1 WHERE id = $1',[task,members.other]),{code:'23514'});
+            else await blocker.query('UPDATE tasks SET assignee_membership_id = $2, version = version + 1 WHERE id = $1', [task, members.other]);
+            if(replay) await blocker.query('ROLLBACK TO SAVEPOINT assignment_guard');
           }
           await blocker.query('COMMIT');
-          const result = await waiting; assert.equal(result.statusCode, ['blocked', 'expired', 'session'].includes(scenario) ? 401 : ['membership', 'company'].includes(scenario) ? 403 : 404, `${replay}/${scenario}/${result.body}`);
+          const result = await waiting;
+          if(scenario==='project' || (scenario==='assignee' && replay)) {
+            assert.equal(result.statusCode,200,result.body); assert.deepEqual((await post(task,op)).json(),result.json());
+            assert.equal((await snapshot('task_progress_receipts')).length,before.length+(replay?0:1));
+            assert.equal((await snapshot('organization_audit_events')).length,auditBefore.length+(replay?0:1));
+            if(!replay) assert.equal((await snapshot('tasks')).find(row=>row.id===task).version,taskBefore.find(row=>row.id===task).version+1);
+            if(replay) { assert.deepEqual(await snapshot('task_progress_receipts'),before); assert.deepEqual(await snapshot('tasks'),taskBefore); }
+            continue;
+          }
+          assert.equal(result.statusCode, ['blocked', 'expired', 'session'].includes(scenario) ? 401 : ['membership', 'company'].includes(scenario) ? 403 : 404, `${replay}/${scenario}/${result.body}`);
           assert(!result.body.includes(op.operationId)); assert(!result.body.includes(task));
           assert.deepEqual(await snapshot('task_progress_receipts'), before); assert.deepEqual(await snapshot('organization_audit_events'), auditBefore);
           if (scenario !== 'assignee') assert.deepEqual(await snapshot('tasks'), taskBefore);

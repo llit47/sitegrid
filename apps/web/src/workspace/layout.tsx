@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import './workspace.css';
 import { NavigationIcon } from './navigation-icon.js';
 
-export type Section = 'dashboard' | 'projects' | 'contractors' | 'members' | 'invitations' | 'settings' | 'platform';
+export type Section = 'dashboard' | 'tasks' | 'projects' | 'contractors' | 'members' | 'invitations' | 'settings' | 'platform';
 export const sectionNames: Record<Section, string> = {
-  dashboard: 'Pulpit', projects: 'Projekty', contractors: 'Kontrahenci', members: 'Pracownicy',
+  dashboard: 'Pulpit', tasks: 'Zadania', projects: 'Projekty', contractors: 'Kontrahenci', members: 'Pracownicy',
   invitations: 'Zaproszenia', settings: 'Ustawienia firmy', platform: 'Administracja platformy',
 };
 export function WorkspaceLayout({ active, navigate, sections, company, identity, email, busy, onLogout, children }: {

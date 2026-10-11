@@ -51,3 +51,9 @@ Wydanie wymaga schematu **11**, upgrade 0–11. Addytywna `011_contractors.sql` 
 ## PR17 — M10
 
 PostgreSQL pozostaje **11**, upgrade 0–11, bez nowych lub zmienionych migracji. Paczka zawiera `dist/server/project-snapshots/` i wersjonowany build PWA z odczytem offline. Podpisy, installer, update, backup i rollback nie zmieniają formatu. IndexedDB v1→v2 zachowuje ownership metadata i dodaje confirmed snapshot store bez kasowania innych stores. Worker update/zgodny rollback nie kasują danych urządzeń. Starszy klient IDB v1 odrzuca nowszą wersję bez downgrade/resetu i zachowuje online; ponowny klient M10 może odczytać nadal ważne snapshoty. Wylogowanie/wygaśnięcie nadal ogranicza ważność, również przez aktualizacje. Backup serwera nie obejmuje lokalnych danych. [Kontrakt i manualny odbiór M10](PROJECT_SNAPSHOTS.md).
+
+## PR21 — zadania i backlog
+
+Bieżąca gałąź wymaga schematu PostgreSQL **12** (silnik 17+), upgrade **0–12**. Migracja `012_task_backlog.sql` zachowuje rekordy i receipts schematu 11, wprowadza nullable wykonawcę, firmowe FK autora/wykonawcy i aktualizuje funkcje/polityki FORCE RLS. Paczka zawiera `dist/server/task-management/`, migrację i zadaniowy frontend w wersjonowanej powłoce PWA. IDB pozostaje v2; worker/instalator/podpisy pozostają zgodne. Wersja package/release pozostaje 0.1.1; ta zmiana nie publikuje wydania.
+
+Update nadal wymaga backupu przed migracją; rollback do PR20/schema 11 jest blokowany **przed zatrzymaniem usługi**. Powrót wymaga kontrolowanego restore DB sprzed migracji; brak downgrade SQL. Testy migracji porównują wszystkie populated tabele, checksumy i replay M08. Testy Python obejmują konkretny update 11 → 12, blokadę rollbacku 12 → 11 oraz istniejący zgodny rollback. Test rzeczywistej paczki wymaga obecności migracji 012, trzech modułów backendu i poprawnych zasobów PWA. [Kontrakt PR21](TASK_BACKLOG.md).

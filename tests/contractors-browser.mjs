@@ -63,6 +63,7 @@ try {
     await api(`${projectPath}/${project.id}/tasks`, { title: 'Cudze zadanie kierownika', assigneeMembershipId: members.administrator });
   }
   await api(`/api/organizations/${companyB}/projects/${projectB.id}/members/${members.workerB}`, { status: 'active', expectedVersion: 0 }, 'administratorB');
+  await api(`/api/organizations/${companyB}/projects/${projectB.id}/tasks`, { title: 'Zadanie w firmie B', assigneeMembershipId:members.workerB }, 'administratorB');
   browser = await chromium.launch({ headless: true, ...(process.env.SITEGRID_CHROMIUM_PATH ? { executablePath: process.env.SITEGRID_CHROMIUM_PATH } : {}) });
   const open = async (actor, mobile) => {
     // Online interception tests run separately from the real-worker PWA suite.
@@ -191,11 +192,11 @@ try {
     assert.equal(await worker.page.locator('.project-choice').count(), 2);
     await worker.page.getByLabel('Filtruj projekty po kontrahencie', { exact: true }).selectOption(one.id); assert.equal(await worker.page.locator('.project-choice').count(), 1);
     await worker.page.getByRole('button', { name: /Projekt Alfa Aktywny Kontrahent: Klient Alfa/ }).click();
-    await worker.page.getByText('Własne zadanie Projekt Alfa', { exact: true }).waitFor(); assert.equal(await worker.page.locator('.task-row').count(), 1);
+    await worker.page.locator('.projects').getByText('Własne zadanie Projekt Alfa', { exact: true }).waitFor(); assert.equal(await worker.page.locator('.task-row').count(), 1);
     await worker.page.getByRole('button', { name: mobile ? 'Zgłoś do odbioru' : 'Rozpocznij zadanie', exact: true }).click();
     await worker.page.getByText(mobile ? 'Serwer potwierdził zgłoszenie do odbioru.' : 'Serwer potwierdził rozpoczęcie zadania.', { exact: true }).waitFor();
     await worker.page.getByLabel('Filtruj projekty po kontrahencie', { exact: true }).selectOption(two.id);
-    await worker.page.getByRole('button', { name: /Projekt Beta Aktywny Kontrahent: Klient Beta/ }).click(); await worker.page.getByText('Własne zadanie Projekt Beta', { exact: true }).waitFor();
+    await worker.page.getByRole('button', { name: /Projekt Beta Aktywny Kontrahent: Klient Beta/ }).click(); await worker.page.locator('.projects').getByText('Własne zadanie Projekt Beta', { exact: true }).waitFor();
     assert.equal(await worker.page.locator('.task-row').count(), 1);
     await selectCompany(worker.page, companyB); await worker.page.getByRole('button', { name: /Projekt obcej firmy Aktywny Kontrahent: Klient Alfa/ }).waitFor();
     assert.equal(await worker.page.getByText('Własne zadanie Projekt Beta', { exact: true }).count(), 0); assert.equal(worker.directoryRequests.length, 0);

@@ -147,6 +147,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual((self.root / 'current').resolve(), self.new)
 
     def test_pr16_update_from_schema10_backs_up_before_schema11_activation(self):
+        self.schema_release(self.new, 11)
         self.schema_release(self.old, 10)
         self.rows = self.history(self.old)
         with patch.object(lc, 'sql', return_value='170000'):
@@ -162,7 +163,35 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(lc.journal()['phase'], 'done')
 
     def test_pr16_schema11_blocks_pr15_rollback_before_stopping_service(self):
+        self.schema_release(self.new, 11)
         self.schema_release(self.old, 10)
+        self.rows = self.history(self.new)
+        atomic_link(self.new, self.root / 'current')
+        write_json(lc.JOURNAL, {'phase': 'done', 'completed_versions': ['0.1.0', '0.1.1']})
+        with self.assertRaisesRegex(SiteGridError, 'Rollback zablokowany'):
+            lc.rollback(argparse.Namespace(version='0.1.0', yes=True))
+        self.assertEqual(self.events, [])
+        self.assertEqual((self.root / 'current').resolve(), self.new)
+
+    def test_pr21_update_from_schema11_backs_up_before_schema12_activation(self):
+        self.schema_release(self.new, 12)
+        self.schema_release(self.old, 11)
+        self.rows = self.history(self.old)
+        with patch.object(lc, 'sql', return_value='170000'):
+            lc.can_upgrade(self.new, self.rows)
+        def migrate_schema12(*args):
+            self.events.append('migrate')
+            self.rows = self.history(self.new)
+        with patch.object(lc, 'app_cli', side_effect=migrate_schema12):
+            lc.deploy(self.new, self.old, {}, 'update', migrate=True)
+        self.assertEqual(len(self.rows), 12)
+        self.assertLess(self.events.index('backup'), self.events.index('migrate'))
+        self.assertEqual((self.root / 'current').resolve(), self.new)
+        self.assertEqual(lc.journal()['phase'], 'done')
+
+    def test_pr21_schema12_blocks_pr20_rollback_before_stopping_service(self):
+        self.schema_release(self.new, 12)
+        self.schema_release(self.old, 11)
         self.rows = self.history(self.new)
         atomic_link(self.new, self.root / 'current')
         write_json(lc.JOURNAL, {'phase': 'done', 'completed_versions': ['0.1.0', '0.1.1']})

@@ -88,7 +88,7 @@ export function OrganizationSwitcher({ csrfToken, accountId, email, platformAdmi
     setOrganizations(current => current?.map(organization => organization.id === updated.organizationId ? { ...organization, name: updated.name } : organization) ?? null);
   };
   const admin = context?.roles.includes('organization_admin') ?? false;
-  const sections: Section[] = context ? ['dashboard', 'projects', ...(admin ? ['contractors', 'members', 'invitations', 'settings'] as Section[] : [])] : ['dashboard'];
+  const sections: Section[] = context ? ['dashboard', 'tasks', 'projects', ...(admin ? ['contractors', 'members', 'invitations', 'settings'] as Section[] : [])] : ['dashboard'];
   if (platformAdmin) sections.push('platform');
   const company = <>
     <label htmlFor="active-organization">Firma</label>
@@ -103,7 +103,7 @@ export function OrganizationSwitcher({ csrfToken, accountId, email, platformAdmi
     {contextError && <p className="error" role="alert">{contextError} <button className="secondary" onClick={refresh}>Ponów połączenie</button></p>}
     {active !== 'platform' && selectedId && !context && !contextError && <p role="status">Ładowanie kontekstu firmy…</p>}
     {active !== 'platform' && !selectedId && <article className="workspace-empty"><h2>{organizations?.length ? 'Wybierz swoje miejsce pracy' : 'Dostęp do firmy'}</h2><p>{organizations?.length ? 'Wybierz firmę w nawigacji, aby otworzyć jej projekty i narzędzia.' : platformAdmin ? 'Firmy i ich pierwszych administratorów przygotujesz w administracji platformy. Projekty wymagają osobnego członkostwa.' : 'Poproś administratora firmy o zaproszenie. Sam profil pracownika nie daje konta logowania ani dostępu do projektów.'}</p></article>}
-    {context?.id === selectedId && branding?.organizationId === selectedId && <CompanyWorkspace key={context.id} active={active} visited={visited} navigate={navigate} accountId={accountId} organizationId={context.id} admin={admin} branding={branding} csrfToken={csrfToken} onSaved={saved} onAccessChanged={refresh} />}
+    {context?.id === selectedId && branding?.organizationId === selectedId && <CompanyWorkspace key={context.id} active={active} visited={visited} accountId={accountId} organizationId={context.id} admin={admin} manageTasks={context.roles.some(role => ['organization_admin','manager','foreman'].includes(role))} readTasks={context.roles.some(role => ['organization_admin','manager','foreman','worker'].includes(role))} branding={branding} csrfToken={csrfToken} onSaved={saved} onAccessChanged={refresh} />}
     {platformAdmin && (active === 'platform' || visited.has('platform')) && <div hidden={active !== 'platform'}>{platform}</div>}
   </WorkspaceLayout>;
 }

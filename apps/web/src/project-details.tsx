@@ -89,7 +89,7 @@ export function ProjectDetails({ scope, path, contractors, csrfToken, onSaved, o
         </article>)}</div>
         {showTaskForm && details.permissions.manageTasks && details.project.status === 'active' && <TaskForm key={`${revision}-${editing?.id ?? 'new'}`} task={editing} members={members} busy={busy} cancel={() => { setEditing(null); setShowTaskForm(false); }}
           save={payload => mutate(editing ? `/tasks/${encodeURIComponent(editing.id)}/update` : '/tasks', payload)} />}
-      </section> : <p role="status">Dostęp do zadań wymaga aktywnego przydziału do projektu i roli kierownika, brygadzisty lub pracownika.</p>}
+      </section> : <p role="status">Dostęp do zadań wymaga roli administratora firmy, kierownika, brygadzisty lub przypisanego pracownika.</p>}
     </>}
   </article>;
 }

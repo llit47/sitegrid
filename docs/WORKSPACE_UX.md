@@ -1,5 +1,7 @@
 # Workspace UX (PR18)
 
+> **PR21 — bieżący kod:** Pulpit i nawigacja stosują [nowy kontrakt backlogu i dostępu do zadań](TASK_BACKLOG.md). Poniżej zachowano historyczny opis wcześniejszego etapu; w konflikcie stosuj PR21.
+
 > **Nowy kontrakt produktu 2026-10-11 — docelowy UX, niewdrożony w v0.1.1:** [Zarządzanie zadaniami v2](TASK_MANAGEMENT_V2.md). Pulpit ma pokazywać rzeczywiste, autoryzowane zadania: administrator/kierownik/brygadzista — zadania całej firmy z backlogiem i filtrami; pracownik — wyłącznie własne. Osobna zakładka „Zadania”, szybkie tworzenie bez wymaganego wykonawcy i przypisywanie z listy należą do PR21. Podzadania (PR22), komentarze/zdjęcia (PR23) następują osobno; planów PDF na razie nie realizujemy. Poniższa specyfikacja PR18 jest **historycznym opisem interfejsu v0.1.1**; jej „brak globalnych zadań” i powitalny pulpit nie są docelowym UX. W czasie implementacji zachować ochronę szkiców, niestabilnych komend M08, izolację firmy i PWA.
 
 
