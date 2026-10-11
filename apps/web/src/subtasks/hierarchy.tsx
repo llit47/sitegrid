@@ -7,6 +7,7 @@ import type { Assignee } from '../tasks/task-form.js';
 import { guardPendingOperations, guardWorkspaceChange, usePendingOperation } from '../workspace/navigation-safety.js';
 import { invalidatePreparedProject, observeAccessFailure } from '../offline/account.js';
 import './subtasks.css';
+import { useLiveResource } from '../tasks/live-resource.js';
 export function ParentContext({ task }: { task: Pick<Task, 'parent'> }) {
   return task.parent ? <p className="parent-context">Podzadanie · {task.parent.title}</p> : null;
 }
@@ -24,8 +25,8 @@ export function ProgressHistory({ path, version, onAccessChanged }: { path: stri
       {history?.length===0 && <p>Brak zmian postępu.</p>}{history && <ol>{history.map((entry,i)=><li key={i}>{taskStateName(entry.status)} · Wersja {entry.version} · {new Date(entry.createdAt).toLocaleString('pl-PL')}</li>)}</ol>}</>}
   </div>;
 }
-export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignees,writable,disabled,onChanged,onProgressConfirmed,onAccessChanged,onPendingChange,onOpenChange,pendingOnly }: {
-  task:Task; path:string; organizationId:string; projectId:string; csrfToken:string; assignees:Assignee[]; writable:boolean; disabled:boolean;
+export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignees,writable,disabled,onChanged,onProgressConfirmed,onAccessChanged,onPendingChange,onOpenChange,pendingOnly, active = true }: {
+  active?: boolean; task:Task; path:string; organizationId:string; projectId:string; csrfToken:string; assignees:Assignee[]; writable:boolean; disabled:boolean;
   onChanged:()=>void; onProgressConfirmed?:()=>void; onAccessChanged:()=>void; onPendingChange?:(id:string,pending:boolean)=>void; onOpenChange?:(open:boolean)=>void; pendingOnly?:Set<string>;
 }) {
   const root=useRef<HTMLElement>(null), lifetime=useRef<AbortController | null>(null), sending=useRef(false);
@@ -33,13 +34,15 @@ export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignee
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   usePendingOperation(busy);
   useEffect(()=>{const controller=new AbortController(); lifetime.current=controller; return ()=>controller.abort();},[]);
-  useEffect(()=>{
-    if(!open) return;
-    const controller=new AbortController(); setTasks(null); setError('');
-    void request<{tasks:Task[]}>(`${path}/subtasks`,controller.signal).then(data=>{if(!controller.signal.aborted) setTasks(data.tasks);})
-      .catch(e=>{if(!controller.signal.aborted) {setError(e.message); if([401,403,404].includes(e.status)) {setTasks(null); onAccessChanged();}}});
-    return ()=>controller.abort();
-  },[path,open]);
+  const [revision,setRevision] = useState(0);
+  useLiveResource(`${path}:${revision}`, signal => request<{tasks:Task[]}>(`${path}/subtasks`, signal), {
+    active: open && active, paused: busy || !!pendingOnly,
+    receive: data => { setTasks(current => data.tasks.map(child => {
+      const previous = current?.find(item => item.id === child.id);
+      return previous && previous.version > child.version ? previous : child;
+    })); setError(''); },
+    failed: e => { setError(e.message); if ([401,403,404].includes(e.status ?? 0)) {setTasks(null); onAccessChanged();} },
+  });
   const childPath=(id:string)=>`${path.slice(0,path.lastIndexOf('/'))}/${id}`;
   const mutate=async(url:string,payload:object,assignment?:Task)=>{
     if(sending.current || disabled || !guardPendingOperations()) return;
@@ -49,7 +52,7 @@ export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignee
       if(signal.aborted) return;
       if(assignment && data.task.assigneeMembershipId!==assignment.assigneeMembershipId) await invalidatePreparedProject(organizationId,projectId);
       if(signal.aborted) return;
-      setCreating(false); setAssigning(''); setNotice('Serwer potwierdził zapis podzadania.'); onChanged();
+      setCreating(false); setAssigning(''); setRevision(value => value + 1); setNotice('Serwer potwierdził zapis podzadania.'); onChanged();
     } catch(e) {if(!signal.aborted) {setError((e as Error).message); if([401,403,404].includes((e as {status:number}).status)) {setTasks(null); onAccessChanged();}}}
     finally {if(!signal.aborted) {sending.current=false; setBusy(false);}}
   };
@@ -77,8 +80,8 @@ export function Subtasks({ task,path,organizationId,projectId,csrfToken,assignee
           onConfirmed={confirmed=>{setTasks(current=>current?.map(item=>item.id===child.id && item.version<=confirmed.version?{...item,...confirmed}:item) ?? null); (onProgressConfirmed ?? onChanged)();}}
           onAccessChanged={status=>{void observeAccessFailure(path,status); setTasks(null); onAccessChanged();}} onGone={()=>{void observeAccessFailure(path,404); setTasks(null); onAccessChanged();}} />
         {writable && child.status==='planned' && <button className="secondary" disabled={busy || disabled} onClick={()=>{if(guardWorkspaceChange(root.current!)) {setAssigning(child.id); setCreating(false);}}}>{child.assigneeMembershipId?'Zmień wykonawcę podzadania':'Przypisz podzadanie'}</button>}
-        {assigning===child.id && <Assignment current={child.assigneeMembershipId} assignees={assignees} busy={busy} cancel={()=>setAssigning('')}
-          save={id=>void mutate(`${childPath(child.id)}/assign`,{assigneeMembershipId:id,expectedVersion:child.version},child)} />}
+        {assigning===child.id && <Assignment current={child.assigneeMembershipId} expectedVersion={child.version} assignees={assignees} busy={busy} cancel={()=>setAssigning('')}
+          save={(id,version)=>void mutate(`${childPath(child.id)}/assign`,{assigneeMembershipId:id,expectedVersion:version},child)} />}
         <Discussion path={childPath(child.id)} title={child.title} csrfToken={csrfToken} writable={writable} onAccessChanged={onAccessChanged} />
         <ProgressHistory path={childPath(child.id)} version={child.version} onAccessChanged={onAccessChanged} />
       </article>)}</div>

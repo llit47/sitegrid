@@ -1,3 +1,4 @@
+import { StatusBadge } from '../tasks/status.js';
 import { ParentContext } from '../subtasks/hierarchy.js';
 import { useEffect, useState } from 'react';
 import { readOfflineAccess, offlineAccessDenied } from '../storage/offline-access.js';
@@ -5,7 +6,6 @@ import { openProjectStorage, type ConfirmedSnapshot } from '../storage/indexed-d
 import { shellIsAvailable } from '../pwa/lifecycle.js';
 import { offlineFailureMessage } from './messages.js';
 
-const taskStatus = { planned: 'Zaplanowane', in_progress: 'W toku', submitted: 'Zgłoszone do odbioru' };
 export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
   const [organization, setOrganization] = useState(''), [organizations, setOrganizations] = useState<string[]>([]);
   const [snapshots, setSnapshots] = useState<ConfirmedSnapshot[]>([]), [error, setError] = useState(''), [loading, setLoading] = useState(true);
@@ -61,7 +61,7 @@ export function OfflineViewer({ localOnly = false }: { localOnly?: boolean }) {
       {snapshot.taskAccess === 'none' && <p>Przygotowano wyłącznie metadane projektu. Brak dostępu do zadań.</p>}
       {snapshot.tasks.map(task => <article className="task-row" key={task.id}><div><ParentContext task={task} /><strong>{task.title}</strong><p>{task.description || 'Brak opisu zadania.'}</p>
         {task.subtaskProgress && <p>Podzadania: {task.subtaskProgress.total} · Do odbioru: {task.subtaskProgress.submitted}</p>}
-        {task.assigneeName && <small>Wykonawca: {task.assigneeName}</small>}<p>{taskStatus[task.status]} · Wersja {task.version}</p></div></article>)}
+        {task.assigneeName && <small>Wykonawca: {task.assigneeName}</small>}<StatusBadge task={task} /></div></article>)}
     </article>)}
   </section>;
 }

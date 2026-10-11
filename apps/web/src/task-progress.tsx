@@ -1,7 +1,8 @@
+import { StatusBadge } from './tasks/status.js';
 import { usePendingOperation } from './workspace/navigation-safety.js';
 import { useEffect, useRef, useState } from 'react';
 
-export type ProgressTask = { id: string; status: string; version: number; canProgress?: boolean };
+export type ProgressTask = { id: string; status: string; version: number; canProgress?: boolean; assigneeMembershipId?: string | null };
 type Command = { operationId: string; schemaVersion: 1; action: 'start' | 'submit'; expectedVersion: number };
 export const taskStateName = (status: string) => ({ planned: 'Zaplanowane', in_progress: 'W toku', submitted: 'Zgłoszone do odbioru' })[status] ?? status;
 
@@ -24,6 +25,7 @@ export function TaskProgress({ task, path, csrfToken, writable, disabled, onConf
   const sending = useRef(false);
   const lifetime = useRef<AbortController | null>(null);
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
+  useEffect(() => { if (!command.current) setConflict(false); }, [task.version]);
   const action = task.status === 'planned' ? 'start' : task.status === 'in_progress' ? 'submit' : null;
   const send = async () => {
     if (sending.current || disabled || conflict) return;
@@ -43,7 +45,7 @@ export function TaskProgress({ task, path, csrfToken, writable, disabled, onConf
         if (response.status === 404) { onGone(); return; }
         if (response.status === 409) {
           command.current = null; setConflict(true);
-          setError(`${data.error} Użyj „Wczytaj aktualne dane” przed kolejną akcją.`); return;
+          setError(`${data.error} Poczekaj na aktualizację danych przed kolejną akcją.`); return;
         }
         if (response.status < 500 && response.status !== 429) { command.current = null; setConflict(true); }
         throw new Error(data.error ?? 'Nie udało się zapisać postępu.');
@@ -58,7 +60,7 @@ export function TaskProgress({ task, path, csrfToken, writable, disabled, onConf
     } finally { if (!signal.aborted) { sending.current = false; setBusy(false); } }
   };
   return <div className="task-progress">
-    <small>{taskStateName(task.status)} · Wersja {task.version}</small>
+    <StatusBadge task={task} />
     {writable && task.canProgress && (action || retry) && <button disabled={busy || disabled || conflict} onClick={() => void send()}>
       {busy ? 'Oczekiwanie na serwer…' : retry ? 'Ponów operację' : action === 'start' ? 'Rozpocznij zadanie' : 'Zgłoś do odbioru'}
     </button>}

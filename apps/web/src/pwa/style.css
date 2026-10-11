@@ -1,10 +1,15 @@
-.pwa-status { margin: 0 0 16px; padding: 10px 16px; border: 1px solid #d3ded8; border-radius: 10px; background: #f5f7ef; font-size: 12px; }
+.pwa-status { margin: 0 0 8px; font-size: 12px; }
 .pwa-connectivity, .pwa-lifecycle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; }
 .pwa-status p { margin: 4px 0; }
 .pwa-status button { margin: 0; min-height: 44px; font-size: 12px; padding: 8px 12px; }
 .pwa-status details { max-width: 100%; }
 .pwa-status details[open] { flex-basis: 100%; }
 .pwa-status summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
-.pwa-status p[role="alert"], .pwa-lifecycle > p[role="status"] { flex-basis: 100%; font-weight: 650; color: #7d412a; }
+.pwa-status p[role="alert"], .pwa-lifecycle > p[role="status"] { flex-basis: 100%; font-weight: 650; color: var(--warning-text); }
 @media (max-width: 480px) { .shell { padding: 16px 12px; } .pwa-status { padding: 10px 12px; } }
 @media (display-mode: standalone) { .shell { padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); } }
+
+.connection-indicator { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 12px; letter-spacing: 0; color: var(--text-muted); font-weight: 650; }
+.connection-indicator::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+.connection-indicator.is-offline::before { background: var(--error-text); }
+.pwa-status details { margin-left: auto; }

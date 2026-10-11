@@ -77,26 +77,37 @@ try {
   await arrived;
   assert(await confirm.getByRole('button', { name: 'Oczekiwanie na serwer…' }).isDisabled());
   assert.equal(await confirm.getByText('Serwer potwierdził', { exact: false }).count(), 0);
-  assert(await confirm.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible());
+  assert(await confirm.getByText('Do zrobienia', { exact: true }).isVisible());
   release(); await confirm.getByText('Serwer potwierdził rozpoczęcie zadania.', { exact: true }).waitFor();
   assert.equal(requests, 1); await page.unroute(url('Potwierdzenie'));
   await confirm.getByRole('button', { name: 'Zgłoś do odbioru', exact: true }).click();
   await confirm.getByText('Serwer potwierdził zgłoszenie do odbioru.', { exact: true }).waitFor();
-  assert(await confirm.getByText('Zgłoszone do odbioru · Wersja 3', { exact: true }).isVisible());
+  assert(await confirm.getByText('Do odbioru', { exact: true }).isVisible());
   assert.equal(await confirm.locator('.task-progress').getByRole('button').count(), 0);
   console.log('PASS start/submit, one double-click request and no success until server confirmation');
-  await api(`${path}/tasks/${tasks.Konflikt.id}/update`, { title: 'Konflikt', assigneeMembershipId: members.worker, expectedVersion: 1 });
+  // Hold refresh delivery so the real conflict remains observable until reload.
+  // Change the server only after the command captures its expected version.
+  const taskReadUrl = `${config.origin}${path}/tasks`;
+  let releaseConflictRead;
+  const conflictRead = new Promise(resolve => { releaseConflictRead = resolve; });
+  const holdConflictRead = async route => { await conflictRead; await route.continue().catch(() => {}); };
+  await page.route(taskReadUrl, holdConflictRead);
+  await page.route(url('Konflikt'), async route => {
+    await api(`${path}/tasks/${tasks.Konflikt.id}/update`, { title: 'Konflikt', assigneeMembershipId: members.worker, expectedVersion: route.request().postDataJSON().expectedVersion });
+    await route.continue();
+  }, { times: 1 });
   const stale = row(page, 'Konflikt'); await stale.getByRole('button', { name: 'Rozpocznij zadanie' }).click();
   await stale.getByRole('alert').filter({ hasText: 'Zadanie zmieniło się' }).waitFor(); assert(await stale.locator('.task-progress').getByRole('button').isDisabled());
-  assert(await stale.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible());
+  assert(await stale.getByText('Do zrobienia', { exact: true }).isVisible());
+  await page.unroute(taskReadUrl, holdConflictRead); releaseConflictRead();
   await page.getByRole('button', { name: 'Wczytaj aktualne dane', exact: true }).click();
-  await stale.getByText('Zaplanowane · Wersja 2', { exact: true }).waitFor(); await stale.getByRole('button', { name: 'Rozpocznij zadanie' }).click();
-  await stale.getByText('W toku · Wersja 3', { exact: true }).waitFor();
+  await stale.getByText('Do zrobienia', { exact: true }).waitFor(); await stale.getByRole('button', { name: 'Rozpocznij zadanie' }).click();
+  await stale.getByText('W toku', { exact: true }).waitFor();
   console.log('PASS stale version feedback blocks another action until explicit refresh');
   const lost = row(page, 'Utrata odpowiedzi'), sent = [];
   await page.route(url('Utrata odpowiedzi'), async route => { sent.push(route.request().postDataJSON()); await route.fetch(); await route.abort('failed'); }, { times: 1 });
   await lost.getByRole('button', { name: 'Rozpocznij zadanie' }).click(); await lost.getByRole('alert').filter({ hasText: 'Brak potwierdzenia' }).waitFor();
-  assert(await lost.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible());
+  assert(await lost.getByText('Do zrobienia', { exact: true }).isVisible());
   await navigateWorkspace(page, 'Pulpit'); await navigateWorkspace(page, 'Projekty');
   assert(await lost.getByRole('button', { name: 'Ponów operację', exact: true }).isVisible(), 'Ambiguous command survives section navigation');
   page.removeAllListeners('dialog');
@@ -107,12 +118,12 @@ try {
   assert(await lost.getByRole('button', { name: 'Ponów operację', exact: true }).isVisible());
   acceptDiscardDialogs(page);
   await page.route(url('Utrata odpowiedzi'), async route => { sent.push(route.request().postDataJSON()); await route.continue(); }, { times: 1 });
-  await lost.getByRole('button', { name: 'Ponów operację', exact: true }).click(); await lost.getByText('W toku · Wersja 2', { exact: true }).waitFor();
+  await lost.getByRole('button', { name: 'Ponów operację', exact: true }).click(); await lost.getByText('W toku', { exact: true }).waitFor();
   assert.deepEqual(sent[0], sent[1]);
   assert.equal((await owner.query("SELECT count(*) FROM organization_audit_events WHERE subject_id = $1 AND event = 'task_started'", [tasks['Utrata odpowiedzi'].id])).rows[0].count, '1');
   await page.route(url('Awaria'), route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Awaria serwera' }) }), { times: 1 });
   const failure = row(page, 'Awaria'); await failure.getByRole('button', { name: 'Rozpocznij zadanie' }).click(); await failure.getByRole('alert').waitFor();
-  assert(await failure.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible()); await failure.getByRole('button', { name: 'Ponów operację' }).click(); await failure.getByText('W toku · Wersja 2', { exact: true }).waitFor();
+  assert(await failure.getByText('Do zrobienia', { exact: true }).isVisible()); await failure.getByRole('button', { name: 'Ponów operację' }).click(); await failure.getByText('W toku', { exact: true }).waitFor();
   await page.screenshot({ path: '/tmp/sitegrid-pr13-desktop.png', fullPage: true });
   console.log('PASS response loss/503 keep unconfirmed state and retry the original operation ID');
   let lateRelease, lateEntered, lateSettled;
@@ -137,8 +148,8 @@ try {
   console.log('PASS pending commands survive section navigation, block company switching, and never leak after a confirmed switch');
   const mobile = await open('worker', true), mobileRow = row(mobile.page, 'Mobilne');
   const button = mobileRow.getByRole('button', { name: 'Rozpocznij zadanie' }); assert((await button.boundingBox()).height >= 44);
-  await button.click(); await mobileRow.getByText('W toku · Wersja 2', { exact: true }).waitFor();
-  await mobileRow.getByRole('button', { name: 'Zgłoś do odbioru' }).click(); await mobileRow.getByText('Zgłoszone do odbioru · Wersja 3', { exact: true }).waitFor();
+  await button.click(); await mobileRow.getByText('W toku', { exact: true }).waitFor();
+  await mobileRow.getByRole('button', { name: 'Zgłoś do odbioru' }).click(); await mobileRow.getByText('Do odbioru', { exact: true }).waitFor();
   assert(await mobile.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await mobile.page.screenshot({ path: '/tmp/sitegrid-pr13-mobile.png', fullPage: true });
   // A current row becomes unauthorized before a progress request.

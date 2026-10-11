@@ -1,4 +1,3 @@
-import { guardWorkspaceChange } from '../workspace/navigation-safety.js';
 import { useEffect, useState, type ReactNode } from 'react';
 import { checkLocalStorage } from '../storage/indexed-db.js';
 import { registerShell, subscribeAccountChanges, type ShellState } from './lifecycle.js';
@@ -9,7 +8,7 @@ import { invalidateOfflineAccount } from '../storage/offline-access.js';
 type InstallPrompt = Event & { prompt(): Promise<void> };
 export function PwaShell({ children }: { children: ReactNode }) {
   const [online, setOnline] = useState(navigator.onLine);
-  const [localView, setLocalView] = useState(false);
+  const [connectedOnce, setConnectedOnce] = useState(navigator.onLine);
   const [revision, setRevision] = useState(0);
   const [shell, setShell] = useState<ShellState>('preparing');
   const [storageFailed, setStorageFailed] = useState(false);
@@ -19,11 +18,11 @@ export function PwaShell({ children }: { children: ReactNode }) {
   useEffect(() => registerShell(setShell), []);
   useEffect(() => {
     void checkLocalStorage().catch(() => setStorageFailed(true));
-    const connectivity = () => { setOnline(navigator.onLine); setLocalView(false); setRevision(value => value + 1); };
+    const connectivity = () => { setOnline(navigator.onLine); if (navigator.onLine) setConnectedOnce(true); };
     const restored = (event: PageTransitionEvent) => { if (event.persisted) connectivity(); };
     const unsubscribe = subscribeAccountChanges(legacy => {
       if (legacy) void invalidateOfflineAccount().catch(() => setStorageFailed(true));
-      connectivity();
+      setRevision(value => value + 1); connectivity();
     });
     window.addEventListener('online', connectivity); window.addEventListener('offline', connectivity);
     window.addEventListener('pageshow', restored);
@@ -38,12 +37,9 @@ export function PwaShell({ children }: { children: ReactNode }) {
     window.addEventListener('beforeinstallprompt', offered); window.addEventListener('appinstalled', installed);
     return () => { window.removeEventListener('beforeinstallprompt', offered); window.removeEventListener('appinstalled', installed); };
   }, []);
-  return <div className="shell"><header className="brand"><span className="brand-mark" aria-hidden="true">S</span> SiteGrid</header>
-    <aside className="pwa-status" aria-label="Stan aplikacji"><div className="pwa-connectivity">
-      <p role="status">{localView ? 'Odczyt lokalny — tylko wcześniej przygotowane dane z ważnym dostępem.' : online ? 'Tryb online.' : 'Brak połączenia. Odczyt tylko wcześniej przygotowanych projektów z ważnym dostępem.'}</p>
-      {online && <button type="button" className="secondary" onClick={() => { if (guardWorkspaceChange()) setLocalView(value => !value); }}>{localView ? 'Wróć do trybu online' : 'Czytaj przygotowane dane lokalnie'}</button>}
-      </div><div className="pwa-lifecycle">{shell === 'ready' && <p>Powłoka aplikacji gotowa do otwarcia offline.</p>}
-      {shell === 'preparing' && <p>Przygotowanie powłoki offline…</p>}
+  return <div className="shell"><header className="brand"><span className="brand-mark" aria-hidden="true">S</span> SiteGrid
+    <span className={`connection-indicator ${online ? 'is-online' : 'is-offline'}`} role="status">{online ? 'Online' : 'Offline'}</span></header>
+    <aside className="pwa-status" aria-label="Stan aplikacji"><div className="pwa-lifecycle">
       {shell === 'unavailable' && <p>Powłoka offline niedostępna. Korzystaj z aplikacji online.</p>}
       {shell === 'update' && <p role="status">Nowa wersja gotowa. Zamknij wszystkie karty i okna SiteGrid, a następnie otwórz aplikację ponownie.</p>}
       {shell === 'activating' && <p role="status">Uruchamianie wersji aplikacji…</p>}
@@ -55,7 +51,7 @@ export function PwaShell({ children }: { children: ReactNode }) {
         {prompt && <button type="button" onClick={() => { const current = prompt; setPrompt(null); void current.prompt().catch(() => { /* Menu guidance stays available. */ }); }}>Zainstaluj aplikację</button>}
       </details>}
     </div></aside>
-    <main aria-label="Treść aplikacji">{online && !localView ? <div key={revision}>{children}</div> : <OfflineViewer key={revision} localOnly={online} />}</main>
+    <main aria-label="Treść aplikacji">{connectedOnce && <div key={revision} hidden={!online}>{children}</div>}{!online && <OfflineViewer key={revision} />}</main>
     <footer>SiteGrid · samodzielna instalacja</footer>
   </div>;
 }

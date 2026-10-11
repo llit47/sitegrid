@@ -69,6 +69,7 @@ jobs:
       - run: node --import tsx tests/task-management-browser.mjs
       - run: node --import tsx tests/subtasks-browser.mjs
       - run: node --import tsx tests/task-comments-browser.mjs
+      - run: node --import tsx tests/ux-refresh-browser.mjs
       - name: Select pinned key (ephemeral fixture only for branch CI)
         run: |
           if [ -f ops/release-public.pem ]; then

@@ -73,7 +73,8 @@ try {
     assert.equal(await page.locator('#active-organization').inputValue(), '', 'Multiple companies need an explicit choice');
     assert.equal(await page.locator('select#active-organization').count(), 1);
     await selectCompany(page, companyA, 'Pulpit');
-    await page.locator('.company-task').filter({hasText:'Montaż drzwi technicznych'}).waitFor();
+    await page.locator('.work-dashboard [data-summary-total]').filter({hasText:'1'}).waitFor();
+    assert.equal(await page.locator('.task-workspace').count(), 0);
     await assertMainLandmark(page, 'Pulpit');
     await noOverflow(page);
     assert.equal(await page.getByRole('navigation', { includeHidden: true }).getByRole('button', { name: 'Pulpit', exact: true, includeHidden: true }).getAttribute('aria-current'), 'page');
@@ -205,7 +206,7 @@ try {
   const both = await open('both', 1280);
   await both.page.locator('#active-organization').waitFor({ state: 'attached' });
   await navigateWorkspace(both.page, 'Pulpit');
-  await both.page.getByRole('heading',{name:'Zadania firmy',exact:true}).waitFor();
+  await both.page.getByRole('heading',{name:'Podsumowanie pracy',exact:true}).waitFor();
   await navigateWorkspace(both.page, 'Administracja platformy'); await both.page.getByRole('heading', { name: 'Firmy', exact: true }).waitFor();
   await both.context.close();
   assert.deepEqual(errors, []); assert.deepEqual(cspErrors, []);

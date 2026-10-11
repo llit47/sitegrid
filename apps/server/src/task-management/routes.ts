@@ -1,4 +1,5 @@
 import { parentColumns, withSubtaskProgress } from '../subtasks/persistence.js';
+import { registerTaskSummary } from './summary.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import type { Config } from '../config.js';
@@ -11,6 +12,7 @@ export function registerCompanyTaskRoutes(app: FastifyInstance, pool: Pool, conf
   checkCsrf: (request: FastifyRequest, session?: Session) => boolean) {
   const { params, scope, project, writable, eligible, conflict } = projectAccess(pool, config, checkCsrf);
   const base = '/api/organizations/:id';
+  registerTaskSummary(app, pool, config, checkCsrf);
   app.get<{ Params: Params; Querystring: Filters }>(`${base}/tasks`, { schema: { ...params(), querystring: {
     type: 'object', additionalProperties: false, properties: {
       view: { type: 'string', enum: ['all', 'mine', 'backlog', 'todo', 'in_progress', 'submitted'] },

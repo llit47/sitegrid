@@ -87,7 +87,7 @@ try {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     await context.addCookies([{ name: 'sitegrid', value: cookies.worker, url: config.origin, httpOnly: true, sameSite: 'Strict' }]);
     const page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message));
-    await page.goto(config.origin); await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
+    await page.goto(config.origin); await page.waitForFunction(async () => !!navigator.serviceWorker.controller && await (await navigator.serviceWorker.ready).active);
     await page.waitForFunction(() => navigator.serviceWorker.controller); await selectCompany(page, companyA);
     await page.getByRole('button', { name: 'Projekt Alfa Aktywny Kontrahent: Klient Alfa', exact: true }).click();
     await page.getByRole('button', { name: 'Przygotuj offline', exact: true }).waitFor(); return { context, page };
@@ -194,9 +194,9 @@ try {
     await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();
     await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor(); assert.equal(downloads,1);
     sessionUnavailable=true;await page.reload();await page.getByRole('alert').filter({hasText:'Serwer sesji chwilowo niedostępny.'}).waitFor();assert.equal(await page.evaluate(()=>navigator.onLine),true);
-    await page.getByRole('button',{name:'Czytaj przygotowane dane lokalnie',exact:true}).click();await page.getByRole('heading',{name:'Odczyt lokalny SiteGrid',exact:true}).waitFor();await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor();
-    assert.equal(await page.getByRole('button',{name:'Rozpocznij zadanie',exact:true}).count(),0);assert.equal(await page.locator('form').count(),0);assert.equal(downloads,1);
-    sessionUnavailable=false;await page.getByRole('button',{name:'Wróć do trybu online',exact:true}).click();await selectCompany(page, companyA);
+    await context.setOffline(true);await page.getByRole('heading',{name:'SiteGrid bez połączenia',exact:true}).waitFor();await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Rozpocznij zadanie',exact:true}).count(),0);assert.equal(await page.locator('form:visible').count(),0);assert.equal(downloads,1);
+    sessionUnavailable=false;await context.setOffline(false);await selectCompany(page, companyA);
     await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click();await page.getByRole('button',{name:'Odśwież offline',exact:true}).waitFor();
     assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);
     for (const mode of ['malformed','limit','disconnect']) {
@@ -228,9 +228,9 @@ try {
     await context.setOffline(true); await page.getByRole('heading',{name:'SiteGrid bez połączenia'}).waitFor();
     await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor(); assert.equal(await page.getByText(temporary.title,{exact:true}).count(),0);
     await page.locator('.offline-project').getByText('Podzadanie · Kontekst Projekt Alfa',{exact:true}).waitFor();
-    assert.equal(await page.getByText('Poufny opis rodzica PR22',{exact:true}).count(),0);assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);assert.equal(await page.locator('.subtask-summary').count(),0);
-    assert.equal(await page.getByText('Projekt Beta',{exact:true}).count(),0); assert.equal(await page.getByText('Projekt obcej firmy',{exact:true}).count(),0);
-    assert.equal(await page.getByRole('button').count(),0); assert.equal(await page.locator('form').count(),0);
+    assert.equal(await page.getByText('Poufny opis rodzica PR22',{exact:true}).count(),0);assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);assert.equal(await page.locator('.subtask-summary:visible').count(),0);
+    assert.equal(await page.getByText('Projekt Beta',{exact:true}).filter({visible:true}).count(),0); assert.equal(await page.getByText('Projekt obcej firmy',{exact:true}).filter({visible:true}).count(),0);
+    assert.equal(await page.getByRole('button').count(),0); assert.equal(await page.locator('form:visible').count(),0);
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await page.close(); page=await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror',error=>errors.push(error.message)); await page.goto(config.origin);
     await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor(); assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);await page.locator('.offline-project').getByText('Podzadanie · Kontekst Projekt Alfa',{exact:true}).waitFor();assert.equal(await page.getByText('Poufny opis rodzica PR22',{exact:true}).count(),0);
@@ -318,7 +318,7 @@ try {
     assert.deepEqual([...new Set(access.scopes.map(scope => scope.organizationId))], [companyA]);
   };
   await prepareB(selection.page);
-  await selection.page.getByRole('button', { name: 'Czytaj przygotowane dane lokalnie', exact: true }).click();
+  await selection.page.evaluate(() => { Object.defineProperty(navigator, 'onLine', {configurable:true,get:()=>false}); window.dispatchEvent(new Event('offline')); });
   await selection.page.getByRole('heading', { name: 'Projekt Alfa', exact: true }).waitFor(); await selectB();
   await selection.page.evaluate(async id => (await import('/test-storage.js')).invalidateOfflineProjects(id), companyB);
   await assertRemainingA();
@@ -351,7 +351,7 @@ try {
     });
     window.snapshotObserver.observe(document.body, { subtree: true, childList: true });
   });
-  await inFlight.page.getByRole('button', { name: 'Czytaj przygotowane dane lokalnie', exact: true }).click();
+  await inFlight.page.evaluate(() => { Object.defineProperty(navigator, 'onLine', {configurable:true,get:()=>false}); window.dispatchEvent(new Event('offline')); });
   await inFlight.page.waitForFunction(() => window.snapshotReadBlocked);
   const generationAfter = await invalidatingTab.evaluate(async id => {
     const storage = await import('/test-storage.js'); await storage.invalidateOfflineProjects(id);

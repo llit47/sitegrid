@@ -16,7 +16,7 @@ try {
     const context=await browser.newContext({serviceWorkers:'block',viewport:{width,height:width===390?844:900}});
     await context.addCookies([{name:'sitegrid',value:f.tokens[actor],url:f.config.origin,httpOnly:true,sameSite:'Strict'}]);
     const page=await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror',e=>errors.push(e.message));
-    await page.goto(f.config.origin); await selectCompany(page,f.organizations.a,'Pulpit');
+    await page.goto(f.config.origin); await selectCompany(page,f.organizations.a,'Zadania');
     await page.waitForFunction(()=>document.querySelector('.workspace-sidebar')?.classList.contains('is-open')===false);
     await page.getByRole('heading',{name:actor==='worker' || actor==='other' ? 'Moje zadania':'Zadania firmy',exact:true}).waitFor();
     return {page,context};
@@ -72,7 +72,7 @@ try {
   // Form draft persists through dashboard/tasks navigation.
   await workspace(manager.page).getByRole('button',{name:'Nowe zadanie',exact:true}).click(); await manager.page.locator('.quick-task-form').getByLabel('Tytuł zadania').fill('Niezapisana propozycja');
   await navigateWorkspace(manager.page,'Pulpit'); assert.equal(await manager.page.locator('.quick-task-form').getByLabel('Tytuł zadania').inputValue(),'Niezapisana propozycja');
-  await manager.page.locator('.quick-task-form').getByRole('button',{name:'Anuluj formularz zadania',exact:true}).click();
+  await navigateWorkspace(manager.page,'Zadania'); await manager.page.locator('.quick-task-form').getByRole('button',{name:'Anuluj formularz zadania',exact:true}).click();
   console.log('PASS quick assign/reassign/unassign, search/empty state, server version conflict and retained draft across tasks/dashboard');
   for(const actor of ['admin','foreman']) {
     const user=await open(actor); await card(user.page,'Praca 10').waitFor(); assert.equal(await user.page.locator('.company-task').count(),10);
@@ -84,12 +84,12 @@ try {
   const worker=await open('worker'); await card(worker.page,'Praca 3').waitFor(); assert.equal(await worker.page.locator('.company-task').count(),2);
   assert.equal(await workspace(worker.page).getByRole('button',{name:'Nowe zadanie',exact:true}).count(),0); assert.equal(await workspace(worker.page).getByRole('button',{name:'Backlog',exact:true}).count(),0);
   assert.equal(await workspace(worker.page).getByLabel('Wykonawca',{exact:true}).count(),0);
-  await card(worker.page,'Praca 3').getByRole('button',{name:'Rozpocznij zadanie',exact:true}).click(); await workspace(worker.page).getByText('Serwer potwierdził rozpoczęcie zadania.',{exact:true}).waitFor();
-  await card(worker.page,'Praca 3').getByRole('button',{name:'Zgłoś do odbioru',exact:true}).click(); await workspace(worker.page).getByText('Serwer potwierdził zgłoszenie do odbioru.',{exact:true}).waitFor();
+  await card(worker.page,'Praca 3').getByRole('button',{name:'Rozpocznij zadanie',exact:true}).click(); await workspace(worker.page).getByText('Serwer potwierdził rozpoczęcie zadania.',{exact:true}).first().waitFor();
+  await card(worker.page,'Praca 3').getByRole('button',{name:'Zgłoś do odbioru',exact:true}).click(); await workspace(worker.page).getByText('Serwer potwierdził zgłoszenie do odbioru.',{exact:true}).first().waitFor();
   await worker.page.waitForFunction(()=>document.querySelectorAll('.company-task').length===2);
   await navigateWorkspace(worker.page,'Zadania'); assert.equal(await worker.page.locator('.company-task').count(),2);
   await worker.page.screenshot({path:'/tmp/sitegrid-pr21-visuals/worker-desktop.png',fullPage:true});
-  await selectCompany(worker.page,f.organizations.b,'Pulpit'); await worker.page.getByText('Nie masz zadań dla wybranych filtrów.',{exact:true}).waitFor(); assert.equal(await worker.page.locator('.company-task').count(),0);
+  await selectCompany(worker.page,f.organizations.b,'Zadania'); await worker.page.getByText('Nie masz zadań dla wybranych filtrów.',{exact:true}).waitFor(); assert.equal(await worker.page.locator('.company-task').count(),0);
   await worker.context.close(); console.log('PASS worker sees only own multi-project work, runs M08 start/submit, and clears previous company on switching');
   for(const [actor,width] of [['manager',768],['foreman',390],['worker',390]]) {
     const user=await open(actor,width); await user.page.locator('.company-task').first().waitFor();

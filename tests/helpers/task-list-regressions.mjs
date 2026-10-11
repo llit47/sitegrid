@@ -92,9 +92,9 @@ export async function runTaskListRegressions(f, browser, page) {
   assert.deepEqual(await snapshots(), beforeStatus, 'No-op assignment preserves prepared snapshots');
   await card(page, changed.title).getByRole('button', { name: 'Rozpocznij zadanie', exact: true }).click(); await waitCount(page, 0);
   assert.deepEqual(await snapshots(), beforeStatus, 'Status refresh preserves prepared snapshots');
-  await choose('W trakcie', 1);
+  await choose('W toku', 1);
   await card(page, changed.title).getByRole('button', { name: 'Zgłoś do odbioru', exact: true }).click(); await waitCount(page, 0);
-  await choose('Do odbioru', 1); await card(page, changed.title).getByText('Zgłoszone do odbioru · Wersja 10', { exact: true }).waitFor();
+  await choose('Do odbioru', 1); await card(page, changed.title).getByText('Do odbioru', { exact: true }).waitFor();
   assert.equal(await workspace(page).getByLabel('Szukaj zadań', { exact: true }).inputValue(), prefix);
   assert.equal(await workspace(page).getByLabel('Wykonawca', { exact: true }).inputValue(), f.members.manager);
   assert.equal(await workspace(page).getByLabel('Projekt', { exact: true }).inputValue(), changed.projectId);
@@ -121,7 +121,8 @@ export async function runTaskListRegressions(f, browser, page) {
   const pendingPage = await context.newPage(), dialogs = [], commands = [], pendingErrors = [];
   pendingPage.on('pageerror', error => pendingErrors.push(error.message));
   pendingPage.on('dialog', dialog => { dialogs.push(dialog.type()); return dialog.accept(); });
-  await pendingPage.goto(f.config.origin); await selectCompany(pendingPage, f.organizations.a, 'Pulpit');
+  await pendingPage.clock.install(); await pendingPage.clock.pauseAt(new Date(Date.now() + 60_000));
+  await pendingPage.goto(f.config.origin); await selectCompany(pendingPage, f.organizations.a, 'Zadania');
   await workspace(pendingPage).getByLabel('Szukaj zadań', { exact: true }).fill('Regresja M08');
   await workspace(pendingPage).getByRole('button', { name: 'Szukaj', exact: true }).click(); await waitCount(pendingPage, 2);
   const firstId = (await api('/tasks?q=Regresja%20M08')).tasks.find(task => task.title === pendingTitles[0]).id;
@@ -138,11 +139,17 @@ export async function runTaskListRegressions(f, browser, page) {
   await card(pendingPage, pendingTitles[1]).getByRole('button', { name: 'Rozpocznij zadanie', exact: true }).click();
   await workspace(pendingPage).getByText('Serwer potwierdził rozpoczęcie zadania.', { exact: true }).first().waitFor();
   assert.equal(listReads, 0, 'Confirmed other card defers list replacement while an M08 result remains ambiguous');
+  const background = pendingPage.waitForResponse(response => new URL(response.url()).pathname === `${base}/tasks`);
+  await pendingPage.clock.runFor(15_000); await (await background).finished();
+  assert.equal(listReads, 1, 'Polling continues while reconciliation preserves the unresolved M08 component');
+  assert(await card(pendingPage, pendingTitles[0]).getByRole('button', { name: 'Ponów operację', exact: true }).isVisible());
   await workspace(pendingPage).getByRole('button', { name: 'Wczytaj aktualne zadania', exact: true }).click();
-  assert.deepEqual(dialogs, ['alert']); assert.equal(listReads, 0);
+  assert.deepEqual(dialogs, ['alert']); assert.equal(listReads, 1);
+  const reconciled = pendingPage.waitForResponse(response => new URL(response.url()).pathname === `${base}/tasks`);
   await card(pendingPage, pendingTitles[0]).getByRole('button', { name: 'Ponów operację', exact: true }).click();
-  await pendingPage.waitForFunction(() => document.querySelectorAll('.company-task .task-progress small').length === 2 && [...document.querySelectorAll('.company-task .task-progress small')].every(item => item.textContent.includes('W toku · Wersja 2')));
-  assert.deepEqual(commands[0], commands[1], 'Retry preserves the exact M08 command and operation ID'); assert.equal(listReads, 1);
+  await (await reconciled).finished();
+  await pendingPage.waitForFunction(() => document.querySelectorAll('.company-task .task-progress .status-badge').length === 2 && [...document.querySelectorAll('.company-task .task-progress .status-badge')].every(item => item.textContent.includes('W toku')));
+  assert.deepEqual(commands[0], commands[1], 'Retry preserves the exact M08 command and operation ID'); assert.equal(listReads, 2);
   assert.deepEqual(pendingErrors, []); await context.close();
   console.log('PASS obsolete query response rejected and simultaneous M08 confirmation preserves an ambiguous command until exact receipt replay');
 
