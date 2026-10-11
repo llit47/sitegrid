@@ -1,6 +1,7 @@
 import fcntl
 import json
 import os
+import pwd
 from pathlib import Path
 import time
 import urllib.request
@@ -86,3 +87,56 @@ def health(version, attempts=30):
         if attempt + 1 < attempts:
             time.sleep(1)
     return False
+
+
+def configure_media_proxy(reload=True):
+    """Narrow upload location; preserve operator configuration and all other limits."""
+    nginx = CONFIG / 'nginx.conf'
+    require(nginx.is_file() and not nginx.is_symlink(), 'Brak bezpiecznej konfiguracji proxy.')
+    content = nginx.read_text()
+    include = '    include /etc/sitegrid/task-media-proxy.conf;\n'
+    if include not in content:
+        require(content.count('    location / {') == 1,
+                'Niestandardowa konfiguracja proxy: dodaj include /etc/sitegrid/task-media-proxy.conf w serwerze HTTPS przed update.')
+        content = content.replace('    location / {', include + '    location / {')
+        temporary = nginx.with_name('nginx.conf.media-incoming')
+        with temporary.open('x') as stream:
+            os.chmod(temporary, nginx.stat().st_mode & 0o777)
+            stream.write(content)
+            stream.flush(); os.fsync(stream.fileno())
+        os.replace(temporary, nginx)
+    location = CONFIG / 'task-media-proxy.conf'
+    require(not location.is_symlink(), 'Niebezpieczny plik konfiguracji mediów.')
+    expected = '''location ~ "^/api/organizations/[0-9a-fA-F-]{36}/projects/[0-9a-fA-F-]{36}/tasks/[0-9a-fA-F-]{36}/comments$" {
+  client_max_body_size 50m;
+  client_body_timeout 60s;
+  proxy_request_buffering off;
+  proxy_read_timeout 75s;
+  proxy_pass http://127.0.0.1:3000;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-For $remote_addr;
+  proxy_set_header X-Forwarded-Proto https;
+}
+'''
+    if location.exists(): require(location.read_text() == expected, 'Konfiguracja mediów została zmieniona; sprawdź ją przed update.')
+    else:
+        with location.open('x') as stream:
+            os.chmod(location, 0o640)
+            stream.write(expected); stream.flush(); os.fsync(stream.fileno())
+    command(['nginx', '-t', '-c', str(nginx)])
+    if reload: command(['systemctl', 'reload', 'sitegrid-proxy.service'])
+
+
+MEDIA = Path('/srv/sitegrid/files')
+
+
+def prepare_media_storage():
+    require(MEDIA.parent.is_dir() and not MEDIA.parent.is_symlink(), 'Niebezpieczny katalog /srv/sitegrid.')
+    MEDIA.mkdir(mode=0o700, exist_ok=True)
+    descriptor = os.open(MEDIA, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        account = pwd.getpwnam('sitegrid')
+        os.fchown(descriptor, account.pw_uid, account.pw_gid)
+        os.fchmod(descriptor, 0o700)
+    finally:
+        os.close(descriptor)

@@ -1,6 +1,6 @@
 # PR22 — podzadania, przydział i niezależny postęp
 
-Kontrakt rozszerza [PR21](TASK_BACKLOG.md) i [Task Management v2](TASK_MANAGEMENT_V2.md). Backend `apps/server/src/subtasks/` i React `apps/web/src/subtasks/` pozostają modułami monolitu. M08 korzysta z tych samych zadań, komend i receipts. Bez komentarzy, zdjęć, PDF ani trwałej kolejki offline.
+Kontrakt rozszerza [PR21](TASK_BACKLOG.md) i [Task Management v2](TASK_MANAGEMENT_V2.md). Backend `apps/server/src/subtasks/` i React `apps/web/src/subtasks/` pozostają modułami monolitu. M08 korzysta z tych samych zadań, komend i receipts. PR22 nie obejmuje komentarzy i zdjęć; rozszerza go [PR23 online](TASK_COMMENTS_MEDIA.md), schema14, bez PDF i trwałej kolejki offline.
 
 ## Hierarchia i migracja 12 → 13
 

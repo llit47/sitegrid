@@ -86,6 +86,9 @@ class ReleaseTests(unittest.TestCase):
             self.assertTrue((Path(directory) / 'release/migrations/011_contractors.sql').is_file())
             self.assertTrue((Path(directory) / 'release/migrations/012_task_backlog.sql').is_file())
             self.assertTrue((Path(directory) / 'release/migrations/013_subtasks.sql').is_file())
+            self.assertTrue((Path(directory) / 'release/migrations/014_task_comments_media.sql').is_file())
+            for module in ['images', 'storage', 'persistence', 'routes', 'operations', 'ops-cli']:
+                self.assertTrue((Path(directory) / f'release/dist/server/task-comments/{module}.js').is_file())
             for module in ['persistence', 'routes']:
                 self.assertTrue((Path(directory) / f'release/dist/server/subtasks/{module}.js').is_file())
             for module in ['access', 'project-tasks', 'routes']:
@@ -112,11 +115,22 @@ class ReleaseTests(unittest.TestCase):
             script = '''
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
+import pg from 'pg';
+import { buildApp } from './dist/server/app.js';
+import { readConfig } from './dist/server/config.js';
+import { normalizePhoto } from './dist/server/task-comments/images.js';
 import { validateLogo } from './dist/server/organization-branding.js';
 import { contractorInput } from './dist/server/contractors/domain.js';
 assert.equal(contractorInput({ name: ' Contractor ' }).name, 'Contractor');
+const pool = new pg.Pool({ connectionString:'postgresql://unavailable@127.0.0.1:1/test' });
+const app = await buildApp(readConfig({ NODE_ENV:'test',DATABASE_URL:'postgresql://unavailable@127.0.0.1:1/test' }),pool);
+assert.equal((await app.inject('/health/live')).statusCode,200);
+await app.close(); await pool.end();
 for (const [format, mime] of [['png', 'image/png'], ['jpeg', 'image/jpeg'], ['webp', 'image/webp']]) {
   const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#ff0022' } }).toFormat(format).toBuffer();
+  const photo = await normalizePhoto(image, mime);
+  assert.equal((await sharp(photo.thumbnail).metadata()).format, 'jpeg');
+  assert.equal((await sharp(photo.original).metadata()).width, 8);
   const logo = await validateLogo(mime, image.toString('base64'));
   assert.equal(logo.mimeType, mime);
   assert.equal((await sharp(logo.data).metadata()).format, format);

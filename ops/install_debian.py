@@ -133,6 +133,7 @@ http {
     ssl_certificate_key /etc/sitegrid/tls/key.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     client_max_body_size 8k;
+    include /etc/sitegrid/task-media-proxy.conf;
     location / {
       proxy_pass http://127.0.0.1:3000;
       proxy_set_header Host $host;
@@ -143,6 +144,8 @@ http {
 }
 '''.replace('HOSTNAME', origin.removeprefix('https://')))
         nginx.chmod(0o640)
+    from system import configure_media_proxy
+    configure_media_proxy(reload=False)
 
 
 def install(args):
@@ -190,6 +193,7 @@ def install(args):
             try: pwd.getpwnam('sitegrid')
             except KeyError: command(['useradd', '--system', '--user-group', '--home-dir', '/srv/sitegrid', '--shell', '/usr/sbin/nologin', 'sitegrid'])
             command(['install', '-d', '-m', '0750', '-o', 'sitegrid', '-g', 'sitegrid', '/srv/sitegrid'])
+            command(['install', '-d', '-m', '0700', '-o', 'sitegrid', '-g', 'sitegrid', '/srv/sitegrid/files'])
             command(['install', '-d', '-m', '0750', '/var/log/sitegrid'])
             if sql("SELECT count(*) FROM pg_roles WHERE rolname = 'sitegrid';", 'postgres') == '0':
                 sql('CREATE ROLE sitegrid LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;', 'postgres')

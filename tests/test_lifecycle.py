@@ -34,7 +34,7 @@ class LifecycleTests(unittest.TestCase):
         for name, value in [('schema_state', lambda: self.rows), ('command', lambda args: self.events.append(args)),
                             ('backup_database', lambda operation: self.events.append('backup') or {'path': '/protected/test.dump'}),
                             ('app_cli', lambda *args: self.events.append('migrate')), ('grant_runtime', lambda: None),
-                            ('health', lambda *args: True), ('service_state', lambda: 'inactive')]:
+                            ('prepare_media_storage', lambda: None), ('configure_media_proxy', lambda: None), ('health', lambda *args: True), ('service_state', lambda: 'inactive')]:
             p = patch.object(lc, name, value); p.start(); self.addCleanup(p.stop)
 
     def release(self, version):
@@ -219,6 +219,33 @@ class LifecycleTests(unittest.TestCase):
     def test_pr22_schema13_blocks_pr21_rollback_before_stopping_service(self):
         self.schema_release(self.new, 13)
         self.schema_release(self.old, 12)
+        self.rows = self.history(self.new)
+        atomic_link(self.new, self.root / 'current')
+        write_json(lc.JOURNAL, {'phase': 'done', 'completed_versions': ['0.1.0', '0.1.1']})
+        with self.assertRaisesRegex(SiteGridError, 'Rollback zablokowany'):
+            lc.rollback(argparse.Namespace(version='0.1.0', yes=True))
+        self.assertEqual(self.events, [])
+        self.assertEqual((self.root / 'current').resolve(), self.new)
+
+    def test_pr23_update_from_schema13_backs_up_before_schema14_activation(self):
+        self.schema_release(self.new, 14)
+        self.schema_release(self.old, 13)
+        self.rows = self.history(self.old)
+        with patch.object(lc, 'sql', return_value='170000'):
+            lc.can_upgrade(self.new, self.rows)
+        def migrate_schema14(*args):
+            self.events.append('migrate')
+            self.rows = self.history(self.new)
+        with patch.object(lc, 'app_cli', side_effect=migrate_schema14):
+            lc.deploy(self.new, self.old, {}, 'update', migrate=True)
+        self.assertEqual(len(self.rows), 14)
+        self.assertLess(self.events.index('backup'), self.events.index('migrate'))
+        self.assertEqual((self.root / 'current').resolve(), self.new)
+        self.assertEqual(lc.journal()['phase'], 'done')
+
+    def test_pr23_schema14_blocks_pr22_rollback_before_stopping_service(self):
+        self.schema_release(self.new, 14)
+        self.schema_release(self.old, 13)
         self.rows = self.history(self.new)
         atomic_link(self.new, self.root / 'current')
         write_json(lc.JOURNAL, {'phase': 'done', 'completed_versions': ['0.1.0', '0.1.1']})

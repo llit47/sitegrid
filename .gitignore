@@ -10,3 +10,5 @@ playwright-report/
 *.log
 __pycache__/
 .recovery/
+
+var/files/

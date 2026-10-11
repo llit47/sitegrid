@@ -83,11 +83,11 @@ try {
   await confirm.getByRole('button', { name: 'Zgłoś do odbioru', exact: true }).click();
   await confirm.getByText('Serwer potwierdził zgłoszenie do odbioru.', { exact: true }).waitFor();
   assert(await confirm.getByText('Zgłoszone do odbioru · Wersja 3', { exact: true }).isVisible());
-  assert.equal(await confirm.getByRole('button').count(), 0);
+  assert.equal(await confirm.locator('.task-progress').getByRole('button').count(), 0);
   console.log('PASS start/submit, one double-click request and no success until server confirmation');
   await api(`${path}/tasks/${tasks.Konflikt.id}/update`, { title: 'Konflikt', assigneeMembershipId: members.worker, expectedVersion: 1 });
   const stale = row(page, 'Konflikt'); await stale.getByRole('button', { name: 'Rozpocznij zadanie' }).click();
-  await stale.getByRole('alert').filter({ hasText: 'Zadanie zmieniło się' }).waitFor(); assert(await stale.getByRole('button').isDisabled());
+  await stale.getByRole('alert').filter({ hasText: 'Zadanie zmieniło się' }).waitFor(); assert(await stale.locator('.task-progress').getByRole('button').isDisabled());
   assert(await stale.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible());
   await page.getByRole('button', { name: 'Wczytaj aktualne dane', exact: true }).click();
   await stale.getByText('Zaplanowane · Wersja 2', { exact: true }).waitFor(); await stale.getByRole('button', { name: 'Rozpocznij zadanie' }).click();

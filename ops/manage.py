@@ -22,6 +22,12 @@ def main():
     rollback = commands.add_parser('rollback')
     rollback.add_argument('--version')
     rollback.add_argument('--yes', action='store_true')
+    commands.add_parser('backup')
+    restore = commands.add_parser('restore')
+    restore.add_argument('--backup', required=True)
+    restore.add_argument('--yes', action='store_true')
+    media = commands.add_parser('media-check')
+    media.add_argument('--cleanup', action='store_true')
     args = parser.parse_args()
     try:
         os.umask(0o077)
@@ -38,6 +44,7 @@ def main():
                     lifecycle.update(args)
                 else:
                     channel.automatic_update(args, STATE, key=Path('/usr/local/lib/sitegrid/release-public.pem'))
+            elif args.command in ('backup', 'restore', 'media-check'): lifecycle.media_operation(args)
             elif args.command == 'rollback': lifecycle.rollback(args)
             else:
                 require(sys.stdin.isatty() and sys.stdout.isatty(), 'Bootstrap wymaga lokalnego terminala.')

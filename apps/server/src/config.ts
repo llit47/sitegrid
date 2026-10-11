@@ -8,6 +8,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   }
   const databaseUrl = env.DATABASE_URL;
   if (!databaseUrl || !/^postgres(ql)?:\/\//.test(databaseUrl)) throw new Error('DATABASE_URL is required');
+  if (production && env.FILES_ROOT && env.FILES_ROOT !== '/srv/sitegrid/files') throw new Error('Production media storage must use /srv/sitegrid/files for managed backups');
   const port = Number(env.PORT ?? 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
   const origin = new URL(env.PUBLIC_ORIGIN ?? (production ? '' : 'http://localhost:5173'));
@@ -32,6 +33,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   return {
     production, databaseUrl, port, origin: origin.origin, smtp, manualInvitationLinks,
     host: env.HOST ?? '127.0.0.1',
+    filesRoot: resolve(env.FILES_ROOT ?? (production ? '/srv/sitegrid/files' : 'var/files')),
     webRoot: resolve(env.WEB_ROOT ?? 'dist/web'),
     migrationsRoot: resolve(env.MIGRATIONS_ROOT ?? 'migrations'),
   };

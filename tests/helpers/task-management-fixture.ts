@@ -14,11 +14,12 @@ export async function taskFixture({ legacy = false, legacyVersion = 11, serveWeb
   for (const url of [ownerUrl,runtimeUrl]) url.searchParams.set('options', `-c search_path=${schema}`);
   const owner = new pg.Pool({ connectionString: ownerUrl.href }), runtime = new pg.Pool({ connectionString: runtimeUrl.href, application_name:schema });
   await admin.query(`CREATE SCHEMA ${schema}`);
-  const config = readConfig({ NODE_ENV:'test',DATABASE_URL:runtimeUrl.href });
+  const filesRoot=await mkdtemp(join(tmpdir(),'sitegrid-media-'));
+  const config = readConfig({ NODE_ENV:'test',DATABASE_URL:runtimeUrl.href,FILES_ROOT:filesRoot });
   const app = await buildApp(config,runtime,{ serveWeb });
   const organizations = { a:randomUUID(), b:randomUUID() }, users: Record<string,string> = {}, members: Record<string,string> = {};
   const tokens: Record<string,string> = {}, headers: Record<string,Record<string,string>> = {}, projects: string[] = [];
-  const close = async () => { await app.close(); await runtime.end(); await owner.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end(); };
+  const close = async () => { await app.close(); await runtime.end(); await owner.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end(); await rm(filesRoot,{recursive:true,force:true}); };
   try {
     if (legacy) {
       const directory = await mkdtemp(join(tmpdir(),'tasks-schema11-'));
