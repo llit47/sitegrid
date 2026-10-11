@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { request, type Project, type Task } from '../project-api.js';
 import { TaskProgress } from '../task-progress.js';
-import { observeAccessFailure } from '../offline/account.js';
+import { invalidatePreparedProject, observeAccessFailure } from '../offline/account.js';
 import { guardPendingOperations, guardWorkspaceChange, usePendingOperation } from '../workspace/navigation-safety.js';
 import { QuickTaskForm, type Assignee } from './task-form.js';
 import { Assignment } from './assignment.js';
@@ -14,19 +14,30 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
 }) {
   const base = `/api/organizations/${organizationId}`;
   const root = useRef<HTMLElement>(null), lifetime = useRef<AbortController | null>(null);
+  const listRequest = useRef<AbortController | null>(null);
   const [tasks,setTasks] = useState<CompanyTask[] | null>(null), [assignees,setAssignees] = useState<Assignee[]>([]);
   const [view,setView] = useState(manage ? 'all' : 'mine'), [projectId,setProjectId] = useState(''), [assignee,setAssignee] = useState('');
   const [q,setQ] = useState(''), [search,setSearch] = useState(''), [projectStatus,setProjectStatus] = useState('active');
   const [revision,setRevision] = useState(0), [hasMore,setHasMore] = useState(false), [creating,setCreating] = useState(false), [assigning,setAssigning] = useState('');
   const [busy,setBusy] = useState(false), [error,setError] = useState(''), [notice,setNotice] = useState('');
   const [directoryError,setDirectoryError] = useState('');
+  const [reloadPending,setReloadPending] = useState(false), [pendingProgress,setPendingProgress] = useState<Set<string>>(new Set());
+  const trackProgress = useCallback((id: string, pending: boolean) => setPendingProgress(current => {
+    if (current.has(id) === pending) return current;
+    const next = new Set(current); if (pending) next.add(id); else next.delete(id); return next;
+  }), []);
   const [filtersOpen,setFiltersOpen] = useState(() => window.matchMedia('(min-width: 641px)').matches);
   usePendingOperation(busy);
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
   const query = new URLSearchParams({ view, q:search, projectStatus, ...(projectId ? { projectId } : {}), ...(assignee ? { assigneeMembershipId:assignee } : {}) }).toString();
+  const reload = useCallback(() => { listRequest.current?.abort(); setRevision(value => value+1); }, []);
+  useEffect(() => {
+    // Keep every unresolved M08 component/operation ID mounted until its result is known.
+    if (reloadPending && pendingProgress.size === 0) { setReloadPending(false); reload(); }
+  }, [reloadPending,pendingProgress,reload]);
   const failed = (e: { message: string; status?: number }) => { setError(e.message); if ([401,403].includes(e.status ?? 0)) { setTasks(null); onAccessChanged(); } };
   useEffect(() => {
-    const controller = new AbortController(); setTasks(null); setError('');
+    const controller = new AbortController(); listRequest.current = controller; setTasks(null); setHasMore(false); setError('');
     void request<Result>(`${base}/tasks?${query}`,controller.signal).then(data => { if (!controller.signal.aborted) { setTasks(data.tasks); setHasMore(data.hasMore); } })
       .catch(e => { if (!controller.signal.aborted) failed(e); });
     return () => controller.abort();
@@ -40,14 +51,15 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
   }, [base,manage,revision]);
   const taskPath = (task: CompanyTask) => `${base}/projects/${task.projectId}/tasks/${task.id}`;
   const changeFilter = (change: () => void) => { if (guardWorkspaceChange(root.current!)) { setCreating(false); setAssigning(''); change(); } };
-  const refresh = () => changeFilter(() => { void observeAccessFailure(base,403); setRevision(value => value+1); });
+  const changeQuery = (change: () => void) => changeFilter(() => { change(); reload(); });
+  const refresh = () => changeFilter(reload);
   const create = async (id: string,payload: object) => {
     if (busy || !guardPendingOperations()) return false;
     const signal = lifetime.current!.signal; setBusy(true); setError(''); setNotice('');
     try {
       await request(`${base}/projects/${id}/tasks`,signal,csrfToken,payload);
       if (signal.aborted) return false;
-      setCreating(false); setNotice('Serwer potwierdził utworzenie zadania.'); setRevision(value => value+1); return true;
+      setCreating(false); setNotice('Serwer potwierdził utworzenie zadania.'); reload(); return true;
     } catch (e) { if (!signal.aborted) failed(e as Error); return false; }
     finally { if (!signal.aborted) setBusy(false); }
   };
@@ -57,15 +69,16 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
     try {
       const data = await request<{ task: Task }>(`${taskPath(task)}/assign`,signal,csrfToken,{ assigneeMembershipId:id,expectedVersion:task.version });
       if (signal.aborted) return;
-      // The project command context gives canProgress for the response; retain project metadata.
-      setTasks(current => current?.map(item => item.id === task.id ? { ...item,...data.task,assigneeName:assignees.find(member => member.membershipId === id)?.displayName ?? null } : item) ?? null);
-      setAssigning(''); setNotice('Serwer potwierdził zapis przydziału.'); await observeAccessFailure(base,403);
+      if (data.task.assigneeMembershipId !== task.assigneeMembershipId) await invalidatePreparedProject(organizationId,task.projectId);
+      if (signal.aborted) return;
+      setAssigning(''); setNotice('Serwer potwierdził zapis przydziału.'); reload();
     } catch (e) { if (!signal.aborted) failed(e as Error); }
     finally { if (!signal.aborted) setBusy(false); }
   };
   const more = async () => {
     if (busy || !tasks || !guardPendingOperations()) return;
-    const signal = lifetime.current!.signal; setBusy(true);
+    const signal = listRequest.current?.signal; if (!signal || signal.aborted) return;
+    setBusy(true);
     try { const data = await request<Result>(`${base}/tasks?${query}&offset=${tasks.length}`,signal);
       if (!signal.aborted) { setTasks(current => [...(current ?? []),...data.tasks.filter(item => !current?.some(existing => existing.id === item.id))]); setHasMore(data.hasMore); }
     } catch (e) { if (!signal.aborted) failed(e as Error); } finally { if (!signal.aborted) setBusy(false); }
@@ -75,11 +88,11 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
       <button className="secondary" disabled={busy} onClick={refresh}>Wczytaj aktualne zadania</button>
       {manage && <button disabled={busy || !projects} onClick={() => changeFilter(() => setCreating(true))}>Nowe zadanie</button>}
     </div></div>
-    {manage && <div className="task-views" role="group" aria-label="Widok zadań">{views.map(([id,name]) => <button className="secondary" key={id} aria-pressed={view===id} disabled={busy} onClick={() => changeFilter(() => setView(id))}>{name}</button>)}</div>}
-    <details className="task-filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)}><summary>Filtry i wyszukiwanie</summary><div className="task-filters"><label>Projekt<select aria-label="Projekt" value={projectId} disabled={busy} onChange={event => changeFilter(() => setProjectId(event.target.value))}><option value="">Wszystkie projekty</option>{projects?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
-      {manage && <label>Wykonawca<select aria-label="Wykonawca" value={assignee} disabled={busy} onChange={event => changeFilter(() => setAssignee(event.target.value))}><option value="">Wszyscy wykonawcy</option>{assignees.map(member => <option key={member.membershipId} value={member.membershipId}>{member.displayName}</option>)}</select></label>}
-      <label>Projekty<select aria-label="Projekty" value={projectStatus} disabled={busy} onChange={event => changeFilter(() => setProjectStatus(event.target.value))}><option value="active">Aktywne</option><option value="archived">Archiwalne</option><option value="all">Wszystkie</option></select></label>
-      <div className="task-search"><label>Szukaj zadań<input aria-label="Szukaj zadań" type="search" value={q} maxLength={200} onChange={event => setQ(event.target.value)} onKeyDown={event => { if (event.key==='Enter') changeFilter(() => setSearch(q)); }} disabled={busy} /></label><button className="secondary" disabled={busy} onClick={() => changeFilter(() => setSearch(q))}>Szukaj</button></div>
+    {manage && <div className="task-views" role="group" aria-label="Widok zadań">{views.map(([id,name]) => <button className="secondary" key={id} aria-pressed={view===id} disabled={busy} onClick={() => changeQuery(() => setView(id))}>{name}</button>)}</div>}
+    <details className="task-filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)}><summary>Filtry i wyszukiwanie</summary><div className="task-filters"><label>Projekt<select aria-label="Projekt" value={projectId} disabled={busy} onChange={event => changeQuery(() => setProjectId(event.target.value))}><option value="">Wszystkie projekty</option>{projects?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+      {manage && <label>Wykonawca<select aria-label="Wykonawca" value={assignee} disabled={busy} onChange={event => changeQuery(() => setAssignee(event.target.value))}><option value="">Wszyscy wykonawcy</option>{assignees.map(member => <option key={member.membershipId} value={member.membershipId}>{member.displayName}</option>)}</select></label>}
+      <label>Projekty<select aria-label="Projekty" value={projectStatus} disabled={busy} onChange={event => changeQuery(() => setProjectStatus(event.target.value))}><option value="active">Aktywne</option><option value="archived">Archiwalne</option><option value="all">Wszystkie</option></select></label>
+      <div className="task-search"><label>Szukaj zadań<input aria-label="Szukaj zadań" type="search" value={q} maxLength={200} onChange={event => setQ(event.target.value)} onKeyDown={event => { if (event.key==='Enter') changeQuery(() => setSearch(q)); }} disabled={busy} /></label><button className="secondary" disabled={busy} onClick={() => changeQuery(() => setSearch(q))}>Szukaj</button></div>
     </div></details>
     {error && <p className="error" role="alert">{error}</p>}{directoryError && <p className="error" role="alert">Nie udało się pobrać wykonawców: {directoryError}. Wczytaj aktualne zadania, aby ponowić.</p>}{notice && <p role="status">{notice}</p>}
     {creating && projects && <QuickTaskForm projects={projects} assignees={assignees} busy={busy} save={create} cancel={() => setCreating(false)} />}
@@ -88,8 +101,8 @@ export function TaskWorkspace({ organizationId, projects, manage, csrfToken, onA
     <div className="company-task-list">{tasks?.map(task => <article key={task.id} className="company-task" aria-label={task.title}>
       <div className="company-task-content"><small>{task.projectName}{task.projectStatus==='archived' ? ' · Archiwalny' : ''}</small><h3>{task.title}</h3>{task.description && <p>{task.description}</p>}
         {manage && <p className="task-assignee-name">{task.assigneeMembershipId ? task.assigneeName : 'Bez wykonawcy · Backlog'}</p>}
-      </div><div className="company-task-actions"><TaskProgress task={task} path={taskPath(task)} csrfToken={csrfToken} writable={task.projectStatus==='active'} disabled={busy}
-        onConfirmed={confirmed => setTasks(current => current?.map(item => item.id===task.id ? { ...item,...confirmed } : item) ?? null)}
+      </div><div className="company-task-actions"><TaskProgress task={task} path={taskPath(task)} csrfToken={csrfToken} writable={task.projectStatus==='active'} disabled={busy || !!assigning || (reloadPending && !pendingProgress.has(task.id))} onPendingChange={trackProgress}
+        onConfirmed={confirmed => { setTasks(current => current?.map(item => item.id===task.id ? { ...item,...confirmed } : item) ?? null); setNotice(confirmed.status==='in_progress' ? 'Serwer potwierdził rozpoczęcie zadania.' : 'Serwer potwierdził zgłoszenie do odbioru.'); setReloadPending(true); }}
         onAccessChanged={status => { void observeAccessFailure(taskPath(task),status); onAccessChanged(); }} onGone={() => { void observeAccessFailure(taskPath(task),404); setTasks(current => current?.filter(item => item.id!==task.id) ?? null); setError('Zadanie jest już niedostępne. Wczytaj aktualne zadania.'); }} />
         {manage && task.projectStatus==='active' && task.status==='planned' && <button className="secondary" disabled={busy || !!directoryError} onClick={() => changeFilter(() => setAssigning(task.id))}>{task.assigneeMembershipId ? 'Zmień wykonawcę' : 'Przypisz'}</button>}
         {assigning===task.id && <Assignment current={task.assigneeMembershipId} assignees={assignees} busy={busy} save={id => void assign(task,id)} cancel={() => setAssigning('')} />}

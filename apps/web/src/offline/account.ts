@@ -29,6 +29,9 @@ export async function observeAccessFailure(path: string, status: number) {
 export async function reconcilePreparedProjects(organizationId: string, projectIds: string[]) {
   try { await invalidateOfflineProjects(organizationId, projectIds, true); } catch { denyOfflineAccess(); }
 }
+export async function invalidatePreparedProject(organizationId: string, projectId: string) {
+  try { await invalidateOfflineProjects(organizationId, [projectId]); } catch { denyOfflineAccess(); }
+}
 export async function reconcilePreparedTasks(organizationId: string, projectId: string, taskIds: string[]) {
   try {
     const access = await readOfflineAccess();

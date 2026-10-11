@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { mkdir } from 'node:fs/promises';
+import { installTaskListRegressionStorage, runTaskListRegressions } from './helpers/task-list-regressions.mjs';
 import { taskFixture } from './helpers/task-management-fixture.ts';
 import { selectCompany, navigateWorkspace, acceptDiscardDialogs } from './helpers/workspace-browser.mjs';
 const { chromium } = await import(process.env.SITEGRID_PLAYWRIGHT_MODULE ? pathToFileURL(process.env.SITEGRID_PLAYWRIGHT_MODULE).href : 'playwright');
 const f=await taskFixture({ serveWeb:true }), errors=[];
 let browser;
 try {
+  await installTaskListRegressionStorage(f.app);
   f.config.origin=await f.app.listen({host:'127.0.0.1',port:0});
   browser=await chromium.launch({headless:true,...(process.env.SITEGRID_CHROMIUM_PATH?{executablePath:process.env.SITEGRID_CHROMIUM_PATH}:{})});
   await mkdir('/tmp/sitegrid-pr21-visuals',{recursive:true});
@@ -44,12 +46,14 @@ try {
     await task.locator('.task-assignment').waitFor({state:'detached'});
     await workspace(manager.page).getByText('Serwer potwierdził zapis przydziału.',{exact:true}).waitFor();
   }
+  await workspace(manager.page).getByRole('button',{name:'Wszystkie',exact:true}).click(); await manager.page.waitForFunction(()=>document.querySelectorAll('.company-task').length===10);
   const task=card(manager.page,'Praca 1');
   await task.getByRole('button',{name:'Zmień wykonawcę',exact:true}).click();
   await task.getByLabel('Wykonawca',{exact:true}).selectOption(f.members.other);
   await task.getByRole('button',{name:'Zapisz przydział',exact:true}).click(); await task.locator('.task-assignment').waitFor({state:'detached'});
   await task.getByRole('button',{name:'Zmień wykonawcę',exact:true}).click(); await task.getByLabel('Wykonawca',{exact:true}).selectOption('');
   await task.getByRole('button',{name:'Zapisz przydział',exact:true}).click(); await task.locator('.task-assignment').waitFor({state:'detached'});
+  await workspace(manager.page).getByRole('button',{name:'Backlog',exact:true}).click(); await manager.page.waitForFunction(()=>document.querySelectorAll('.company-task').length===5);
   await navigateWorkspace(manager.page,'Zadania'); assert.equal(await workspace(manager.page).getByRole('button',{name:'Backlog',exact:true}).getAttribute('aria-pressed'),'true');
   await workspace(manager.page).getByRole('button',{name:'Wczytaj aktualne zadania',exact:true}).click();
   await manager.page.waitForFunction(()=>document.querySelectorAll('.company-task').length===5);
@@ -80,8 +84,9 @@ try {
   const worker=await open('worker'); await card(worker.page,'Praca 3').waitFor(); assert.equal(await worker.page.locator('.company-task').count(),2);
   assert.equal(await workspace(worker.page).getByRole('button',{name:'Nowe zadanie',exact:true}).count(),0); assert.equal(await workspace(worker.page).getByRole('button',{name:'Backlog',exact:true}).count(),0);
   assert.equal(await workspace(worker.page).getByLabel('Wykonawca',{exact:true}).count(),0);
-  await card(worker.page,'Praca 3').getByRole('button',{name:'Rozpocznij zadanie',exact:true}).click(); await card(worker.page,'Praca 3').getByText('Serwer potwierdził rozpoczęcie zadania.',{exact:true}).waitFor();
-  await card(worker.page,'Praca 3').getByRole('button',{name:'Zgłoś do odbioru',exact:true}).click(); await card(worker.page,'Praca 3').getByText('Serwer potwierdził zgłoszenie do odbioru.',{exact:true}).waitFor();
+  await card(worker.page,'Praca 3').getByRole('button',{name:'Rozpocznij zadanie',exact:true}).click(); await workspace(worker.page).getByText('Serwer potwierdził rozpoczęcie zadania.',{exact:true}).waitFor();
+  await card(worker.page,'Praca 3').getByRole('button',{name:'Zgłoś do odbioru',exact:true}).click(); await workspace(worker.page).getByText('Serwer potwierdził zgłoszenie do odbioru.',{exact:true}).waitFor();
+  await worker.page.waitForFunction(()=>document.querySelectorAll('.company-task').length===2);
   await navigateWorkspace(worker.page,'Zadania'); assert.equal(await worker.page.locator('.company-task').count(),2);
   await worker.page.screenshot({path:'/tmp/sitegrid-pr21-visuals/worker-desktop.png',fullPage:true});
   await selectCompany(worker.page,f.organizations.b,'Pulpit'); await worker.page.getByText('Nie masz zadań dla wybranych filtrów.',{exact:true}).waitFor(); assert.equal(await worker.page.locator('.company-task').count(),0);
@@ -94,6 +99,7 @@ try {
     for(const button of await workspace(user.page).getByRole('button').all()) { const box=await button.boundingBox(); if(box) assert(box.height>=44,'Touch controls at least 44px'); }
     await user.page.screenshot({path:`/tmp/sitegrid-pr21-visuals/${actor}-${width}.png`,fullPage:true}); await user.context.close();
   }
+  await runTaskListRegressions(f,browser,manager.page);
   await manager.context.close();
   const rolelessContext=await browser.newContext({serviceWorkers:'block'}); await rolelessContext.addCookies([{name:'sitegrid',value:f.tokens.roleless,url:f.config.origin,httpOnly:true,sameSite:'Strict'}]);
   const roleless=await rolelessContext.newPage(); let deniedRequests=0; roleless.on('request',req=>{if(new URL(req.url()).pathname.endsWith('/tasks')) deniedRequests++;});

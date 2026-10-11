@@ -5,9 +5,10 @@ export type ProgressTask = { id: string; status: string; version: number; canPro
 type Command = { operationId: string; schemaVersion: 1; action: 'start' | 'submit'; expectedVersion: number };
 export const taskStateName = (status: string) => ({ planned: 'Zaplanowane', in_progress: 'W toku', submitted: 'Zgłoszone do odbioru' })[status] ?? status;
 
-export function TaskProgress({ task, path, csrfToken, writable, disabled, onConfirmed, onAccessChanged, onGone }: {
+export function TaskProgress({ task, path, csrfToken, writable, disabled, onConfirmed, onAccessChanged, onGone, onPendingChange }: {
   task: ProgressTask; path: string; csrfToken: string; writable: boolean; disabled: boolean;
   onConfirmed: (task: ProgressTask) => void; onAccessChanged: (status: number) => void; onGone: () => void;
+  onPendingChange?: (taskId: string, pending: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -15,6 +16,10 @@ export function TaskProgress({ task, path, csrfToken, writable, disabled, onConf
   const [retry, setRetry] = useState(false);
   const [conflict, setConflict] = useState(false);
   usePendingOperation(busy || retry);
+  useEffect(() => {
+    onPendingChange?.(task.id, busy || retry);
+    return () => onPendingChange?.(task.id, false);
+  }, [task.id, busy, retry, onPendingChange]);
   const command = useRef<Command | null>(null);
   const sending = useRef(false);
   const lifetime = useRef<AbortController | null>(null);
