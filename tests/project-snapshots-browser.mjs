@@ -1,3 +1,4 @@
+import { selectCompany, acceptDiscardDialogs } from './helpers/workspace-browser.mjs';
 // M10 production PWA, authorized snapshots and real browser storage failures.
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -82,9 +83,9 @@ try {
   const open = async mobile => {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     await context.addCookies([{ name: 'sitegrid', value: cookies.worker, url: config.origin, httpOnly: true, sameSite: 'Strict' }]);
-    const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+    const page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message));
     await page.goto(config.origin); await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
-    await page.waitForFunction(() => navigator.serviceWorker.controller); await page.locator('#active-organization').selectOption(companyA);
+    await page.waitForFunction(() => navigator.serviceWorker.controller); await selectCompany(page, companyA);
     await page.getByRole('button', { name: 'Projekt Alfa Aktywny Kontrahent: Klient Alfa', exact: true }).click();
     await page.getByRole('button', { name: 'Przygotuj offline', exact: true }).waitFor(); return { context, page };
   };
@@ -192,7 +193,7 @@ try {
     sessionUnavailable=true;await page.reload();await page.getByRole('alert').filter({hasText:'Serwer sesji chwilowo niedostępny.'}).waitFor();assert.equal(await page.evaluate(()=>navigator.onLine),true);
     await page.getByRole('button',{name:'Czytaj przygotowane dane lokalnie',exact:true}).click();await page.getByRole('heading',{name:'Odczyt lokalny SiteGrid',exact:true}).waitFor();await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'Rozpocznij zadanie',exact:true}).count(),0);assert.equal(await page.locator('form').count(),0);assert.equal(downloads,1);
-    sessionUnavailable=false;await page.getByRole('button',{name:'Wróć do trybu online',exact:true}).click();await page.locator('#active-organization').selectOption(companyA);
+    sessionUnavailable=false;await page.getByRole('button',{name:'Wróć do trybu online',exact:true}).click();await selectCompany(page, companyA);
     await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click();await page.getByRole('button',{name:'Odśwież offline',exact:true}).waitFor();
     assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);
     for (const mode of ['malformed','limit','disconnect']) {
@@ -200,7 +201,7 @@ try {
       await page.getByText('Odświeżenie nie powiodło się.',{exact:false}).waitFor();
       if(mode==='limit') assert(await page.getByRole('alert').filter({hasText:'500 zadań lub 2 MiB'}).isVisible());
       await context.setOffline(true); await page.getByText(temporary.title,{exact:true}).waitFor(); await context.setOffline(false);
-      await page.locator('#active-organization').selectOption(companyA); await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click();
+      await selectCompany(page, companyA); await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click();
       await page.getByRole('button',{name:'Odśwież offline',exact:true}).waitFor(); snapshotMode='';
     }
     await page.evaluate(()=>{
@@ -216,7 +217,7 @@ try {
     await page.getByRole('button',{name:'Odśwież offline',exact:true}).click(); await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
     snapshotMode='hold';const delayed=new Promise(resolve=>{downloadStarted=resolve;});
     await page.getByRole('button',{name:'Odśwież offline',exact:true}).click();await delayed;
-    await page.locator('#active-organization').selectOption(companyB);releaseDownload();snapshotMode='';
+    await selectCompany(page, companyB);releaseDownload();snapshotMode='';
     await page.getByRole('button',{name:'Projekt obcej firmy Aktywny Kontrahent: Klient Alfa',exact:true}).click();
     await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click(); await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
     const access=await page.evaluate(async()=>await(await import('/test-storage.js')).readOfflineAccess()); assert.equal(access.scopes.length,2); assert.equal(access.accountId,users.worker);
@@ -226,7 +227,7 @@ try {
     assert.equal(await page.getByText('Projekt Beta',{exact:true}).count(),0); assert.equal(await page.getByText('Projekt obcej firmy',{exact:true}).count(),0);
     assert.equal(await page.getByRole('button').count(),0); assert.equal(await page.locator('form').count(),0);
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-    await page.close(); page=await context.newPage(); page.on('pageerror',error=>errors.push(error.message)); await page.goto(config.origin);
+    await page.close(); page=await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror',error=>errors.push(error.message)); await page.goto(config.origin);
     await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor(); assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);
     await page.getByLabel('Przygotowana firma',{exact:true}).selectOption(companyB); await page.getByRole('heading',{name:'Projekt obcej firmy',exact:true}).waitFor();
     assert.equal(await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).count(),0);
@@ -247,7 +248,7 @@ try {
     await page.evaluate(()=>{window.originalClock=Date.now;Date.now=()=>window.originalClock()+24*60*60*1000+1000;});
     await page.getByText('Część danych wygasła',{exact:false}).waitFor(); assert.equal(await page.locator('.offline-project').count(),0);
     await page.evaluate(()=>{Date.now=window.originalClock;}); await page.reload(); await page.getByText('Brak pobranych projektów',{exact:false}).waitFor();
-    await context.setOffline(false); await page.locator('#active-organization').selectOption(companyA);
+    await context.setOffline(false); await selectCompany(page, companyA);
     await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click(); await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();
     await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
     const other=await context.newPage(); await other.goto(config.origin); await other.getByText('worker@example.test',{exact:true}).waitFor();
@@ -266,7 +267,7 @@ try {
     }
     await other.locator('#email').fill('administratorb@example.test');await other.locator('#password').fill(password);await other.getByRole('button',{name:'Zaloguj się',exact:true}).click();
     await other.getByText('administratorb@example.test',{exact:true}).waitFor();
-    await other.locator('#active-organization').selectOption(companyB);await other.getByRole('button',{name:'Projekt obcej firmy Aktywny Kontrahent: Klient Alfa',exact:true}).click();
+    await selectCompany(other, companyB);await other.getByRole('button',{name:'Projekt obcej firmy Aktywny Kontrahent: Klient Alfa',exact:true}).click();
     await other.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await other.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
     await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'Projekt obcej firmy',exact:true}).waitFor();await page.getByText('Przygotowano wyłącznie metadane projektu.',{exact:false}).waitFor();
     assert.equal(await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).count(),0);assert.equal(await page.locator('.task-row').count(),0);
@@ -292,7 +293,7 @@ try {
   await selection.page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
   await selection.page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).waitFor();
   const prepareB = async page => {
-    await page.locator('#active-organization').selectOption(companyB);
+    await selectCompany(page, companyB);
     await page.getByRole('button', { name: 'Projekt obcej firmy Aktywny Kontrahent: Klient Alfa', exact: true }).click();
     await page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
     await page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).waitFor();

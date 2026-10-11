@@ -1,3 +1,4 @@
+import { usePendingOperation } from './workspace/navigation-safety.js';
 import { useEffect, useState, type FormEvent } from 'react';
 
 type Invitation = { id: string; email: string; role: string; status: string; expiresAt: string };
@@ -27,6 +28,7 @@ export function InvitationManager({ organizationId, csrfToken, platform = false 
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const [delivery, setDelivery] = useState<InvitationDeliveryResult | null>(null);
+  usePendingOperation(busy);
   const path = `/api/${platform ? 'admin/' : ''}organizations/${encodeURIComponent(organizationId)}/invitations`;
   useEffect(() => {
     const controller = new AbortController();

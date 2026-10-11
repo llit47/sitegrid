@@ -1,3 +1,4 @@
+import { selectCompany, acceptDiscardDialogs, assertMainLandmark } from './helpers/workspace-browser.mjs';
 // Production PWA + real browser IndexedDB, with synthetic PostgreSQL/runtime RLS.
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
@@ -87,10 +88,11 @@ async function invitationRegression(mobile, offlineLaunch, issuer) {
       });
       observer.observe(document, { childList: true, subtree: true });
     });
-    const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+    const page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message));
     await page.goto(config.origin);
     await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
     await page.waitForFunction(() => navigator.serviceWorker.controller);
+    await assertMainLandmark(page, 'Zaloguj się.');
     if (offlineLaunch) await context.setOffline(true);
     const sanitizedUrl = `${config.origin}/invitations/accept?source=email&next=%2F`;
     await page.goto(`${sanitizedUrl}#${created.token}`);
@@ -101,19 +103,23 @@ async function invitationRegression(mobile, offlineLaunch, issuer) {
     };
     if (offlineLaunch) {
       await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
+      await assertMainLandmark(page, 'SiteGrid bez połączenia');
       await checkSanitized();
       assert.equal(await page.getByRole('heading', { name: 'Aktywacja zaproszenia' }).count(), 0);
       await assertInvitationIsMemoryOnly(page, created.token);
       await context.setOffline(false);
     }
     await page.getByText('Oczekujące — Firma A', { exact: true }).waitFor();
+    await assertMainLandmark(page, 'Aktywacja zaproszenia', 'Zaloguj się.');
     await checkSanitized();
     // Both an offline launch and an already sanitized online page survive remounts.
     await context.setOffline(true);
     await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
+    await assertMainLandmark(page, 'SiteGrid bez połączenia');
     await checkSanitized();
     await context.setOffline(false);
     await page.getByText('Oczekujące — Firma A', { exact: true }).waitFor();
+    await assertMainLandmark(page, 'Aktywacja zaproszenia', 'Zaloguj się.');
     await checkSanitized();
     await assertInvitationIsMemoryOnly(page, created.token);
     if (offlineLaunch) {
@@ -126,6 +132,7 @@ async function invitationRegression(mobile, offlineLaunch, issuer) {
     await page.locator('#email').fill(email); await page.locator('#password').fill('Synthetic-password-15');
     await page.getByRole('button', { name: 'Zaloguj się', exact: true }).click();
     await page.locator('.account').getByText(email, { exact: true }).waitFor();
+    await assertMainLandmark(page, 'Aktywacja zaproszenia', 'Pulpit');
     if (!offlineLaunch) {
       await page.getByRole('button', { name: 'Akceptuj zaproszenie', exact: true }).click();
       await page.getByText('Zaproszenie zostało przyjęte.', { exact: false }).waitFor();
@@ -136,6 +143,7 @@ async function invitationRegression(mobile, offlineLaunch, issuer) {
     await assertInvitationIsMemoryOnly(page, created.token);
     await page.getByRole('button', { name: 'Wyloguj się', exact: true }).click();
     await page.getByRole('heading', { name: 'Zaloguj się.' }).waitFor();
+    await assertMainLandmark(page, 'Zaloguj się.');
     await checkSanitized();
     await assertInvitationIsMemoryOnly(page, created.token);
     await page.reload();
@@ -192,22 +200,24 @@ try {
   for (const mobile of [false, true]) {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     await context.addCookies([{ name: 'sitegrid', value: token, url: config.origin, httpOnly: true, sameSite: 'Strict' }]);
-    let page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+    let page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message));
     let ownSessionReads = 0;
     page.on('request', request => { if (new URL(request.url()).pathname === '/api/auth/session') ownSessionReads++; });
     await page.goto(config.origin);
     await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
     await page.waitForFunction(() => navigator.serviceWorker.controller);
-    await page.locator('#active-organization').selectOption(company);
+    await selectCompany(page, company);
     await page.getByRole('button', { name: 'Poufny projekt A Aktywny Kontrahent: Poufny kontrahent A', exact: true }).click();
     await page.getByText('Poufne zadanie A', { exact: true }).waitFor();
+    await assertMainLandmark(page, 'Projekty');
     await page.getByRole('button', { name: mobile ? 'Zgłoś do odbioru' : 'Rozpocznij zadanie', exact: true }).click();
     await page.getByText(mobile ? 'Serwer potwierdził zgłoszenie do odbioru.' : 'Serwer potwierdził rozpoczęcie zadania.', { exact: true }).waitFor();
-    await page.locator('#active-organization').selectOption(companyB);
+    await selectCompany(page, companyB);
     await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor();
-    await page.locator('#active-organization').selectOption(company);
+    await selectCompany(page, company);
     await page.getByRole('button', { name: 'Poufny projekt A Aktywny Kontrahent: Poufny kontrahent A', exact: true }).click();
     await page.getByText('Poufne zadanie A', { exact: true }).waitFor();
+    await assertMainLandmark(page, 'Projekty');
     assert.equal(await page.locator('.project-details').getByText('Kontrahent: Poufny kontrahent A', { exact: true }).count(), 1);
     assert.equal(await page.getByText('Niewidoczny katalog kontrahentów A', { exact: true }).count(), 0);
     await page.getByText('Zainstaluj SiteGrid', { exact: true }).click();
@@ -233,10 +243,12 @@ try {
     }), false);
     await context.setOffline(true);
     await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
+    await assertMainLandmark(page, 'SiteGrid bez połączenia');
     assert.equal(await page.getByText('Poufne zadanie A', { exact: true }).count(), 0);
     assert.equal(await page.getByText('Kontrahent: Poufny kontrahent A', { exact: true }).count(), 0);
     assert.equal(await page.locator('.account').count(), 0);
     await page.reload(); await page.getByRole('heading', { name: 'SiteGrid bez połączenia' }).waitFor();
+    await assertMainLandmark(page, 'SiteGrid bez połączenia');
     await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
     assert.equal(await page.locator('#email').count(), 0);
     await page.screenshot({ path: `/tmp/sitegrid-pr15-${mobile ? 'mobile' : 'desktop'}-offline.png`, fullPage: true });
@@ -247,6 +259,7 @@ try {
     await page.getByRole('button', { name: 'Wyloguj się', exact: true }).click();
     await otherTab.getByRole('heading', { name: 'Zaloguj się.' }).waitFor();
     await page.getByRole('heading', { name: 'Zaloguj się.' }).waitFor();
+    await assertMainLandmark(page, 'Zaloguj się.');
     const beforeLoginReads = ownSessionReads;
     await page.locator('#email').fill('second@example.test'); await page.locator('#password').fill('Synthetic-password-15');
     await page.getByRole('button', { name: 'Zaloguj się', exact: true }).click();
@@ -323,7 +336,7 @@ try {
       assert.equal(await updateTab.evaluate(async () => (await caches.keys()).filter(name => name.startsWith('sitegrid-shell-v1-')).length), 2);
       assert(await updateTab.getByText('second@example.test', { exact: true }).isVisible());
       await updateTab.close();
-      page = await context.newPage(); page.on('pageerror', error => errors.push(error.message)); await page.goto(config.origin);
+      page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message)); await page.goto(config.origin);
       await page.waitForFunction(async () => (await navigator.serviceWorker.getRegistration()).active?.state === 'activated' &&
         (await caches.keys()).includes('sitegrid-shell-v1-' + 'b'.repeat(64)) && (await caches.keys()).filter(name => name.startsWith('sitegrid-shell-v1-')).length === 1);
       assert(await page.evaluate(async () => (await caches.keys()).includes('unrelated-app-cache')));
@@ -336,12 +349,13 @@ try {
   }
   const unavailable = await browser.newContext();
   await unavailable.addInitScript(() => { Object.defineProperty(window, 'BroadcastChannel', { value: class { constructor() { throw new DOMException('Denied', 'SecurityError'); } } }); Object.defineProperty(window, 'indexedDB', { get() { throw new DOMException('Denied', 'SecurityError'); } }); delete Object.getPrototypeOf(navigator).serviceWorker; });
-  const page = await unavailable.newPage(); page.on('pageerror', error => errors.push(error.message)); await page.goto(config.origin);
+  const page = await unavailable.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message)); await page.goto(config.origin);
   await page.getByText('Pamięć lokalna niedostępna', { exact: false }).waitFor();
   await page.getByText('Powłoka offline niedostępna.', { exact: false }).waitFor();
   await page.locator('#email').fill('second@example.test'); await page.locator('#password').fill('Synthetic-password-15');
   await page.getByRole('button', { name: 'Zaloguj się', exact: true }).click(); await page.getByText('second@example.test', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Wyloguj się', exact: true }).click(); await page.getByRole('heading', { name: 'Zaloguj się.' }).waitFor();
+    await assertMainLandmark(page, 'Zaloguj się.');
   await unavailable.close();
   const unprepared = await browser.newContext(); await unprepared.setOffline(true);
   const cold = await unprepared.newPage(); await assert.rejects(cold.goto(config.origin)); await unprepared.close();

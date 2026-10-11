@@ -1,0 +1,94 @@
+.workspace { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: calc(100dvh - 150px); border: 1px solid #d9e3dd; border-radius: 14px; background: #fff; overflow: clip; }
+.workspace [hidden] { display: none !important; }
+.workspace-sidebar { padding: 24px 16px; background: #f8faf9; border-right: 1px solid #d9e3dd; }
+.workspace-sidebar-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.company-switcher { margin-bottom: 24px; }
+.company-switcher select { font-size: 14px; min-height: 44px; margin-top: 8px; padding: 10px; }
+.workspace .company-refresh { border: 0; background: transparent; font-size: 12px; padding: 8px 0; text-align: left; font-weight: 500; }
+.workspace-nav-item { display: flex; gap: 12px; align-items: center; width: 100%; min-height: 44px; padding: 10px 12px; margin: 4px 0; background: transparent; color: #59716b; border: 1px solid transparent; text-align: left; font-size: 14px; }
+.workspace-nav-item:hover { background: #eaf1ed; }
+.workspace-nav-item[aria-current="page"] { color: #163638; background: #e1ede6; border-color: #c1d6c9; font-weight: 750; }
+.workspace-nav-item > svg { flex-shrink: 0; }
+.workspace-nav-item.platform-link { border-top: 1px solid #d9e3dd; margin-top: 24px; }
+.workspace-sidebar-note { font-size: 12px; margin: 32px 12px 0; }
+.workspace-body { min-width: 0; }
+.workspace-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 28px; min-height: 90px; border-bottom: 1px solid #e4eae6; }
+.workspace-identity { min-width: 0; }
+.workspace .company-header { margin: 0; gap: 10px; }
+.workspace .company-header h3 { margin: 0 0 4px; font-size: 16px; }
+.workspace .company-header small { font-size: 12px; color: #59716b; }
+.workspace-header .company-logo { height: 36px; width: 36px; }
+.workspace-header .accent-swatch { height: 36px; width: 4px; }
+.workspace-account { display: flex; gap: 14px; align-items: center; min-width: 0; font-size: 12px; }
+.workspace-account .account { max-width: 200px; }
+.workspace button { margin-top: 0; min-height: 44px; }
+.workspace-content { padding: 28px; max-width: 1180px; margin-inline: auto; overflow-wrap: anywhere; }
+.workspace-page-heading { margin-bottom: 24px; }
+.workspace-page-heading .eyebrow { margin: 0 0 10px; }
+.workspace-page-heading h1 { margin: 0; font-size: 30px; }
+.workspace .tile { padding: 24px; border-radius: 12px; }
+.workspace .tile h2 { margin-top: 0; font-size: 18px; }
+.workspace .organizations { margin-top: 20px; }
+.workspace .projects, .workspace .contractors, .workspace .company-members, .workspace .company-branding { border: 0; margin: 0; padding: 0; }
+.workspace form { padding: 20px; border: 1px solid #d9e3dd; border-radius: 12px; background: #fafcfb; gap: 12px; }
+.workspace form h4 { margin: 0; }
+.workspace label { display: block; }
+.workspace input, .workspace select { margin-top: 6px; min-width: 0; }
+.workspace .role-choice { display: flex; }
+.workspace .role-choice input { margin: 0; }
+.workspace .hint { margin-top: 10px; }
+.workspace .error { margin-block: 12px; }
+.workspace .project-list { gap: 14px; margin-block: 20px; }
+.workspace .project-choice { padding: 20px; min-height: 116px; border-color: #d9e3dd; }
+.workspace .project-choice strong { font-size: 17px; }
+.workspace .project-choice[aria-pressed="true"] { background: #edf5ef; }
+.workspace .project-details { padding: 24px; background: #fff; }
+.workspace .project-details > section { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e4eae6; }
+.workspace .project-toolbar h3, .workspace .project-toolbar h4 { margin: 0; }
+.workspace .project-roster { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+.workspace .project-member { align-items: flex-start; }
+.workspace .task-row { padding: 16px; flex-wrap: wrap; }
+.workspace .task-row > div:first-child { flex: 1 1 220px; }
+.workspace .contractor-row { padding: 16px 0; border-bottom: 1px solid #e4eae6; }
+.workspace .contractor-row h4 { margin: 0; }
+.workspace .contractor-row p { margin-block: 8px; }
+.workspace .table-scroll { max-width: 100%; }
+.workspace-welcome { background: #eef5f0; border: 1px solid #d5e4da; border-radius: 12px; padding: 28px; margin-bottom: 20px; }
+.workspace-welcome h2 { margin: 4px 0; font-size: 26px; letter-spacing: -.6px; }
+.workspace-welcome .eyebrow { margin: 0; }
+.workspace-welcome > p { max-width: 580px; }
+.workspace-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.workspace-metric { font-size: 36px; letter-spacing: -1px; }
+.workspace-empty { border: 1px dashed #bfd2c5; border-radius: 12px; padding: 24px; margin-block: 20px; background: #fafcfb; }
+.workspace-empty h2 { margin-top: 0; font-size: 20px; }
+.mobile-only { display: none; }
+.skip-link { position: absolute; left: -10000px; }
+.skip-link:focus { left: 16px; top: 16px; z-index: 10; background: #fff; padding: 12px; color: #163638; }
+.workspace h1:focus-visible, .workspace a:focus-visible, .workspace summary:focus-visible { outline: 3px solid #66a991; outline-offset: 3px; }
+@media (min-width: 901px) { .workspace-sidebar { position: sticky; top: 0; align-self: start; min-height: calc(100dvh - 150px); } }
+@media (max-width: 1100px) { .workspace-header { padding: 18px; gap: 12px; } .workspace-account { flex-direction: column; align-items: flex-end; gap: 6px; } .workspace-content { padding: 24px; } }
+@media (max-width: 900px) {
+  .workspace { grid-template-columns: 1fr; position: relative; }
+  .mobile-only { display: block; }
+  .workspace-sidebar { display: none; border-right: 0; border-bottom: 1px solid #d9e3dd; }
+  .workspace-sidebar.is-open { display: block; }
+  .workspace-sidebar-heading { margin-bottom: 8px; }
+  .workspace-header { flex-wrap: wrap; gap: 12px; }
+  .workspace-identity { flex: 1; }
+  .workspace-account { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; }
+  .workspace-account .account { max-width: none; }
+  .workspace-summary { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .workspace-content { padding: 20px 16px; }
+  .workspace-welcome, .workspace .tile, .workspace .project-details, .workspace form { padding: 18px; }
+  .workspace-header { padding: 14px 16px; }
+  .workspace-page-heading h1 { font-size: 26px; }
+  .workspace .project-toolbar, .workspace .project-actions { align-items: stretch; }
+  .workspace .project-toolbar > button { flex-grow: 1; }
+  .workspace .member-toolbar label { min-width: 0; width: 100%; }
+}
+
+.workspace-company-brand { display: flex; align-items: center; gap: 12px; }
+
+@media (max-width: 700px) { .workspace .task-row > div:first-child { flex: initial; } }

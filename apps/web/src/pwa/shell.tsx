@@ -1,3 +1,4 @@
+import { guardWorkspaceChange } from '../workspace/navigation-safety.js';
 import { useEffect, useState, type ReactNode } from 'react';
 import { checkLocalStorage } from '../storage/indexed-db.js';
 import { registerShell, subscribeAccountChanges, type ShellState } from './lifecycle.js';
@@ -37,12 +38,11 @@ export function PwaShell({ children }: { children: ReactNode }) {
     window.addEventListener('beforeinstallprompt', offered); window.addEventListener('appinstalled', installed);
     return () => { window.removeEventListener('beforeinstallprompt', offered); window.removeEventListener('appinstalled', installed); };
   }, []);
-  return <main className="shell"><header className="brand"><span className="brand-mark" aria-hidden="true">S</span> SiteGrid</header>
-    <aside className="pwa-status" aria-label="Stan aplikacji">
+  return <div className="shell"><header className="brand"><span className="brand-mark" aria-hidden="true">S</span> SiteGrid</header>
+    <aside className="pwa-status" aria-label="Stan aplikacji"><div className="pwa-connectivity">
       <p role="status">{localView ? 'Odczyt lokalny — tylko wcześniej przygotowane dane z ważnym dostępem.' : online ? 'Tryb online.' : 'Brak połączenia. Odczyt tylko wcześniej przygotowanych projektów z ważnym dostępem.'}</p>
-      {online && <><button type="button" className="secondary" onClick={() => setLocalView(value => !value)}>{localView ? 'Wróć do trybu online' : 'Czytaj przygotowane dane lokalnie'}</button>
-        {!localView && <p className="hint">Odczyt lokalny działa także przy niedostępnym serwerze. Przejście zamyka bieżące formularze online.</p>}</>}
-      {shell === 'ready' && <p>Powłoka aplikacji gotowa do otwarcia offline.</p>}
+      {online && <button type="button" className="secondary" onClick={() => { if (guardWorkspaceChange()) setLocalView(value => !value); }}>{localView ? 'Wróć do trybu online' : 'Czytaj przygotowane dane lokalnie'}</button>}
+      </div><div className="pwa-lifecycle">{shell === 'ready' && <p>Powłoka aplikacji gotowa do otwarcia offline.</p>}
       {shell === 'preparing' && <p>Przygotowanie powłoki offline…</p>}
       {shell === 'unavailable' && <p>Powłoka offline niedostępna. Korzystaj z aplikacji online.</p>}
       {shell === 'update' && <p role="status">Nowa wersja gotowa. Zamknij wszystkie karty i okna SiteGrid, a następnie otwórz aplikację ponownie.</p>}
@@ -54,8 +54,8 @@ export function PwaShell({ children }: { children: ReactNode }) {
         <p>Jeśli instalacja jest niedostępna, korzystaj z SiteGrid w przeglądarce. Instalacja nie pobiera danych projektów.</p>
         {prompt && <button type="button" onClick={() => { const current = prompt; setPrompt(null); void current.prompt().catch(() => { /* Menu guidance stays available. */ }); }}>Zainstaluj aplikację</button>}
       </details>}
-    </aside>
-    {online && !localView ? <div key={revision}>{children}</div> : <OfflineViewer key={revision} localOnly={online} />}
+    </div></aside>
+    <main aria-label="Treść aplikacji">{online && !localView ? <div key={revision}>{children}</div> : <OfflineViewer key={revision} localOnly={online} />}</main>
     <footer>SiteGrid · samodzielna instalacja</footer>
-  </main>;
+  </div>;
 }

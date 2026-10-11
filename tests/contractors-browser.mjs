@@ -1,3 +1,4 @@
+import { selectCompany, navigateWorkspace, acceptDiscardDialogs } from './helpers/workspace-browser.mjs';
 // Disposable M09C production UI, with actual PostgreSQL runtime authorization.
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -67,16 +68,17 @@ try {
     // Online interception tests run separately from the real-worker PWA suite.
     const context = await browser.newContext({ serviceWorkers: 'block', viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     await context.addCookies([{ name: 'sitegrid', value: cookies[actor], url: config.origin, httpOnly: true, sameSite: 'Strict' }]);
-    const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+    const page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message));
     const directoryRequests = [];
     page.on('request', request => { if (new URL(request.url()).pathname.endsWith('/contractors')) directoryRequests.push(request.method()); });
     page.on('console', message => { if (message.text().includes('Content Security Policy')) cspErrors.push(message.text()); });
-    await page.goto(config.origin); await page.locator('#active-organization').selectOption(companyA);
+    await page.goto(config.origin); await selectCompany(page, companyA);
     await page.locator('.projects').waitFor(); return { context, page, directoryRequests };
   };
   for (const mobile of [false, true]) {
     const mode = mobile ? 'mobile' : 'desktop', { context, page } = await open('administrator', mobile);
     const projects = page.locator('.projects'), directory = page.getByRole('region', { name: 'Kontrahenci firmy' }), details = projects.locator('.project-details');
+    await navigateWorkspace(page, 'Kontrahenci');
     await directory.getByRole('heading', { name: 'Klient Alfa', exact: true }).waitFor();
     const newName = `Nowy klient ${mode}`;
     const creation = directory.locator('.contractor-form').last();
@@ -100,12 +102,15 @@ try {
     await directory.getByRole('alert').filter({ hasText: 'Rekord zmienił się' }).waitFor();
     assert.equal(await row(`Szkic ${mode}`).getByLabel('Nazwa kontrahenta', { exact: true }).inputValue(), `Lokalna propozycja ${mode}`);
     await directory.getByRole('button', { name: 'Wczytaj kontrahentów ponownie', exact: true }).click(); await row(currentName).waitFor();
-    const projectCreation = projects.locator('.project-form').last(), projectName = `Projekt testowy ${mode}`;
+    await navigateWorkspace(page, 'Projekty');
+    await projects.getByRole('button', { name: 'Nowy projekt', exact: true }).click();
+    const projectCreation = projects.locator(':scope > .project-form'), projectName = `Projekt testowy ${mode}`;
     await projectCreation.getByLabel('Nazwa projektu', { exact: true }).fill(projectName);
     await projectCreation.getByLabel('Kontrahent projektu', { exact: true }).selectOption(item.id);
     await projectCreation.getByRole('button', { name: 'Utwórz projekt', exact: true }).click(); await details.getByRole('heading', { name: projectName, exact: true }).waitFor();
     const createdProject = (await api(projectPath)).projects.find(project => project.name === projectName);
     await api(`${projectPath}/${createdProject.id}/update`, { name: projectName, contractorId: one.id, expectedVersion: 1 });
+    await details.getByRole('button', { name: 'Edytuj projekt', exact: true }).click();
     await details.getByLabel('Nazwa projektu', { exact: true }).fill('Lokalny szkic projektu');
     await details.getByLabel('Kontrahent projektu', { exact: true }).selectOption(two.id);
     await details.getByRole('button', { name: 'Zapisz projekt', exact: true }).click();
@@ -113,16 +118,23 @@ try {
     assert.equal(await details.getByLabel('Nazwa projektu', { exact: true }).inputValue(), 'Lokalny szkic projektu');
     assert.equal(await details.getByLabel('Kontrahent projektu', { exact: true }).inputValue(), two.id);
     await details.getByRole('button', { name: 'Wczytaj aktualne dane', exact: true }).click(); await details.getByText(/Wersja 2 ·/).waitFor();
+    await details.getByRole('button', { name: 'Edytuj projekt', exact: true }).click();
     assert.equal(await details.getByLabel('Kontrahent projektu', { exact: true }).inputValue(), one.id);
     for (const [contractorId, version] of [[two.id, 3], ['', 4], [item.id, 5]]) {
+      if (!await details.getByLabel('Kontrahent projektu', { exact: true }).count()) await details.getByRole('button', { name: 'Edytuj projekt', exact: true }).click();
       await details.getByLabel('Kontrahent projektu', { exact: true }).selectOption(contractorId);
       await details.getByRole('button', { name: 'Zapisz projekt', exact: true }).click();
       await details.getByText(new RegExp(`Wersja ${version} ·`)).waitFor();
     }
+    await navigateWorkspace(page, 'Kontrahenci');
     await row(currentName).getByRole('button', { name: 'Dezaktywuj kontrahenta', exact: true }).click();
     await row(currentName).getByText('Nieaktywny kontrahent', { exact: false }).waitFor();
+    await navigateWorkspace(page, 'Projekty');
     await details.getByText(`Kontrahent: ${currentName} (nieaktywny)`, { exact: true }).waitFor();
+    await projects.getByRole('button', { name: 'Nowy projekt', exact: true }).click();
     assert.equal(await projectCreation.getByLabel('Kontrahent projektu', { exact: true }).locator(`option[value="${item.id}"]`).count(), 0);
+    await projects.locator('.project-choice').filter({ hasText: projectName }).click();
+    await details.getByRole('button', { name: 'Edytuj projekt', exact: true }).click();
     assert.equal(await details.getByLabel('Kontrahent projektu', { exact: true }).locator(`option[value="${item.id}"]`).evaluate(option => option.disabled), true);
     await details.getByLabel('Nazwa projektu', { exact: true }).fill(`${projectName} z historią`);
     await details.getByRole('button', { name: 'Zapisz projekt', exact: true }).click(); await details.getByText(/Wersja 6 ·/).waitFor();
@@ -130,11 +142,15 @@ try {
     await projects.getByLabel('Filtruj projekty po kontrahencie', { exact: true }).selectOption(item.id);
     assert.equal(await projects.locator('.project-choice').count(), 1); assert.equal(await details.count(), 0);
     await projects.getByLabel('Filtruj projekty po kontrahencie', { exact: true }).selectOption('none');
-    await projects.getByRole('button', { name: 'Projekt wewnętrzny Aktywny', exact: true }).waitFor(); assert.equal(await projects.locator('.project-choice').count(), 1);
+    await projects.getByRole('button', { name: 'Projekt wewnętrzny Aktywny Bez kontrahenta', exact: true }).waitFor(); assert.equal(await projects.locator('.project-choice').count(), 1);
     await projects.getByLabel('Filtruj projekty po kontrahencie', { exact: true }).selectOption('');
+    await navigateWorkspace(page, 'Kontrahenci');
     await row(currentName).getByRole('button', { name: 'Aktywuj kontrahenta', exact: true }).click(); await row(currentName).getByText(/^Aktywny kontrahent · Wersja/).waitFor();
+    await navigateWorkspace(page, 'Projekty');
+    await projects.getByRole('button', { name: 'Nowy projekt', exact: true }).click();
     assert.equal(await projectCreation.getByLabel('Kontrahent projektu', { exact: true }).locator(`option[value="${item.id}"]`).count(), 1);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await navigateWorkspace(page, 'Kontrahenci');
     // A late directory read and an already committed write cannot enter company B.
     for (const mutation of [false, true]) {
       let release, started, finished;
@@ -149,10 +165,22 @@ try {
         await row(currentName).getByLabel('Nazwa kontrahenta', { exact: true }).fill(`Spóźniona nazwa ${mode}`);
         await row(currentName).getByRole('button', { name: 'Zapisz kontrahenta', exact: true }).click();
       } else await directory.getByRole('button', { name: 'Wczytaj kontrahentów ponownie', exact: true }).click();
-      await intercepted; await page.locator('#active-organization').selectOption(companyB);
+      await intercepted;
+      if (mutation) {
+        page.removeAllListeners('dialog');
+        let blocked = false; page.once('dialog', async dialog => { assert.equal(dialog.type(), 'alert'); blocked = true; await dialog.accept(); });
+        if (mobile) await page.getByRole('button', { name: 'Otwórz nawigację', exact: true }).click();
+        await page.locator('#active-organization').selectOption(companyB);
+        assert(blocked, 'Pending contractor writes must block company switching');
+        assert.equal(await page.locator('#active-organization').inputValue(), companyA);
+        release(); await delivered;
+        await row(`Spóźniona nazwa ${mode}`).waitFor();
+        acceptDiscardDialogs(page);
+      }
+      await selectCompany(page, companyB);
       await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor(); release(); await delivered; await page.unroute(url);
       assert.equal(await page.locator('.contractors').count(), 0); assert.equal(await page.getByText(`Spóźniona nazwa ${mode}`, { exact: true }).count(), 0);
-      if (!mutation) { await page.locator('#active-organization').selectOption(companyA); await row(currentName).waitFor(); }
+      if (!mutation) { await selectCompany(page, companyA, 'Kontrahenci'); await row(currentName).waitFor(); }
     }
     await context.close();
     const worker = await open('worker', mobile);
@@ -169,7 +197,7 @@ try {
     await worker.page.getByLabel('Filtruj projekty po kontrahencie', { exact: true }).selectOption(two.id);
     await worker.page.getByRole('button', { name: /Projekt Beta Aktywny Kontrahent: Klient Beta/ }).click(); await worker.page.getByText('Własne zadanie Projekt Beta', { exact: true }).waitFor();
     assert.equal(await worker.page.locator('.task-row').count(), 1);
-    await worker.page.locator('#active-organization').selectOption(companyB); await worker.page.getByRole('button', { name: /Projekt obcej firmy Aktywny Kontrahent: Klient Alfa/ }).waitFor();
+    await selectCompany(worker.page, companyB); await worker.page.getByRole('button', { name: /Projekt obcej firmy Aktywny Kontrahent: Klient Alfa/ }).waitFor();
     assert.equal(await worker.page.getByText('Własne zadanie Projekt Beta', { exact: true }).count(), 0); assert.equal(worker.directoryRequests.length, 0);
     assert(await worker.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await worker.context.close();
