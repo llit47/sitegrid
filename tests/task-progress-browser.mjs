@@ -85,10 +85,21 @@ try {
   assert(await confirm.getByText('Do odbioru', { exact: true }).isVisible());
   assert.equal(await confirm.locator('.task-progress').getByRole('button').count(), 0);
   console.log('PASS start/submit, one double-click request and no success until server confirmation');
-  await api(`${path}/tasks/${tasks.Konflikt.id}/update`, { title: 'Konflikt', assigneeMembershipId: members.worker, expectedVersion: 1 });
+  // Hold refresh delivery so the real conflict remains observable until reload.
+  // Change the server only after the command captures its expected version.
+  const taskReadUrl = `${config.origin}${path}/tasks`;
+  let releaseConflictRead;
+  const conflictRead = new Promise(resolve => { releaseConflictRead = resolve; });
+  const holdConflictRead = async route => { await conflictRead; await route.continue().catch(() => {}); };
+  await page.route(taskReadUrl, holdConflictRead);
+  await page.route(url('Konflikt'), async route => {
+    await api(`${path}/tasks/${tasks.Konflikt.id}/update`, { title: 'Konflikt', assigneeMembershipId: members.worker, expectedVersion: route.request().postDataJSON().expectedVersion });
+    await route.continue();
+  }, { times: 1 });
   const stale = row(page, 'Konflikt'); await stale.getByRole('button', { name: 'Rozpocznij zadanie' }).click();
   await stale.getByRole('alert').filter({ hasText: 'Zadanie zmieniło się' }).waitFor(); assert(await stale.locator('.task-progress').getByRole('button').isDisabled());
   assert(await stale.getByText('Do zrobienia', { exact: true }).isVisible());
+  await page.unroute(taskReadUrl, holdConflictRead); releaseConflictRead();
   await page.getByRole('button', { name: 'Wczytaj aktualne dane', exact: true }).click();
   await stale.getByText('Do zrobienia', { exact: true }).waitFor(); await stale.getByRole('button', { name: 'Rozpocznij zadanie' }).click();
   await stale.getByText('W toku', { exact: true }).waitFor();
