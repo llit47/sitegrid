@@ -44,5 +44,9 @@ path.write_text(json.dumps(manifest, sort_keys=True, separators=(',', ':')) + '\
 command(['openssl', 'pkeyutl', '-sign', '-inkey', str(key), '-rawin', '-in', str(path), '-out', str(signature)])
 verify_manifest(path, signature, a.version, public, now=issued)
 notes = f'''SiteGrid {a.version} — Debian 13 only\n\nThis release contains the prebuilt application, Node runtime, installer and signed manifest.\nPinned bootstrap command (run as root inside an existing Debian 13):\n\n```sh\n{(directory / 'INSTALL_COMMAND.txt').read_text().strip()}\n```\n\nAfter installation: `sitegrid bootstrap-admin`, `sitegrid update`, `sitegrid rollback`.\nRelease public key fingerprint (SHA-256 of PEM): {hashlib.sha256(public.read_bytes()).hexdigest()}\n'''
+try:
+    notes += '\n' + (repository / 'docs/releases' / f'v{a.version}.md').read_text(encoding='utf-8')
+except FileNotFoundError:
+    pass  # Historical releases and fixture builds may have no versioned feature notes.
 (directory / 'RELEASE_NOTES.md').write_text(notes)
 print(f'Signed {a.version}: {", ".join(artifacts)}; valid for 90 days. No publication performed.')

@@ -16,7 +16,7 @@ git tag -a v0.1.3 -m "SiteGrid v0.1.3" HEAD &&
 git push origin refs/tags/v0.1.3
 ```
 
-Push tagu uruchamia istniejący workflow `release.yml`: ponowny CI tej wersji, bramka środowiska `release-signing`, podpisanie sprawdzonej paczki i **Draft Release**. Operator zatwierdza środowisko w GitHub Actions; klucz pozostaje sekretem Actions. Nie podpisywać oficjalnych artefaktów lokalnie ani publikować Draft automatycznie. Workflow generuje notes z przypiętą komendą instalacji i fingerprintem; przygotowane notes funkcjonalne należy dołączyć podczas przeglądu Draft, zachowując te wygenerowane informacje.
+Push tagu uruchamia istniejący workflow `release.yml`: ponowny CI tej wersji, bramka środowiska `release-signing`, podpisanie sprawdzonej paczki i **Draft Release**. Operator zatwierdza środowisko w GitHub Actions; klucz pozostaje sekretem Actions. Nie podpisywać oficjalnych artefaktów lokalnie ani publikować Draft automatycznie. Workflow generuje notes z przypiętą komendą instalacji, fingerprintem i informacją o platformie, następnie automatycznie dołącza `docs/releases/v<VERSION>.md`. Brak tego pliku zachowuje dotychczasowe notes dla historycznych wydań i fixture; inne błędy odczytu nie są ignorowane.
 
 ## Przygotowanie klucza i wydania
 
