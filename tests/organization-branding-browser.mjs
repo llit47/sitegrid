@@ -1,3 +1,4 @@
+import { selectCompany, navigateWorkspace, acceptDiscardDialogs } from './helpers/workspace-browser.mjs';
 // Disposable local UI smoke using the same owner/runtime URLs as integration tests.
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -45,7 +46,7 @@ try {
   browser = await chromium.launch({ headless: true, ...(process.env.SITEGRID_CHROMIUM_PATH ? { executablePath: process.env.SITEGRID_CHROMIUM_PATH } : {}) });
   const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1280, height: 900 } });
   const page = await context.newPage(), errors = [], cspErrors = [];
-  page.on('pageerror', e => errors.push(e.message));
+  acceptDiscardDialogs(page); page.on('pageerror', e => errors.push(e.message));
   page.on('console', msg => { if (msg.text().includes('Content Security Policy')) cspErrors.push(msg.text()); });
   // Hold the initial list's A branding snapshot while the selected company is saved.
   let releaseInitial, initialStarted, initialHeld = false;
@@ -62,7 +63,7 @@ try {
   await page.locator('#email').fill('shared@example.test'); await page.locator('#password').fill(password);
   await page.getByRole('button', { name: 'Zaloguj się', exact: true }).click();
   await initialFetched;
-  await page.locator('#active-organization').selectOption(companyA);
+  await selectCompany(page, companyA, 'Ustawienia firmy');
   const settings = page.locator('.company-branding'), header = page.locator('.company-header');
   await settings.getByRole('heading', { name: 'Ustawienia firmy' }).waitFor();
   assert.equal(await header.locator('img').count(), 0);
@@ -82,10 +83,9 @@ try {
       const savedLogo = await header.locator('img').getAttribute('src');
       releaseInitial();
       // B's logo appears only after the initial batch has merged into the switcher.
-      await page.waitForFunction(id => document.querySelector(`.company-choice img[src*="${id}"]`)?.naturalWidth > 0, companyB);
-      const selectedChoice = page.locator('.company-choice[aria-pressed="true"]');
-      assert.equal(await selectedChoice.locator('span').last().textContent(), 'Żółć Browser A', 'Delayed initial branding must retain the saved name');
-      assert.equal(await selectedChoice.locator('img').getAttribute('src'), savedLogo, 'Delayed initial branding must retain the saved logo version');
+      await page.waitForFunction(id => document.querySelector(`#active-organization option[value="${id}"]`)?.textContent === 'Firma Browser B', companyB);
+      assert.equal(await page.locator('#active-organization option:checked').textContent(), 'Żółć Browser A', 'Delayed initial branding must retain the saved name');
+      assert.equal(await header.locator('img').getAttribute('src'), savedLogo, 'Delayed initial branding must retain the saved logo version');
       assert.equal(await header.locator('h3').textContent(), 'Żółć Browser A');
       await page.unroute(initialPath);
       console.log('PASS regression: delayed initial branding cannot replace a newer saved name/logo');
@@ -131,7 +131,7 @@ try {
   await page.waitForFunction(() => document.querySelector('.company-branding input[type=file]')?.value === '' && !document.querySelector('.company-branding button')?.disabled);
   assert(await settings.getByRole('button', { name: 'Zastąp logo', exact: true }).isDisabled());
   console.log('PASS regression: conflict → refresh clears the invisible retained file and requires a fresh selection');
-  await page.locator('#active-organization').selectOption(companyB);
+  await selectCompany(page, companyB);
   await header.getByRole('heading', { name: 'Firma Browser B', exact: true }).waitFor();
   assert.equal(await settings.count(), 0);
   await page.waitForFunction(() => document.querySelector('.company-header img')?.naturalWidth > 0);
@@ -148,7 +148,7 @@ try {
   });
   await page.locator('#active-organization').selectOption(companyA); await intercepted;
   assert.equal(await header.count(), 0, 'Loading A must clear B branding immediately');
-  await page.locator('#active-organization').selectOption(companyB);
+  await selectCompany(page, companyB);
   await header.getByRole('heading', { name: 'Firma Browser B', exact: true }).waitFor();
   release(); await page.unroute(delayedPath);
   await page.waitForTimeout(150);
@@ -156,9 +156,10 @@ try {
   assert.equal(await settings.count(), 0);
   assert.equal(await page.locator('.company-header img').count(), 1);
   assert((await header.locator('img').getAttribute('src')).includes(companyB));
-  await page.locator('#active-organization').selectOption(companyA);
+  await selectCompany(page, companyA, 'Ustawienia firmy');
   await settings.getByRole('heading', { name: 'Ustawienia firmy' }).waitFor();
-  assert(await page.locator('.company-members').isVisible()); assert(await page.getByRole('heading', { name: 'Zaproszenia do firmy' }).isVisible());
+  await navigateWorkspace(page, 'Pracownicy'); assert(await page.locator('.company-members').isVisible());
+  await navigateWorkspace(page, 'Zaproszenia'); assert(await page.getByRole('heading', { name: 'Zaproszenia do firmy' }).isVisible());
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await page.setViewportSize({ width: 390, height: 844 });
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));

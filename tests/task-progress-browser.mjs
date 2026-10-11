@@ -1,3 +1,4 @@
+import { selectCompany, navigateWorkspace, acceptDiscardDialogs } from './helpers/workspace-browser.mjs';
 // Online M08 UI checks; synthetic PostgreSQL schema and real runtime RLS.
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -50,9 +51,9 @@ try {
   const open = async (actor, mobile = false) => {
     const context = await browser.newContext({ serviceWorkers: 'block', viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     await context.addCookies([{ name: 'sitegrid', value: tokens[actor], url: config.origin, httpOnly: true, sameSite: 'Strict' }]);
-    const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
-    await page.goto(config.origin); await page.locator('#active-organization').selectOption(company);
-    await page.getByRole('button', { name: 'Prace montażowe Aktywny', exact: true }).click();
+    const page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message));
+    await page.goto(config.origin); await selectCompany(page, company);
+    await page.getByRole('button', { name: 'Prace montażowe Aktywny Bez kontrahenta', exact: true }).click();
     await page.locator('.project-details h4').filter({ hasText: 'Prace montażowe' }).waitFor();
     return { context, page };
   };
@@ -96,6 +97,15 @@ try {
   await page.route(url('Utrata odpowiedzi'), async route => { sent.push(route.request().postDataJSON()); await route.fetch(); await route.abort('failed'); }, { times: 1 });
   await lost.getByRole('button', { name: 'Rozpocznij zadanie' }).click(); await lost.getByRole('alert').filter({ hasText: 'Brak potwierdzenia' }).waitFor();
   assert(await lost.getByText('Zaplanowane · Wersja 1', { exact: true }).isVisible());
+  await navigateWorkspace(page, 'Pulpit'); await navigateWorkspace(page, 'Projekty');
+  assert(await lost.getByRole('button', { name: 'Ponów operację', exact: true }).isVisible(), 'Ambiguous command survives section navigation');
+  page.removeAllListeners('dialog');
+  let ambiguousBlocked = false;
+  page.once('dialog', async dialog => { assert.equal(dialog.type(), 'alert'); ambiguousBlocked = true; await dialog.accept(); });
+  await page.getByRole('button', { name: 'Wczytaj aktualne dane', exact: true }).click();
+  assert(ambiguousBlocked, 'Refresh must not discard an ambiguous command');
+  assert(await lost.getByRole('button', { name: 'Ponów operację', exact: true }).isVisible());
+  acceptDiscardDialogs(page);
   await page.route(url('Utrata odpowiedzi'), async route => { sent.push(route.request().postDataJSON()); await route.continue(); }, { times: 1 });
   await lost.getByRole('button', { name: 'Ponów operację', exact: true }).click(); await lost.getByText('W toku · Wersja 2', { exact: true }).waitFor();
   assert.deepEqual(sent[0], sent[1]);
@@ -112,9 +122,19 @@ try {
     try { await route.fulfill({ response }); } catch (error) { if (!error.message.includes('Route is already handled')) throw error; } finally { lateSettled(); }
   });
   await row(page, 'Spóźniona odpowiedź').getByRole('button', { name: 'Rozpocznij zadanie' }).click(); await lateArrival;
-  await page.locator('#active-organization').selectOption(companyB); await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor();
-  lateRelease(); await lateDone; assert.equal(await page.locator('.task-row').count(), 0); assert.equal(await page.getByText('Serwer potwierdził', { exact: false }).count(), 0); await context.close();
-  console.log('PASS late command results are discarded after company switch');
+  await navigateWorkspace(page, 'Pulpit');
+  await navigateWorkspace(page, 'Projekty');
+  assert(await row(page, 'Spóźniona odpowiedź').getByRole('button', { name: 'Oczekiwanie na serwer…' }).isDisabled());
+  page.removeAllListeners('dialog');
+  let blocked = false;
+  page.once('dialog', async dialog => { assert.equal(dialog.type(), 'alert'); blocked = true; await dialog.accept(); });
+  await page.locator('#active-organization').selectOption(companyB);
+  assert(blocked, 'Company switching must block while a task command awaits confirmation');
+  assert.equal(await page.locator('#active-organization').inputValue(), company);
+  lateRelease(); await lateDone;
+  await row(page, 'Spóźniona odpowiedź').getByText('Serwer potwierdził rozpoczęcie zadania.', { exact: true }).waitFor();
+  await selectCompany(page, companyB); await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor(); assert.equal(await page.locator('.task-row').count(), 0); assert.equal(await page.getByText('Serwer potwierdził', { exact: false }).count(), 0); await context.close();
+  console.log('PASS pending commands survive section navigation, block company switching, and never leak after a confirmed switch');
   const mobile = await open('worker', true), mobileRow = row(mobile.page, 'Mobilne');
   const button = mobileRow.getByRole('button', { name: 'Rozpocznij zadanie' }); assert((await button.boundingBox()).height >= 44);
   await button.click(); await mobileRow.getByText('W toku · Wersja 2', { exact: true }).waitFor();

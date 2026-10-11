@@ -1,3 +1,4 @@
+import { guardWorkspaceChange, usePendingOperation } from './workspace/navigation-safety.js';
 import { useEffect, useState, type FormEvent } from 'react';
 
 type Employee = { id: string; membershipId: string | null; displayName: string; position: string; phone: string; status: string };
@@ -24,6 +25,7 @@ export function CompanyMembers({ organizationId, csrfToken, onAccessChanged }: {
   const [revision, setRevision] = useState(0);
   const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState<Employee | null>(null);
+  usePendingOperation(busy);
   const path = `/api/organizations/${encodeURIComponent(organizationId)}`;
   useEffect(() => {
     const controller = new AbortController();
@@ -75,7 +77,7 @@ export function CompanyMembers({ organizationId, csrfToken, onAccessChanged }: {
     {notice && <p role="status">{notice}</p>}
     <div className="member-toolbar"><label>Pokaż<select aria-label="Pokaż" value={filter} onChange={event => setFilter(event.target.value)}>
       <option value="all">Wszystkich</option><option value="active">Aktywnych</option><option value="inactive">Nieaktywnych</option><option value="pending">Oczekujących</option>
-    </select></label><button className="secondary" disabled={busy || loading} onClick={() => { setError(''); setRevision(current => current + 1); }}>Odśwież listę</button></div>
+    </select></label><button className="secondary" disabled={busy || loading} onClick={event => { if (guardWorkspaceChange(event.currentTarget.closest('section')!)) { setError(''); setRevision(current => current + 1); } }}>Odśwież listę</button></div>
     {loading ? <p role="status">Ładowanie członków i pracowników…</p> : <>
       <h4>Członkostwa z kontem</h4>
       <div className="member-list">{visible(members).map(member => <article className="member-row" key={member.id}>
@@ -88,14 +90,14 @@ export function CompanyMembers({ organizationId, csrfToken, onAccessChanged }: {
           <input type="checkbox" checked={member.roles.includes(role)} onChange={event => void mutate(`members/${member.id}/roles/${event.target.checked ? 'assign' : 'remove'}`, { role })} />{name}
         </label>)}</fieldset>
           {statusAction('members', member)}
-          {member.employee && <button className="secondary" disabled={busy} onClick={() => setEditing(member.employee)}>Edytuj profil</button>}
+          {member.employee && <button className="secondary" disabled={busy} onClick={event => { if (guardWorkspaceChange(event.currentTarget.closest('section')!)) setEditing(member.employee); }}>Edytuj profil</button>}
         </div>
       </article>)}</div>
       {!visible(members).length && <p>Brak członkostw w wybranym filtrze.</p>}
-      <h4>Pracownicy bez konta</h4>
+      <h4>Profile pracowników bez konta</h4><p className="hint">Profil opisuje pracownika w firmie. Nie tworzy konta logowania. Dostęp do aplikacji przyznaj przez zaproszenie, a następnie przydział do projektu.</p>
       <div className="member-list">{visible(employees.filter(employee => !employee.membershipId)).map(employee => <article className="member-row" key={employee.id}>
         <div><strong>{employee.displayName}</strong><p>{[employee.position, employee.phone].filter(Boolean).join(' · ')}</p><p>{states[employee.status]} · Bez konta logowania</p></div>
-        <div><button className="secondary" disabled={busy} onClick={() => setEditing(employee)}>Edytuj profil</button>{statusAction('employees', employee)}</div>
+        <div><button className="secondary" disabled={busy} onClick={event => { if (guardWorkspaceChange(event.currentTarget.closest('section')!)) setEditing(employee); }}>Edytuj profil</button>{statusAction('employees', employee)}</div>
       </article>)}</div>
       {!visible(employees.filter(employee => !employee.membershipId)).length && <p>Brak pracowników bez konta w wybranym filtrze.</p>}
     </>}

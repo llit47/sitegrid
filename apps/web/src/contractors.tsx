@@ -1,3 +1,4 @@
+import { guardWorkspaceChange, usePendingOperation } from './workspace/navigation-safety.js';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 export type ProjectContractor = { id: string; name: string; status: string };
@@ -15,6 +16,7 @@ export function useContractorDirectory(organizationId: string, enabled: boolean,
   const [contractors, setContractors] = useState<Contractor[] | null>(null);
   const [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false), [busy, setBusy] = useState(false), [revision, setRevision] = useState(0);
+  usePendingOperation(busy);
   const lifetime = useRef<AbortController | null>(null);
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
   useEffect(() => {
@@ -49,7 +51,7 @@ export function useContractorDirectory(organizationId: string, enabled: boolean,
   return { contractors: enabled ? contractors : null, loading, busy, error, notice, revision,
     refresh: () => { setNotice(''); setRevision(value => value + 1); }, save };
 }
-type Directory = ReturnType<typeof useContractorDirectory>;
+export type Directory = ReturnType<typeof useContractorDirectory>;
 function ContractorForm({ current, directory }: { current?: Contractor; directory: Directory }) {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -67,7 +69,7 @@ function ContractorForm({ current, directory }: { current?: Contractor; director
 }
 export function ContractorDirectory({ directory }: { directory: Directory }) {
   return <section className="contractors" aria-label="Kontrahenci firmy">
-    <div className="project-toolbar"><h3>Kontrahenci</h3><button className="secondary" disabled={directory.busy || directory.loading} onClick={directory.refresh}>Wczytaj kontrahentów ponownie</button></div>
+    <div className="project-toolbar"><h3>Kontrahenci</h3><button className="secondary" disabled={directory.busy || directory.loading} onClick={event => { if (guardWorkspaceChange(event.currentTarget.closest('section')!)) directory.refresh(); }}>Wczytaj kontrahentów ponownie</button></div>
     <p className="hint">Dezaktywacja zachowuje powiązania projektów. Po konflikcie propozycja pozostaje w formularzu; ponowne wczytanie zastępuje niezapisane formularze kontrahentów.</p>
     {directory.error && <p className="error" role="alert">{directory.error}</p>}
     {directory.notice && <p role="status">{directory.notice}</p>}
@@ -94,7 +96,7 @@ export function ContractorSelect({ contractors, current, value, onChange, disabl
   contractors: Contractor[] | null; current?: ProjectContractor | null; value: string; onChange: (value: string) => void; disabled: boolean;
 }) {
   const selected = contractors?.find(item => item.id === value) ?? (current?.id === value ? current : null);
-  return <label>Kontrahent projektu<select aria-label="Kontrahent projektu" name="contractorId" value={value} onChange={event => onChange(event.target.value)} disabled={disabled || !contractors}>
+  return <label>Kontrahent projektu<select aria-label="Kontrahent projektu" name="contractorId" value={value} data-initial-value={current?.id ?? ''} onChange={event => onChange(event.target.value)} disabled={disabled || !contractors}>
     <option value="">Bez kontrahenta (projekt wewnętrzny lub historyczny)</option>
     {selected && selected.status === 'inactive' && <option value={selected.id} disabled>{selected.name} (nieaktywny — {current?.id === selected.id ? 'istniejące powiązanie' : 'wybierz innego'})</option>}
     {!contractors && current && current.status === 'active' && <option value={current.id}>{current.name}</option>}

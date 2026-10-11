@@ -1,3 +1,4 @@
+import { usePendingOperation } from './workspace/navigation-safety.js';
 import { useEffect, useRef, useState } from 'react';
 
 export type ProgressTask = { id: string; status: string; version: number; canProgress?: boolean };
@@ -13,6 +14,7 @@ export function TaskProgress({ task, path, csrfToken, writable, disabled, onConf
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(false);
   const [conflict, setConflict] = useState(false);
+  usePendingOperation(busy || retry);
   const command = useRef<Command | null>(null);
   const sending = useRef(false);
   const lifetime = useRef<AbortController | null>(null);

@@ -1,3 +1,4 @@
+import { selectCompany, acceptDiscardDialogs } from './helpers/workspace-browser.mjs';
 // Production PWA + real browser IndexedDB, with synthetic PostgreSQL/runtime RLS.
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
@@ -87,7 +88,7 @@ async function invitationRegression(mobile, offlineLaunch, issuer) {
       });
       observer.observe(document, { childList: true, subtree: true });
     });
-    const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+    const page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message));
     await page.goto(config.origin);
     await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
     await page.waitForFunction(() => navigator.serviceWorker.controller);
@@ -192,20 +193,20 @@ try {
   for (const mobile of [false, true]) {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     await context.addCookies([{ name: 'sitegrid', value: token, url: config.origin, httpOnly: true, sameSite: 'Strict' }]);
-    let page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+    let page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message));
     let ownSessionReads = 0;
     page.on('request', request => { if (new URL(request.url()).pathname === '/api/auth/session') ownSessionReads++; });
     await page.goto(config.origin);
     await page.getByText('Powłoka aplikacji gotowa do otwarcia offline.', { exact: true }).waitFor();
     await page.waitForFunction(() => navigator.serviceWorker.controller);
-    await page.locator('#active-organization').selectOption(company);
+    await selectCompany(page, company);
     await page.getByRole('button', { name: 'Poufny projekt A Aktywny Kontrahent: Poufny kontrahent A', exact: true }).click();
     await page.getByText('Poufne zadanie A', { exact: true }).waitFor();
     await page.getByRole('button', { name: mobile ? 'Zgłoś do odbioru' : 'Rozpocznij zadanie', exact: true }).click();
     await page.getByText(mobile ? 'Serwer potwierdził zgłoszenie do odbioru.' : 'Serwer potwierdził rozpoczęcie zadania.', { exact: true }).waitFor();
-    await page.locator('#active-organization').selectOption(companyB);
+    await selectCompany(page, companyB);
     await page.getByText('Brak dostępnych projektów.', { exact: false }).waitFor();
-    await page.locator('#active-organization').selectOption(company);
+    await selectCompany(page, company);
     await page.getByRole('button', { name: 'Poufny projekt A Aktywny Kontrahent: Poufny kontrahent A', exact: true }).click();
     await page.getByText('Poufne zadanie A', { exact: true }).waitFor();
     assert.equal(await page.locator('.project-details').getByText('Kontrahent: Poufny kontrahent A', { exact: true }).count(), 1);
@@ -323,7 +324,7 @@ try {
       assert.equal(await updateTab.evaluate(async () => (await caches.keys()).filter(name => name.startsWith('sitegrid-shell-v1-')).length), 2);
       assert(await updateTab.getByText('second@example.test', { exact: true }).isVisible());
       await updateTab.close();
-      page = await context.newPage(); page.on('pageerror', error => errors.push(error.message)); await page.goto(config.origin);
+      page = await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message)); await page.goto(config.origin);
       await page.waitForFunction(async () => (await navigator.serviceWorker.getRegistration()).active?.state === 'activated' &&
         (await caches.keys()).includes('sitegrid-shell-v1-' + 'b'.repeat(64)) && (await caches.keys()).filter(name => name.startsWith('sitegrid-shell-v1-')).length === 1);
       assert(await page.evaluate(async () => (await caches.keys()).includes('unrelated-app-cache')));
@@ -336,7 +337,7 @@ try {
   }
   const unavailable = await browser.newContext();
   await unavailable.addInitScript(() => { Object.defineProperty(window, 'BroadcastChannel', { value: class { constructor() { throw new DOMException('Denied', 'SecurityError'); } } }); Object.defineProperty(window, 'indexedDB', { get() { throw new DOMException('Denied', 'SecurityError'); } }); delete Object.getPrototypeOf(navigator).serviceWorker; });
-  const page = await unavailable.newPage(); page.on('pageerror', error => errors.push(error.message)); await page.goto(config.origin);
+  const page = await unavailable.newPage(); acceptDiscardDialogs(page); page.on('pageerror', error => errors.push(error.message)); await page.goto(config.origin);
   await page.getByText('Pamięć lokalna niedostępna', { exact: false }).waitFor();
   await page.getByText('Powłoka offline niedostępna.', { exact: false }).waitFor();
   await page.locator('#email').fill('second@example.test'); await page.locator('#password').fill('Synthetic-password-15');

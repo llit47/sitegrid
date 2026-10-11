@@ -1,3 +1,4 @@
+import { guardWorkspaceChange, usePendingOperation } from './workspace/navigation-safety.js';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 export type Branding = { organizationId: string; name: string; accentColor: string; version: number;
@@ -30,6 +31,7 @@ export function CompanyBranding({ branding, csrfToken, onSaved, onAccessChanged 
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [conflict, setConflict] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  usePendingOperation(busy);
   const controller = useRef(new AbortController());
   useEffect(() => { const active = controller.current; return () => active.abort(); }, []);
   const path = `/api/organizations/${encodeURIComponent(branding.organizationId)}/branding`;
@@ -84,7 +86,7 @@ export function CompanyBranding({ branding, csrfToken, onSaved, onAccessChanged 
     {notice && <p role="status">{notice}</p>}
     <p className="hint">Nazwa, kolor i logo dotyczą wyłącznie wybranej firmy.</p>
     {conflict && <p role="status">Zapis jest wstrzymany. Twój formularz pozostaje na ekranie; odświeżenie zastąpi go aktualnymi danymi firmy.</p>}
-    <button type="button" className="secondary" disabled={busy} onClick={() => void refresh()}>Odśwież ustawienia</button>
+    <button type="button" className="secondary" disabled={busy} onClick={event => { if (guardWorkspaceChange(event.currentTarget.closest('section')!)) void refresh(); }}>Odśwież ustawienia</button>
     <form key={`settings-${branding.version}`} onSubmit={save}>
       <label>Nazwa firmy<input name="name" defaultValue={branding.name} maxLength={400} required disabled={busy || conflict} /></label>
       <label>Kolor firmowy<input name="accentColor" type="color" defaultValue={branding.accentColor} disabled={busy || conflict} /></label>

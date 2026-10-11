@@ -1,3 +1,4 @@
+import { selectCompany, acceptDiscardDialogs } from './helpers/workspace-browser.mjs';
 // Disposable online M07 UI smoke, using the same real owner/runtime databases as CI.
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -56,7 +57,7 @@ try {
   const login = async (actor, mobile = false) => {
     const context = await browser.newContext({ serviceWorkers: 'block', viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     const page = await context.newPage();
-    page.on('pageerror', e => errors.push(e.message));
+    acceptDiscardDialogs(page); page.on('pageerror', e => errors.push(e.message));
     page.on('console', msg => { if (msg.text().includes('Content Security Policy')) cspErrors.push(msg.text()); });
     await page.goto(config.origin); await page.locator('#email').fill(`${actor.toLowerCase()}@example.test`); await page.locator('#password').fill(password);
     await page.getByRole('button', { name: 'Zaloguj się', exact: true }).click();
@@ -66,23 +67,24 @@ try {
       initialListFetched(); await initialListGate;
       await route.fulfill({ response }); initialListFinished();
     }, { times: 1 });
-    await page.locator('#active-organization').selectOption(companyA); await page.locator('.projects').waitFor();
+    await selectCompany(page, companyA); await page.locator('.projects').waitFor();
     return { context, page };
   };
   const { context, page } = await login('dual');
   const projects = page.locator('.projects'), details = projects.locator('.project-details');
   await initialListSnapshot;
   await projects.getByText('Ładowanie projektów…', { exact: true }).waitFor();
+  await projects.getByRole('button', { name: 'Nowy projekt', exact: true }).click();
   const creation = projects.locator('.project-form').last();
   await creation.getByLabel('Nazwa projektu', { exact: true }).fill('Budowa A'); await creation.getByLabel('Opis projektu (opcjonalnie)').fill('Prace montażowe');
   await creation.getByRole('button', { name: 'Utwórz projekt', exact: true }).click();
   await details.getByRole('heading', { name: 'Budowa A', exact: true }).waitFor();
-  const createdChoice = projects.getByRole('button', { name: 'Budowa A Aktywny', exact: true });
+  const createdChoice = projects.getByRole('button', { name: 'Budowa A Aktywny Bez kontrahenta', exact: true });
   assert.equal(await createdChoice.getAttribute('aria-pressed'), 'true');
   assert.equal(await projects.getByText('Ładowanie projektów…', { exact: true }).count(), 0);
   releaseInitialList(); await initialListDelivery;
   // Seeing the old snapshot's row proves the released GET has reached React state.
-  await projects.getByRole('button', { name: 'Projekt istniejący Aktywny', exact: true }).waitFor();
+  await projects.getByRole('button', { name: 'Projekt istniejący Aktywny Bez kontrahenta', exact: true }).waitFor();
   assert(await createdChoice.isVisible(), 'The stale initial GET must preserve the newly created project');
   assert.equal(await createdChoice.getAttribute('aria-pressed'), 'true', 'The created project must remain selected');
   assert.equal(await projects.locator('.project-choice').count(), 2);
@@ -94,11 +96,13 @@ try {
     await details.getByRole('button', { name: `Przydziel: ${displayName}`, exact: true }).click();
     await details.getByRole('button', { name: `Odbierz przydział: ${displayName}`, exact: true }).waitFor();
   }
+  await details.getByRole('button', { name: 'Nowe zadanie', exact: true }).click();
   const taskForm = details.locator('.task-form');
   await taskForm.getByLabel('Tytuł zadania', { exact: true }).fill('Drzwi pracownika');
   await taskForm.getByLabel('Opis zadania (opcjonalnie)').fill('Zamontuj drzwi'); await taskForm.getByLabel('Wykonawca', { exact: true }).selectOption(members.worker);
   await taskForm.getByRole('button', { name: 'Utwórz zadanie', exact: true }).click();
   await details.locator('.task-row').filter({ hasText: 'Drzwi pracownika' }).waitFor();
+  await details.getByRole('button', { name: 'Nowe zadanie', exact: true }).click();
   await taskForm.getByLabel('Tytuł zadania', { exact: true }).fill('Własne kierownika'); await taskForm.getByLabel('Wykonawca', { exact: true }).selectOption(members.dual);
   await taskForm.getByRole('button', { name: 'Utwórz zadanie', exact: true }).click();
   await details.locator('.task-row').filter({ hasText: 'Własne kierownika' }).waitFor();
@@ -114,7 +118,7 @@ try {
   assert.equal(await taskForm.getByLabel('Tytuł zadania', { exact: true }).inputValue(), 'Lokalny szkic');
   await details.getByRole('button', { name: 'Wczytaj aktualne dane', exact: true }).click();
   await details.locator('.task-row').filter({ hasText: 'Z innej karty' }).waitFor();
-  assert.equal(await taskForm.getByLabel('Tytuł zadania', { exact: true }).inputValue(), '');
+  assert.equal(await taskForm.count(), 0, 'Explicit refresh closes the discarded task form');
   await details.locator('.task-row').filter({ hasText: 'Z innej karty' }).getByRole('button', { name: 'Edytuj zadanie', exact: true }).click();
   await taskForm.getByLabel('Wykonawca', { exact: true }).selectOption(members.dual); await taskForm.getByRole('button', { name: 'Zapisz zadanie', exact: true }).click();
   await page.waitForFunction(() => [...document.querySelectorAll('.task-row')].find(row => row.textContent.includes('Z innej karty'))?.textContent.includes('Kierownik A'));
@@ -126,17 +130,17 @@ try {
   // Add a second project and prove empty/error/loading views and late response isolation.
   const second = (await api(`/api/organizations/${companyA}/projects`, { name: 'Budowa druga' })).project;
   await projects.getByRole('button', { name: 'Odśwież projekty', exact: true }).click();
-  await projects.getByRole('button', { name: 'Budowa druga Aktywny', exact: true }).waitFor();
+  await projects.getByRole('button', { name: 'Budowa druga Aktywny Bez kontrahenta', exact: true }).waitFor();
   assert.equal(await projects.locator('.project-choice[aria-pressed="true"]').count(), 0, 'Manual refresh clears selection');
   assert.equal(await details.count(), 0);
   assert.equal(await projects.locator('.project-choice').count(), 3, 'Manual refresh reloads the full server list');
-  await projects.getByRole('button', { name: 'Budowa druga Aktywny', exact: true }).click();
+  await projects.getByRole('button', { name: 'Budowa druga Aktywny Bez kontrahenta', exact: true }).click();
   await details.getByRole('heading', { name: 'Budowa druga', exact: true }).waitFor();
   await details.getByRole('button', { name: 'Przydziel: Kierownik A', exact: true }).click();
   await details.getByText('Brak zadań w Twoim zakresie.', { exact: true }).waitFor();
   const taskUrl = `${config.origin}${projectPath}/tasks`;
   await page.route(taskUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Testowy błąd połączenia.' }) }));
-  await projects.getByRole('button', { name: 'Budowa A Aktywny', exact: true }).click();
+  await projects.getByRole('button', { name: 'Budowa A Aktywny Bez kontrahenta', exact: true }).click();
   await details.getByRole('alert').filter({ hasText: 'Testowy błąd' }).waitFor(); assert.equal(await details.locator('.task-row').count(), 0);
   await page.unroute(taskUrl); await details.getByRole('button', { name: 'Wczytaj aktualne dane', exact: true }).click();
   await details.locator('.task-row').filter({ hasText: 'Z innej karty' }).waitFor();
@@ -151,23 +155,23 @@ try {
   });
   await details.getByRole('button', { name: 'Wczytaj aktualne dane', exact: true }).click(); await intercepted;
   await details.getByText('Ładowanie projektu i zadań…', { exact: true }).waitFor();
-  await projects.getByRole('button', { name: 'Budowa druga Aktywny', exact: true }).click();
+  await projects.getByRole('button', { name: 'Budowa druga Aktywny Bez kontrahenta', exact: true }).click();
   await details.getByRole('heading', { name: 'Budowa druga', exact: true }).waitFor(); release(); await finished; await page.unroute(taskUrl);
   assert.equal(await details.locator('.task-row').count(), 0);
-  await page.locator('#active-organization').selectOption(companyB);
+  await selectCompany(page, companyB);
   await projects.getByText('Brak dostępnych projektów.', { exact: false }).waitFor(); assert.equal(await projects.locator('.task-row').count(), 0); assert.equal(await projects.locator('.project-form').count(), 0);
   console.log('PASS loading/empty/error/retry and delayed responses across projects and companies');
   await context.close();
   const mobile = await login('worker', true);
-  await mobile.page.locator('.projects').getByRole('button', { name: 'Budowa A Aktywny', exact: true }).click();
+  await mobile.page.locator('.projects').getByRole('button', { name: 'Budowa A Aktywny Bez kontrahenta', exact: true }).click();
   await mobile.page.locator('.task-row').filter({ hasText: 'Z innej karty' }).waitFor();
   assert.equal(await mobile.page.locator('.task-row').count(), 1); assert.equal(await mobile.page.locator('.task-form').count(), 0);
   assert.equal(await mobile.page.locator('.project-roster').count(), 0); assert.equal(await mobile.page.getByRole('button', { name: 'Edytuj zadanie', exact: true }).count(), 0);
   assert(await mobile.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Mobile must not overflow horizontally');
   await mobile.page.screenshot({ path: '/tmp/sitegrid-pr12-worker-mobile.png', fullPage: true }); await mobile.context.close();
-  const foreman = await login('foreman'); await foreman.page.locator('.projects').getByRole('button', { name: 'Budowa A Aktywny', exact: true }).click();
+  const foreman = await login('foreman'); await foreman.page.locator('.projects').getByRole('button', { name: 'Budowa A Aktywny Bez kontrahenta', exact: true }).click();
   await foreman.page.locator('.task-row').filter({ hasText: 'Z innej karty' }).waitFor(); assert.equal(await foreman.page.locator('.task-row').count(), 2); assert.equal(await foreman.page.locator('.task-form').count(), 0); await foreman.context.close();
-  const adminOnly = await login('adminOnly', true); await adminOnly.page.locator('.projects').getByRole('button', { name: 'Budowa A Aktywny', exact: true }).click();
+  const adminOnly = await login('adminOnly', true); await adminOnly.page.locator('.projects').getByRole('button', { name: 'Budowa A Aktywny Bez kontrahenta', exact: true }).click();
   await adminOnly.page.locator('.project-details').getByText('Dostęp do zadań wymaga', { exact: false }).waitFor(); assert.equal(await adminOnly.page.locator('.task-row').count(), 0);
   assert(await adminOnly.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   await adminOnly.page.screenshot({ path: '/tmp/sitegrid-pr12-admin-mobile.png', fullPage: true });
