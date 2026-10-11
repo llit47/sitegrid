@@ -2,7 +2,22 @@
 
 Data: 2026-10-09. Normatywna propozycja własnego produktu powiązana z [architekturą](ARCHITECTURE.md); nie opis uprawnień referencyjnego HERC. Wszystkie operacje podlegają autoryzacji API i izolacji danych. Ukrycie przycisku nie jest zabezpieczeniem.
 
-## Role i zakresy
+## Docelowe uprawnienia zadań — decyzja 2026-10-11 (jeszcze niewdrożone)
+
+**Źródło prawdy dla nowych PR-ów:** [Zarządzanie zadaniami v2](../TASK_MANAGEMENT_V2.md). Poniższa historyczna macierz opisuje istniejący kod v0.1.1 i nie może być stosowana jako docelowe wymaganie PR21–PR23.
+
+| Operacja | Administrator firmy | Kierownik | Brygadzista | Pracownik |
+|---|---|---|---|---|
+| Wszystkie zadania projektów **własnej firmy** | Tak | Tak | Tak | Nie |
+| Tworzenie/backlog bez wykonawcy | Tak | Tak | Tak | Nie |
+| Przydzielanie i edycja zadań | Tak | Tak | Tak | Nie |
+| Podzadania, zarządzanie | Tak | Tak | Tak | Nie |
+| Komentowanie/zdjęcia | Dostępne zadania | Dostępne zadania | Dostępne zadania | Wyłącznie swoje przypisane |
+| Własne komendy postępu | Tylko własne przydziały wykonawcze | Tylko własne | Tylko własne | Tylko własne |
+
+**Bez wyjątku platformowego:** administrator platformy nie otrzymuje domyślnego dostępu do zadań firm. Manager/foreman nie wymagają osobnego przydziału do każdego projektu; przypisanie zadania pracownikowi daje automatycznie **minimalny** dostęp do zadania i kontekstu jego projektu, ale nie do innych zadań, zdjęć, komentarzy i list pracowników. Przestrzegać odwołania przydziału, aktywności konta/członkostwa, wyścigów zapisu, izolacji RLS. Zmiana uprawnień nie nadaje prawa do dokonywania postępu w imieniu innego pracownika. Odbiory rozstrzygamy w osobnym etapie M14.
+
+## Stan wdrożenia v0.1.1 — historyczne role i zakresy
 
 | Operacja | Administrator platformy | Administrator firmy | Kierownik | Brygadzista | Pracownik |
 |---|---|---|---|---|---|
