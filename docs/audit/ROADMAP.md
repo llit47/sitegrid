@@ -1,6 +1,6 @@
 > **Aktualizacja decyzji 2026-10-11 (plan, niewdrożony w v0.1.1):** kolejność realizacji zmieniono na PR20 (dokumentacja) → PR21 (backlog, uprawnienia i zadaniowy pulpit) → PR22 (podzadania) → PR23 (komentarze i zdjęcia), następnie M11/M12 (offline). Kanoniczna specyfikacja: [Zarządzanie zadaniami v2](../TASK_MANAGEMENT_V2.md). Wcześniejsze opisy M07–M10 i kolumny historycznych PR-ów dokumentują aktualny kod, nie docelowe uprawnienia. Wymóg niezawodności offline przed pilotażem pozostaje, lecz nie zastępuje użytecznego przepływu zadań.
 
-> **Implementacja PR22:** PR21 jest scalony; [podzadania](../SUBTASKS.md) w bieżącej gałęzi wymagają schematu 13. [PR23](../TASK_COMMENTS_MEDIA.md) w bieżącej gałęzi dodaje dyskusje online i spójny backup/restore DB+files (schema14), potem M11/M12; bramki pilotażu pozostają nieukończone.
+> **Stan main / przygotowanie v0.1.3:** PR21–PR23 są scalone. [Podzadania](../SUBTASKS.md), [dyskusje online i spójny backup/restore DB+files](../TASK_COMMENTS_MEDIA.md) wymagają schematu 14. Następne M11/M12 i bramki pilotażu pozostają nieukończone.
 
 # SiteGrid — roadmapa małego MVP offline-first
 
@@ -40,7 +40,7 @@ To **wąski pierwszy przyrost**, nie ukończone MVP. Obsługa wielu firm, zapros
 | 20 — scalony | Dokumentacja nowego modelu | Wspólna specyfikacja; bez zmian runtime |
 | 21 — scalony | Backlog + lista zadań wszystkich projektów + pulpit per rola | Zadanie bez wykonawcy; kierownik/brygadzista/admin firmy zarządzają całą firmą; pracownik widzi wyłącznie swoje; testy autoryzacji/migracji/UX |
 | 22 — scalony | Podzadania | Własne przypisania/statusy, kontrola hierarchii, brak ujawniania rodzeństwa |
-| 23 — implementacja w bieżącej gałęzi | Komentarze i fotografie online | Historia, prywatne media, autoryzacja i sprawdzony backup/restore plików |
+| 23 — scalony | Komentarze i fotografie online | Historia, prywatne media, autoryzacja i sprawdzony backup/restore plików |
 | Dalej M11–M12 | Trwałe zapisy offline, retry i konflikty | Nie utracić lokalnych operacji ani nowego zakresu dostępów |
 
 Plany projektu, pliki PDF/rysunki i ich podpinanie do zadań są odłożone. M13–M15 nadal obowiązują, lecz terminy i numery PR wymagają ponownego ustalenia po PR23. Historyczna tabela niżej wyraża zależności funkcjonalne M01–M15, a nie aktualną kolejność prac.

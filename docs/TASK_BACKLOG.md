@@ -1,4 +1,4 @@
-> **PR22 — bieżąca gałąź:** [Podzadania](SUBTASKS.md) rozszerzają ten kontrakt. Schemat 13, lista firmowa obejmuje każde autoryzowane zadanie/podzadanie dokładnie raz. Poniższy opis pozostaje dokumentacją PR21/schema 12.
+> **PR21–PR23 scalone / przygotowanie v0.1.3:** [Podzadania](SUBTASKS.md) i [komentarze/prywatne media online](TASK_COMMENTS_MEDIA.md) rozszerzają ten kontrakt. Schemat 14; lista firmowa obejmuje każde autoryzowane zadanie/podzadanie dokładnie raz. Poniższy opis pozostaje dokumentacją PR21/schema 12.
 
 # PR21 — backlog, zadania firmy i pulpit pracy
 

@@ -2,9 +2,9 @@
 
 Self-hosted platforma projektów budowlanych i pracy wielu firm. React/TypeScript, Fastify i PostgreSQL; pełne MVP obejmie PWA i podstawową pracę offline. M01 dostarcza działające logowanie administratora oraz mechanizm instalacji, aktualizacji i rollbacku. Instalacja wyłącznie **w gotowym Debianie 13 z systemd**, również w LXC.
 
-**PR #5 pozostaje roboczy. Pierwszy oficjalny Release nie został opublikowany.** Bootstrap i publiczny kanał przetestowano na lokalnych podpisanych fixture w świeżym Debianie 13; URL poniżej jest wzorcem przyszłej instrukcji, nie działającym wydaniem. Status i ograniczenia: [M01_STATUS.md](docs/M01_STATUS.md).
+**Przygotowywane wydanie: v0.1.3, po scaleniu PR23; PostgreSQL schema 14.** [Oficjalne wydania](https://github.com/llit47/sitegrid/releases) obejmują v0.1.0–v0.1.2. [Release notes v0.1.3](docs/releases/v0.1.3.md) i [procedura podpisanego Draft Release](docs/RELEASES.md). Historyczny status M01: [M01_STATUS.md](docs/M01_STATUS.md).
 
-Po zatwierdzeniu pierwszego Release operator jako root wklei jedno polecenie wygenerowane w `INSTALL_COMMAND.txt`. Docelowy wzorzec (placeholdery zastępuje builder, bez ręcznego kopiowania `ops/` lub paczki):
+Dla opublikowanego wydania operator jako root wkleja komendę z jego `INSTALL_COMMAND.txt`, po sprawdzeniu zaufanej instrukcji. Wzorzec (placeholdery zastępuje builder, bez ręcznego kopiowania `ops/` lub paczki):
 
 ```sh
 bash -c 'set -euo pipefail; test "$(id -u)" = 0; . /etc/os-release; test "$ID:$VERSION_ID" = debian:13; apt-get update; apt-get install -y ca-certificates curl; f=$(mktemp); trap '\''rm -f -- "$f"'\'' EXIT; curl --disable --fail --silent --show-error --location --proto =https --proto-redir =https "https://github.com/llit47/sitegrid/releases/download/v<VERSION>/sitegrid-install-<VERSION>.sh" -o "$f"; echo "<BOOTSTRAP_SHA256>  $f" | sha256sum --check --status; bash "$f"'
@@ -34,4 +34,4 @@ Tryb manualny update nadal działa z `--bundle`, `--version` i `--sha256`. Rollb
 
 HERC pozostaje osobną aplikacją referencyjną: [audyt funkcjonalny](docs/audit/FUNCTIONALITY.md) i [ocena UX](docs/audit/UX_REVIEW.md).
 
-PR22: [podzadania, niezależny postęp i minimalny kontekst rodzica](docs/SUBTASKS.md), schemat 13 w bieżącej gałęzi. Komentarze, zdjęcia i trwała kolejka offline pozostają osobnymi etapami.
+Scalone PR22/PR23: [podzadania](docs/SUBTASKS.md) oraz [komentarze i prywatne zdjęcia online, backup/restore PostgreSQL + media](docs/TASK_COMMENTS_MEDIA.md). Schemat 14; trwała kolejka offline M11/M12 pozostaje osobnym etapem.

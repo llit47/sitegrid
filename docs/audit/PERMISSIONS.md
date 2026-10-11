@@ -2,7 +2,7 @@
 
 Data: 2026-10-09. Normatywna propozycja własnego produktu powiązana z [architekturą](ARCHITECTURE.md); nie opis uprawnień referencyjnego HERC. Wszystkie operacje podlegają autoryzacji API i izolacji danych. Ukrycie przycisku nie jest zabezpieczeniem.
 
-## Uprawnienia zadań — PR21 (bieżąca gałąź)
+## Uprawnienia zadań — PR21–PR23 (scalone, przygotowanie v0.1.3)
 
 **Implementacja backlogu/pulpitu:** [PR21](../TASK_BACKLOG.md). [PR22](../SUBTASKS.md) implementuje podzadania: zarządzający ma całą hierarchię, pracownik wyłącznie własne dzieci i ID/tytuł rodzica, bez rodzeństwa/liczników. [PR23](../TASK_COMMENTS_MEDIA.md): pełna dyskusja i fotografie dostępnego zadania niezależnie od autora; pracownik tylko własny przydział, bez parent/sibling media; archiwum tylko odczyt. Każdy plik sprawdza aktualną sesję, firmę i konkretne zadanie. Nieaktywny autor pozostaje w historii; platforma bez wyjątku. **Źródło prawdy dla nowych PR-ów:** [Zarządzanie zadaniami v2](../TASK_MANAGEMENT_V2.md). Poniższa historyczna macierz opisuje istniejący kod v0.1.1 i nie może być stosowana jako docelowe wymaganie PR21–PR23.
 

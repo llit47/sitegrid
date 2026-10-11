@@ -2,13 +2,29 @@
 
 Repozytorium i kanał instalacji: publiczne GitHub Releases `llit47/sitegrid`. Klient nie używa uwierzytelnienia GitHub. Wydawca podpisuje manifest Ed25519; klucz publiczny jest przypięty w bootstrapie i kontrolerze instalacji. SHA-256 obok paczki ma znaczenie pomocnicze; autentyczność pochodzi z podpisu i przypiętego klucza, a pierwsze wykonanie bootstrapu z sumy przypiętej w zaufanej instrukcji.
 
+## v0.1.3 — przygotowanie po scaleniu PR23
+
+Wersje package/lock/release i domyślna wersja CI: **0.1.3**. PostgreSQL target/min/max **14**, upgrade **0–14**. [Zwięzłe release notes](releases/v0.1.3.md) obejmują dyskusje zadań/podzadań, prywatne zdjęcia, autoryzowany odczyt mediów, spójny backup/restore DB+files i ograniczenia online. Historyczne kontrakty PR-ów poniżej zachowują swoje wersje i schematy.
+
+Po merge i sukcesie CI na wybranym main operator wykonuje poniższe polecenia z czystego checkoutu. Ten etap przygotowania nie tworzy tagu ani Release.
+
+```sh
+git switch main &&
+git pull --ff-only origin main &&
+test "$(gh run list --workflow ci.yml --branch main --commit "$(git rev-parse HEAD)" --limit 1 --json conclusion --jq '.[0].conclusion')" = success &&
+git tag -a v0.1.3 -m "SiteGrid v0.1.3" HEAD &&
+git push origin refs/tags/v0.1.3
+```
+
+Push tagu uruchamia istniejący workflow `release.yml`: ponowny CI tej wersji, bramka środowiska `release-signing`, podpisanie sprawdzonej paczki i **Draft Release**. Operator zatwierdza środowisko w GitHub Actions; klucz pozostaje sekretem Actions. Nie podpisywać oficjalnych artefaktów lokalnie ani publikować Draft automatycznie. Workflow generuje notes z przypiętą komendą instalacji i fingerprintem; przygotowane notes funkcjonalne należy dołączyć podczas przeglądu Draft, zachowując te wygenerowane informacje.
+
 ## Przygotowanie klucza i wydania
 
 1. Klucz wydawcy wygenerowano po zgodzie użytkownika; do `ops/release-public.pem` trafiła tylko publiczna część Ed25519 (SHA-256 pliku PEM: `3a6e17d95f6db366e851e530f1029669cd72cba3cf7e5baea024af6bec4c7094`). Prywatny klucz jest poza repo w `/home/codex/.local/share/sitegrid-release-signing/ed25519.pem`, z prawami 0600 i katalogiem 0700. Przed wydaniem operator musi wykonać bezpieczną kopię poza LXC. Aktualizator używa kotwicy `/usr/local/lib/sitegrid/release-public.pem` zachowanej od instalacji; zmiana kotwicy wymaga oddzielnego przeglądu, nie pobieramy nowego klucza z aktualizowanego wydania.
 2. Skonfigurować środowisko GitHub Actions `release-signing` z wymaganym zatwierdzeniem operatora i sekretem `SITEGRID_ED25519_KEY`. Workflow sprawdza, że sekret odpowiada przypiętemu kluczowi. Klient instalacji/aktualizacji nie otrzymuje tego sekretu. Branch CI może użyć efemerycznego klucza fixture; tag wymaga prawdziwego przypiętego klucza.
-3. Po akceptacji zmian i integracji przez operatora wskazać commit main, ustawić spójne `package.json`, `release.json` i tag `vX.Y.Z`. Nie tagować ruchomego ani nieprzetestowanego kodu. Workflow odrzuca tag spoza historii main i tag prerelease.
+3. Po akceptacji zmian i integracji przez operatora wskazać commit main, ustawić spójne `package.json`, `package-lock.json`, `release.json` i tag `vX.Y.Z`. Nie tagować ruchomego ani nieprzetestowanego kodu. Workflow odrzuca tag spoza historii main i tag prerelease.
 4. Push tagu wywołuje reusable CI: typecheck/build/testy aplikacji, paczka z przypiętym Node, testy Python i walidacje skryptów. Dopiero po sukcesie i bramce środowiska workflow pobiera **ten sam sprawdzony artefakt**, tworzy deterministyczny bootstrap i podpisuje manifest. Brak klucza lub niezgodność podpisu zatrzymuje proces.
-5. Workflow tworzy wyłącznie **Draft Release**. Pierwsze publiczne wydanie wymaga osobnego zatwierdzenia użytkownika i ręcznego opublikowania gotowego Draft. Żadnego automatycznego publikowania, `--clobber` ani nadpisywania wydanych assetów. Do tej pory nie utworzono tagu ani Release.
+5. Workflow tworzy wyłącznie **Draft Release**. Publiczne wydanie wymaga osobnego zatwierdzenia użytkownika i ręcznego opublikowania gotowego Draft. Żadnego automatycznego publikowania, `--clobber` ani nadpisywania wydanych assetów. Wydania v0.1.0–v0.1.2 są opublikowane; v0.1.3 jest przygotowywane.
 
 Obecny workflow buduje Linux x64. Kod potrafi zweryfikować arm64, ale instalacja arm64 wymaga oddzielnej przetestowanej paczki wymienionej w podpisanym manifeście; brak takiej paczki zatrzymuje instalator.
 
@@ -54,7 +70,7 @@ PostgreSQL pozostaje **11**, upgrade 0–11, bez nowych lub zmienionych migracji
 
 ## PR21 — zadania i backlog
 
-Bieżąca gałąź wymaga schematu PostgreSQL **12** (silnik 17+), upgrade **0–12**. Migracja `012_task_backlog.sql` zachowuje rekordy i receipts schematu 11, wprowadza nullable wykonawcę, firmowe FK autora/wykonawcy i aktualizuje funkcje/polityki FORCE RLS. Paczka zawiera `dist/server/task-management/`, migrację i zadaniowy frontend w wersjonowanej powłoce PWA. IDB pozostaje v2; worker/instalator/podpisy pozostają zgodne. Wersja package/release pozostaje 0.1.1; ta zmiana nie publikuje wydania.
+Kontrakt PR21 wymaga schematu PostgreSQL **12** (silnik 17+), upgrade **0–12**. Migracja `012_task_backlog.sql` zachowuje rekordy i receipts schematu 11, wprowadza nullable wykonawcę, firmowe FK autora/wykonawcy i aktualizuje funkcje/polityki FORCE RLS. Paczka zawiera `dist/server/task-management/`, migrację i zadaniowy frontend w wersjonowanej powłoce PWA. IDB pozostaje v2; worker/instalator/podpisy pozostają zgodne. Wersja package/release pozostaje 0.1.1; ta zmiana nie publikuje wydania.
 
 Update nadal wymaga backupu przed migracją; rollback do PR20/schema 11 jest blokowany **przed zatrzymaniem usługi**. Powrót wymaga kontrolowanego restore DB sprzed migracji; brak downgrade SQL. Testy migracji porównują wszystkie populated tabele, checksumy i replay M08. Testy Python obejmują konkretny update 11 → 12, blokadę rollbacku 12 → 11 oraz istniejący zgodny rollback. Test rzeczywistej paczki wymaga obecności migracji 012, trzech modułów backendu i poprawnych zasobów PWA. [Kontrakt PR21](TASK_BACKLOG.md).
 
@@ -64,7 +80,7 @@ Schemat PostgreSQL **13**, upgrade **0–13**. Addytywna `013_subtasks.sql` zach
 
 ## PR23 — komentarze i prywatne media
 
-PostgreSQL **14**, upgrade **0–14**; migracja `014_task_comments_media.sql`, FORCE RLS i niezmienna historia. Wersja produktu z latest main pozostaje **0.1.2**, bez tagu/Release. Paczka zawiera `dist/server/task-comments/`, UI, multipart parser i existing sharp; test paczki dekoduje zdjęcie i miniaturę własnym runtime.
+PostgreSQL **14**, upgrade **0–14**; migracja `014_task_comments_media.sql`, FORCE RLS i niezmienna historia. PR23 zachował wersję produktu **0.1.2** i nie tworzył tagu/Release; osobne przygotowanie v0.1.3 opisano powyżej. Paczka zawiera `dist/server/task-comments/`, UI, multipart parser i existing sharp; test paczki dekoduje zdjęcie i miniaturę własnym runtime.
 
 Storage `/srv/sitegrid/files` poza release i publicznym webRoot, chroniony sesją i prawami konkretnego zadania. Dla schema14 backup przed migracją obejmuje **DB + referencjonowane originals/thumbnails** z tego samego wyeksportowanego snapshotu. Dotychczasowe DB-only kopie schematów ≤13 pozostają zgodne. Niepełna kopia `.incoming`, brak zdjęcia albo zła suma blokują sukces/migrację. Restore wymaga kompletnej kopii i pustej DB/files, weryfikuje relacje i integralność. [Procedura i kontrakt](TASK_COMMENTS_MEDIA.md).
 
