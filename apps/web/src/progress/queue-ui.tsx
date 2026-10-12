@@ -3,7 +3,7 @@ import { readOfflineAccess } from '../storage/offline-access.js';
 import { queueProgress, retryProgress, commandPath, type QueuedProgress } from '../storage/progress-queue.js';
 import type { ConfirmedSnapshot } from '../storage/indexed-db.js';
 import { notifyProgress, startProgressSync } from './sync.js';
-import { queueState } from './queue-state.js';
+import { queueState, type QueueState } from './queue-state.js';
 import { offlineFailureMessage } from '../offline/messages.js';
 
 export function queueLabel(row: QueuedProgress) {
@@ -46,6 +46,10 @@ export function OfflineProgress({ saved, task }: { saved: ConfirmedSnapshot; tas
     {(error || failed) && <p role="alert" className="error">{error || 'Pamięć lokalna niedostępna. Nie można zapisać postępu.'}</p>}
   </div>;
 }
+export function queueRecovered(state: QueueState, accountId: string) {
+  return state.accountId === accountId && state.access?.accountId === accountId && !state.checking &&
+    !state.failed && state.failures.length === 0 && state.rows.every(row => row.state === 'confirmed');
+}
 export function ProgressQueue({ accountId }: { accountId: string }) {
   const state = useSyncExternalStore(queueState.subscribe, queueState.getSnapshot);
   const [warning, setWarning] = useState('');
@@ -56,11 +60,16 @@ export function ProgressQueue({ accountId }: { accountId: string }) {
     const stop = startProgressSync(accountId, setWarning);
     return () => { stop(); unbind(); };
   }, [accountId]);
+  useEffect(() => {
+    if (queueRecovered(state, accountId)) setWarning('');
+  }, [state, accountId]);
   const retry = async (row: QueuedProgress) => {
     try {
       const access = await readOfflineAccess();
       if (!navigator.onLine || access?.accountId !== accountId) return;
-      await retryProgress(row, access.generation); notifyProgress();
+      const retried = await retryProgress(row, access.generation);
+      if (retried) setWarning('');
+      notifyProgress();
     } catch { setWarning('Wymaga uwagi. Nie udało się zapisać ponowienia. Operacja pozostaje w kolejce.'); }
   };
   const pending = rows.filter(row => row.state !== 'confirmed');
@@ -68,6 +77,6 @@ export function ProgressQueue({ accountId }: { accountId: string }) {
     {pending.map(row => <article key={row.command.operationId}><strong>{row.title}</strong><QueueFeedback row={row} />
       {row.state === 'attention' && row.reason !== 'conflict' && <button onClick={() => void retry(row)}>Ponów tę samą operację</button>}
     </article>)}
-  </section>}{rows.length > 0 && pending.length === 0 && <p role="status">Zapisano na serwerze</p>}{(warning || state.failed || state.failures.length > 0) && <p role="alert" className="error">{warning ||
+  </section>}{rows.length > 0 && queueRecovered(state, accountId) && !warning && <p role="status">Zapisano na serwerze</p>}{(warning || state.failed || state.failures.length > 0) && <p role="alert" className="error">{warning ||
     'Wymaga uwagi. Nie można odczytać części kolejek urządzenia. Dane zachowano; przywróć pamięć urządzenia i otwórz aplikację ponownie. Zdrowe projekty synchronizują się dalej.'}</p>}</>;
 }
