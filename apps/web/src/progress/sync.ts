@@ -5,7 +5,7 @@ import { observeAccessFailure } from '../offline/account.js';
 export const progressEvent = 'sitegrid-progress-queue';
 let channel: BroadcastChannel | null = null;
 try {
-  if (typeof BroadcastChannel !== 'undefined') channel = new BroadcastChannel(progressEvent);
+  if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') channel = new BroadcastChannel(progressEvent);
   channel?.addEventListener('message', () => window.dispatchEvent(new Event(progressEvent)));
 } catch { channel = null; } // Storage/privacy policies can deny this optional channel.
 export function notifyProgress() {
@@ -14,8 +14,14 @@ export function notifyProgress() {
 }
 export async function accountQueue(accountId: string) {
   const rows: QueuedProgress[] = [];
-  for (const scope of await queuedScopes(accountId)) rows.push(...await queueRows(scope));
-  return rows;
+  const failures: QueuedProgress['scope'][] = [];
+  const scopes = await queuedScopes(accountId);
+  const results = await Promise.allSettled(scopes.map(scope => queueRows(scope)));
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') rows.push(...result.value);
+    else failures.push(scopes[i]);
+  });
+  return { rows, failures };
 }
 export function startProgressSync(accountId: string, onWarning: (message: string) => void) {
   const owner = crypto.randomUUID(), lifetime = new AbortController();
@@ -26,7 +32,9 @@ export function startProgressSync(accountId: string, onWarning: (message: string
     try {
       let access = await readOfflineAccess();
       if (!access || access.accountId !== accountId || !active()) return;
-      const rows = (await accountQueue(accountId)).filter(row => row.state === 'pending');
+      const queues = await accountQueue(accountId);
+      if (queues.failures.length) onWarning('Wymaga uwagi. Nie można odczytać części kolejek projektów. Dane zachowano; przywróć pamięć urządzenia i otwórz aplikację ponownie. Pozostałe projekty synchronizują się dalej.');
+      const rows = queues.rows.filter(row => row.state === 'pending');
       if (!rows.length) return;
       const stopForSession = async () => {
         try { for (const row of rows) await flagProgress(row, 'session'); notifyProgress(); }

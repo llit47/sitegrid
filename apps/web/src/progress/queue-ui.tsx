@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { readOfflineAccess } from '../storage/offline-access.js';
-import { queueProgress, queueRows, retryProgress, commandPath, type QueuedProgress } from '../storage/progress-queue.js';
+import { queueProgress, retryProgress, commandPath, type QueuedProgress } from '../storage/progress-queue.js';
 import type { ConfirmedSnapshot } from '../storage/indexed-db.js';
-import { accountQueue, notifyProgress, progressEvent, startProgressSync } from './sync.js';
+import { notifyProgress, startProgressSync } from './sync.js';
+import { queueState } from './queue-state.js';
 import { offlineFailureMessage } from '../offline/messages.js';
 
 export function queueLabel(row: QueuedProgress) {
@@ -18,26 +19,11 @@ export function QueueFeedback({ row }: { row: QueuedProgress }) {
   </div>;
 }
 export function useQueuedCommand(path: string) {
-  const [row, setRow] = useState<QueuedProgress | null>(null), [checking, setChecking] = useState(true), [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let disposed = false, running = false;
-    const check = async () => {
-      if (running) return; running = true;
-      try {
-        const access = await readOfflineAccess(), match = path.match(/^\/api\/organizations\/([a-f0-9-]+)\/projects\/([a-f0-9-]+)\/tasks\/([a-f0-9-]+)$/);
-        let next: QueuedProgress | null = null;
-        if (access && match) next = (await queueRows({ accountId: access.accountId, organizationId: match[1], projectId: match[2] })).find(item => item.taskId === match[3]) ?? null;
-        const current = await readOfflineAccess();
-        if (!disposed) { setRow(current?.accountId === access?.accountId && current?.generation === access?.generation ? next : null); setFailed(false); }
-      } catch { if (!disposed) { setRow(null); setFailed(true); } }
-      finally { running = false; if (!disposed) setChecking(false); }
-    };
-    const wake = () => { void check(); };
-    wake(); const timer = setInterval(wake, 2000);
-    window.addEventListener(progressEvent, wake); window.addEventListener('sitegrid-offline-access', wake);
-    return () => { disposed = true; clearInterval(timer); window.removeEventListener(progressEvent, wake); window.removeEventListener('sitegrid-offline-access', wake); };
-  }, [path]);
-  return { row, checking, failed };
+  const state = useSyncExternalStore(queueState.subscribe, queueState.getSnapshot);
+  const match = path.match(/^\/api\/organizations\/([a-f0-9-]+)\/projects\/([a-f0-9-]+)\/tasks\/([a-f0-9-]+)$/);
+  const row = match ? state.rows.find(row => row.scope.accountId === state.accountId && row.scope.organizationId === match[1] && row.scope.projectId === match[2] && row.taskId === match[3]) ?? null : null;
+  const failed = state.failed || !!match && state.failures.some(scope => scope.organizationId === match[1] && scope.projectId === match[2]);
+  return { row, checking: state.checking, failed };
 }
 export function OfflineProgress({ saved, task }: { saved: ConfirmedSnapshot; task: ConfirmedSnapshot['snapshot']['tasks'][number] }) {
   const scope = saved.snapshot.scope, { row, checking, failed } = useQueuedCommand(commandPath(scope, task.id));
@@ -61,25 +47,14 @@ export function OfflineProgress({ saved, task }: { saved: ConfirmedSnapshot; tas
   </div>;
 }
 export function ProgressQueue({ accountId }: { accountId: string }) {
-  const [rows, setRows] = useState<QueuedProgress[]>([]), [warning, setWarning] = useState('');
+  const state = useSyncExternalStore(queueState.subscribe, queueState.getSnapshot);
+  const [warning, setWarning] = useState('');
+  const rows = state.accountId === accountId ? state.rows.map(row => ({ ...row, title:
+    state.access && row.generation === state.access.generation && Date.now() < row.expiresAt && state.access.scopes.some(scope => scope.organizationId === row.scope.organizationId && scope.projectId === row.scope.projectId) ? row.title : 'Operacja postępu zadania' })) : [];
   useEffect(() => {
-    let disposed = false, running = false;
-    const check = async () => {
-      if (running) return; running = true;
-      try {
-        const access = await readOfflineAccess();
-        const next = access?.accountId === accountId ? await accountQueue(accountId) : [];
-        const current = await readOfflineAccess();
-        if (!disposed) setRows(current?.accountId === accountId && current.generation === access?.generation ? next.map(row => ({ ...row, title:
-          row.generation === current.generation && Date.now() < row.expiresAt && current.scopes.some(scope => scope.organizationId === row.scope.organizationId && scope.projectId === row.scope.projectId) ? row.title : 'Operacja postępu zadania' })) : []);
-      } catch { if (!disposed) setWarning('Wymaga uwagi. Nie udało się odczytać kolejki.'); }
-      finally { running = false; }
-    };
-    const wake = () => { void check(); };
-    const stop = startProgressSync(accountId, message => { if (!disposed) setWarning(message); });
-    wake(); const timer = setInterval(wake, 2000);
-    window.addEventListener(progressEvent, wake); window.addEventListener('sitegrid-offline-access', wake);
-    return () => { disposed = true; stop(); clearInterval(timer); window.removeEventListener(progressEvent, wake); window.removeEventListener('sitegrid-offline-access', wake); };
+    const unbind = queueState.bindAccount(accountId);
+    const stop = startProgressSync(accountId, setWarning);
+    return () => { stop(); unbind(); };
   }, [accountId]);
   const retry = async (row: QueuedProgress) => {
     try {
@@ -93,5 +68,6 @@ export function ProgressQueue({ accountId }: { accountId: string }) {
     {pending.map(row => <article key={row.command.operationId}><strong>{row.title}</strong><QueueFeedback row={row} />
       {row.state === 'attention' && row.reason !== 'conflict' && <button onClick={() => void retry(row)}>Ponów tę samą operację</button>}
     </article>)}
-  </section>}{rows.length > 0 && pending.length === 0 && <p role="status">Zapisano na serwerze</p>}{warning && <p role="alert" className="error">{warning}</p>}</>;
+  </section>}{rows.length > 0 && pending.length === 0 && <p role="status">Zapisano na serwerze</p>}{(warning || state.failed || state.failures.length > 0) && <p role="alert" className="error">{warning ||
+    'Wymaga uwagi. Nie można odczytać części kolejek urządzenia. Dane zachowano; przywróć pamięć urządzenia i otwórz aplikację ponownie. Zdrowe projekty synchronizują się dalej.'}</p>}</>;
 }

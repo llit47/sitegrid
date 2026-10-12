@@ -1,5 +1,5 @@
 import type { ProgressCommand, ProgressTask } from '../../../server/src/task-progress/domain.js';
-import { openProjectStorage, openLocalDatabase, plainStore, localTransaction, LocalStorageError, storageFailure, type StorageScope, type ConfirmedSnapshot } from './indexed-db.js';
+import { openProjectStorage, openProgressStorage, openLocalDatabase, plainStore, localTransaction, LocalStorageError, storageFailure, type StorageScope, type ConfirmedSnapshot } from './indexed-db.js';
 import { readOfflineAccess } from './offline-access.js';
 import { validUuid, OFFLINE_ACCESS_MS } from './snapshot.js';
 
@@ -44,12 +44,12 @@ async function catalog(accountId: string, scope?: StorageScope): Promise<Storage
 }
 export const queuedScopes = (accountId: string) => catalog(accountId);
 export async function queueRows(scope: StorageScope): Promise<QueuedProgress[]> {
-  const handle = await openProjectStorage(scope);
+  const handle = await openProgressStorage(scope);
   try { return await handle.progressTransaction((tx, result, invalid) => {
     const request = tx.objectStore('progress').getAll(); request.onsuccess = () => {
       try { result(request.result.map(row => validate(row, scope))); } catch (error) { invalid(storageFailure(error)); }
     };
-  }); } finally { handle.close(); }
+  }, 'readonly', false); } finally { handle.close(); }
 }
 export async function queueProgress(scope: StorageScope, taskId: string, command: ProgressCommand): Promise<QueuedProgress> {
   if (!validUuid(taskId) || !validCommand(command)) throw new LocalStorageError('invalid');
@@ -87,7 +87,7 @@ export async function queueProgress(scope: StorageScope, taskId: string, command
   } finally { handle.close(); }
 }
 async function update(scope: StorageScope, taskId: string, operationId: string, change: (row: QueuedProgress) => QueuedProgress | null) {
-  const handle = await openProjectStorage(scope);
+  const handle = await openProgressStorage(scope);
   try { return await handle.progressTransaction<QueuedProgress | null>((tx, result, invalid) => {
     const store = tx.objectStore('progress'), request = store.get(taskId);
     request.onsuccess = () => {
@@ -98,7 +98,7 @@ async function update(scope: StorageScope, taskId: string, operationId: string, 
         const next = change(row); if (next) store.put(validate(next, scope), taskId); result(next);
       } catch (error) { invalid(storageFailure(error)); }
     };
-  }); } finally { handle.close(); }
+  }, 'readwrite', false); } finally { handle.close(); }
 }
 export function claimProgress(row: QueuedProgress, owner: string, now = Date.now()) {
   return update(row.scope, row.taskId, row.command.operationId, current => current.state !== 'pending' || current.nextAttempt > now || (current.lease && current.lease.until > now) ? null :

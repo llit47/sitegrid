@@ -82,7 +82,7 @@ function ownerMatches(value: unknown, owner: StorageScope): boolean {
     record.accountId === owner.accountId && record.organizationId === owner.organizationId && record.projectId === owner.projectId;
 }
 export type ConfirmedSnapshot = { format: 1; generation: string; authorizedAt: number; snapshot: ProjectSnapshot };
-export async function openProjectStorage(scope: StorageScope, signal?: AbortSignal) {
+async function openScopedStorage(scope: StorageScope, signal?: AbortSignal, withSnapshot = true) {
   const owner = canonicalScope(scope);
   const db = await openLocalDatabase(projectDatabaseName(owner), STORAGE_SCHEMA_VERSION, (database, tx, oldVersion) => {
     if (oldVersion === 0 && database.objectStoreNames.length === 0) database.createObjectStore('metadata').put({ format: 1, ...owner }, 'owner');
@@ -122,15 +122,24 @@ export async function openProjectStorage(scope: StorageScope, signal?: AbortSign
     return value;
   };
   const verify = async () => {
-    const value = await readRaw(); if (value !== undefined) await validateRecord(value);
+    if (withSnapshot) {
+      const value = await readRaw(); if (value !== undefined) await validateRecord(value);
+    } else {
+      check();
+      await localTransaction<void>(db, ['metadata'], 'readonly', (tx, result, invalid) => {
+        const request = tx.objectStore('metadata').get('owner');
+        request.onsuccess = () => { if (!ownerMatches(request.result, owner)) invalid(); else result(undefined); };
+      }, signal);
+    }
   };
   try { await verify(); }
   catch (error) { close(); throw storageFailure(error); }
   // A caller must close and discard this handle on logout or ANY scope change.
   return { verify, close,
-    progressTransaction<T>(work: (tx: IDBTransaction, result: (value: T) => void, invalid: (error?: LocalStorageError) => void) => void) {
+    progressTransaction<T>(work: (tx: IDBTransaction, result: (value: T) => void, invalid: (error?: LocalStorageError) => void) => void,
+      mode: IDBTransactionMode = 'readwrite', includeSnapshot = true) {
       check();
-      return localTransaction<T>(db, ['metadata', 'confirmed', 'progress'], 'readwrite', (tx, result, invalid) => {
+      return localTransaction<T>(db, includeSnapshot ? ['metadata', 'confirmed', 'progress'] : ['metadata', 'progress'], mode, (tx, result, invalid) => {
         const request = tx.objectStore('metadata').get('owner');
         request.onsuccess = () => { if (!ownerMatches(request.result, owner)) invalid(); };
         work(tx, result, invalid);
@@ -164,6 +173,10 @@ export async function openProjectStorage(scope: StorageScope, signal?: AbortSign
     async clear() { check(); await localTransaction<void>(db, ['confirmed'], 'readwrite', (tx, result) => { tx.objectStore('confirmed').delete('snapshot'); result(undefined); }, signal); },
   };
 }
+export const openProjectStorage = (scope: StorageScope, signal?: AbortSignal) => openScopedStorage(scope, signal);
+// Queue discovery/replay validates its owner and records without reading/hashing
+// the prepared snapshot. Enqueue still requires the full snapshot validation.
+export const openProgressStorage = (scope: StorageScope, signal?: AbortSignal) => openScopedStorage(scope, signal, false);
 export async function checkLocalStorage(): Promise<void> {
   const db = await openLocalDatabase('sitegrid-idb-probe', 1, (database, _tx, oldVersion) => {
     if (oldVersion !== 0 || database.objectStoreNames.length !== 0) throw new LocalStorageError('invalid');
