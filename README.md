@@ -2,7 +2,7 @@
 
 Self-hosted platforma projektów budowlanych i pracy wielu firm. React/TypeScript, Fastify i PostgreSQL; pełne MVP obejmie PWA i podstawową pracę offline. M01 dostarcza działające logowanie administratora oraz mechanizm instalacji, aktualizacji i rollbacku. Instalacja wyłącznie **w gotowym Debianie 13 z systemd**, również w LXC.
 
-**Przygotowywane wydanie: v0.1.3, po scaleniu PR23; PostgreSQL schema 14.** [Oficjalne wydania](https://github.com/llit47/sitegrid/releases) obejmują v0.1.0–v0.1.2. [Release notes v0.1.3](docs/releases/v0.1.3.md) i [procedura podpisanego Draft Release](docs/RELEASES.md). Historyczny status M01: [M01_STATUS.md](docs/M01_STATUS.md).
+**Przygotowywane wydanie: v0.1.4, po scaleniu PR25–PR26; PostgreSQL schema 14.** [Oficjalne wydania](https://github.com/llit47/sitegrid/releases) obejmują v0.1.0–v0.1.3. [Release notes v0.1.4](docs/releases/v0.1.4.md) i [procedura podpisanego Draft Release](docs/RELEASES.md). Historyczny status M01: [M01_STATUS.md](docs/M01_STATUS.md).
 
 Dla opublikowanego wydania operator jako root wkleja komendę z jego `INSTALL_COMMAND.txt`, po sprawdzeniu zaufanej instrukcji. Wzorzec (placeholdery zastępuje builder, bez ręcznego kopiowania `ops/` lub paczki):
 
