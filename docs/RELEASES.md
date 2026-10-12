@@ -2,9 +2,9 @@
 
 Repozytorium i kanał instalacji: publiczne GitHub Releases `llit47/sitegrid`. Klient nie używa uwierzytelnienia GitHub. Wydawca podpisuje manifest Ed25519; klucz publiczny jest przypięty w bootstrapie i kontrolerze instalacji. SHA-256 obok paczki ma znaczenie pomocnicze; autentyczność pochodzi z podpisu i przypiętego klucza, a pierwsze wykonanie bootstrapu z sumy przypiętej w zaufanej instrukcji.
 
-## v0.1.3 — przygotowanie po scaleniu PR23
+## v0.1.4 — przygotowanie po scaleniu PR25–PR26
 
-Wersje package/lock/release i domyślna wersja CI: **0.1.3**. PostgreSQL target/min/max **14**, upgrade **0–14**. [Zwięzłe release notes](releases/v0.1.3.md) obejmują dyskusje zadań/podzadań, prywatne zdjęcia, autoryzowany odczyt mediów, spójny backup/restore DB+files i ograniczenia online. Historyczne kontrakty PR-ów poniżej zachowują swoje wersje i schematy.
+Wersje package/lock/release i domyślna wersja CI: **0.1.4**. PostgreSQL target/min/max **14**, upgrade **0–14**, bez nowych ani zmienionych migracji. [Zwięzłe release notes](releases/v0.1.4.md) obejmują przeprojektowany workspace/pulpit/zadania, automatyczne odświeżanie, wskaźnik Online/Offline, responsywne jasne/ciemne motywy oraz trwałą kolejkę postępu IndexedDB v3 z synchronizacją po reconnect, oryginalnym `operationId`, izolacją kont/firm/projektów i zachowaniem konfliktów. Zdjęcia/komentarze offline, synchronizacja w tle i pełne rozstrzyganie konfliktów M12 pozostają poza wydaniem. Podpisy Ed25519, przypięty klucz, installer, updater, rollback i workflow GitHub Release pozostają bez zmian.
 
 Po merge i sukcesie CI na wybranym main operator wykonuje poniższe polecenia z czystego checkoutu. Ten etap przygotowania nie tworzy tagu ani Release.
 
@@ -12,8 +12,8 @@ Po merge i sukcesie CI na wybranym main operator wykonuje poniższe polecenia z 
 git switch main &&
 git pull --ff-only origin main &&
 test "$(gh run list --workflow ci.yml --branch main --commit "$(git rev-parse HEAD)" --limit 1 --json conclusion --jq '.[0].conclusion')" = success &&
-git tag -a v0.1.3 -m "SiteGrid v0.1.3" HEAD &&
-git push origin refs/tags/v0.1.3
+git tag -a v0.1.4 -m "SiteGrid v0.1.4" HEAD &&
+git push origin refs/tags/v0.1.4
 ```
 
 Push tagu uruchamia istniejący workflow `release.yml`: ponowny CI tej wersji, bramka środowiska `release-signing`, podpisanie sprawdzonej paczki i **Draft Release**. Operator zatwierdza środowisko w GitHub Actions; klucz pozostaje sekretem Actions. Nie podpisywać oficjalnych artefaktów lokalnie ani publikować Draft automatycznie. Workflow generuje notes z przypiętą komendą instalacji, fingerprintem i informacją o platformie, następnie automatycznie dołącza `docs/releases/v<VERSION>.md`. Brak tego pliku zachowuje dotychczasowe notes dla historycznych wydań i fixture; inne błędy odczytu nie są ignorowane.
@@ -24,7 +24,7 @@ Push tagu uruchamia istniejący workflow `release.yml`: ponowny CI tej wersji, b
 2. Skonfigurować środowisko GitHub Actions `release-signing` z wymaganym zatwierdzeniem operatora i sekretem `SITEGRID_ED25519_KEY`. Workflow sprawdza, że sekret odpowiada przypiętemu kluczowi. Klient instalacji/aktualizacji nie otrzymuje tego sekretu. Branch CI może użyć efemerycznego klucza fixture; tag wymaga prawdziwego przypiętego klucza.
 3. Po akceptacji zmian i integracji przez operatora wskazać commit main, ustawić spójne `package.json`, `package-lock.json`, `release.json` i tag `vX.Y.Z`. Nie tagować ruchomego ani nieprzetestowanego kodu. Workflow odrzuca tag spoza historii main i tag prerelease.
 4. Push tagu wywołuje reusable CI: typecheck/build/testy aplikacji, paczka z przypiętym Node, testy Python i walidacje skryptów. Dopiero po sukcesie i bramce środowiska workflow pobiera **ten sam sprawdzony artefakt**, tworzy deterministyczny bootstrap i podpisuje manifest. Brak klucza lub niezgodność podpisu zatrzymuje proces.
-5. Workflow tworzy wyłącznie **Draft Release**. Publiczne wydanie wymaga osobnego zatwierdzenia użytkownika i ręcznego opublikowania gotowego Draft. Żadnego automatycznego publikowania, `--clobber` ani nadpisywania wydanych assetów. Wydania v0.1.0–v0.1.2 są opublikowane; v0.1.3 jest przygotowywane.
+5. Workflow tworzy wyłącznie **Draft Release**. Publiczne wydanie wymaga osobnego zatwierdzenia użytkownika i ręcznego opublikowania gotowego Draft. Żadnego automatycznego publikowania, `--clobber` ani nadpisywania wydanych assetów. Wydania v0.1.0–v0.1.3 są opublikowane; v0.1.4 jest przygotowywane.
 
 Obecny workflow buduje Linux x64. Kod potrafi zweryfikować arm64, ale instalacja arm64 wymaga oddzielnej przetestowanej paczki wymienionej w podpisanym manifeście; brak takiej paczki zatrzymuje instalator.
 
@@ -45,6 +45,10 @@ python3 scripts/sign-release.py X.Y.Z --key-file /BEZPIECZNA_SCIEZKA/ed25519.pem
 Te polecenia nie publikują. `sign-release.py` odrzuca klucz prywatny umieszczony w repozytorium oraz klucz o niebezpiecznych prawach. Przygotowaną komendę z `artifacts/INSTALL_COMMAND.txt` należy opublikować w zaufanej instrukcji dopiero po sprawdzeniu Draft i zatwierdzeniu publikacji. Nie pobierać samej sumy i skryptu z niezweryfikowanego miejsca, po czym traktować tej pary jako zaufanej.
 
 Testy korzystają z lokalnych, podpisanych fixture i efemerycznych kluczy poza repozytorium. Są niezależne od dostępności pierwszego publicznego Release. Artefakt CI z kluczem fixture nie jest oficjalnym wydaniem.
+
+## v0.1.3 — historyczne przygotowanie po scaleniu PR23
+
+Wersje package/lock/release i domyślna wersja CI tego wydania: **0.1.3**. PostgreSQL target/min/max **14**, upgrade **0–14**. [Zwięzłe release notes](releases/v0.1.3.md) obejmują dyskusje zadań/podzadań, prywatne zdjęcia, autoryzowany odczyt mediów, spójny backup/restore DB+files i ograniczenia online. Historyczne artefakty, tag i kontrakty PR-ów poniżej zachowują swoje wersje i schematy.
 
 ## Kontrakt PR11 / M06
 
