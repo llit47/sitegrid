@@ -9,7 +9,7 @@ export type ProjectSnapshotBody = {
   format: 1; complete: true; scope: SnapshotScope; generatedAt: string; expiresAt: string;
   taskAccess: 'none' | 'own' | 'project';
   project: TimedRecord & { name: string; description: string; status: 'active' | 'archived'; contractor: { id: string; name: string; status: 'active' | 'inactive' } | null };
-  tasks: (TimedRecord & { parent?: { id: string; title: string } | null; subtaskProgress?: { total: number; planned: number; inProgress: number; submitted: number }; title: string; description: string; status: 'planned' | 'in_progress' | 'submitted'; assigneeName: string | null })[];
+  tasks: (TimedRecord & { canProgress?: boolean; parent?: { id: string; title: string } | null; subtaskProgress?: { total: number; planned: number; inProgress: number; submitted: number }; title: string; description: string; status: 'planned' | 'in_progress' | 'submitted'; assigneeName: string | null })[];
 };
 export type ProjectSnapshot = ProjectSnapshotBody & { integrity: { algorithm: 'SHA-256'; digest: string; records: number; bytes: number } };
 export function canonicalJson(value: unknown): string {

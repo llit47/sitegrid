@@ -95,7 +95,7 @@ try {
   const rawStorage = await open(false);
   const wire = await api(`${projectPath}/${projectTwo.id}/snapshot`, undefined, 'worker');
   const storageResults = await rawStorage.page.evaluate(async wire => {
-    const { openProjectStorage, projectDatabaseName, readOfflineAccess, registerOfflineScope, validateSnapshot, invalidateOfflineAccount, confirmOfflineAccount, finishAccountVerification, offlineAccountGeneration, reconcilePreparedTasks } = await import('/test-storage.js');
+    const { STORAGE_SCHEMA_VERSION, openProjectStorage, projectDatabaseName, readOfflineAccess, registerOfflineScope, validateSnapshot, invalidateOfflineAccount, confirmOfflineAccount, finishAccountVerification, offlineAccountGeneration, reconcilePreparedTasks } = await import('/test-storage.js');
     const scope = wire.scope, name = projectDatabaseName(scope), access = await readOfflineAccess();
     const raw = (name, version, upgrade) => new Promise((resolve, reject) => {
       const request = indexedDB.open(name, version); request.onupgradeneeded = () => upgrade?.(request.result);
@@ -132,16 +132,16 @@ try {
     await expectError(() => handle.verify(), 'failed');
     // A rollback to schema-v1 code fails without modifying or deleting v2 data.
     try { (await raw(name,1)).close(); throw new Error('Downgraded local database'); } catch (error) { if (error.name !== 'VersionError') throw error; }
-    const upgraded = await raw(name,2); const tx=upgraded.transaction(['metadata','future_queue','future_drafts']);
+    const upgraded = await raw(name,STORAGE_SCHEMA_VERSION); const tx=upgraded.transaction(['metadata','future_queue','future_drafts']);
     const owner=tx.objectStore('metadata').get('owner'), queue=tx.objectStore('future_queue').get('command'), draft=tx.objectStore('future_drafts').get('draft');
     await complete(tx); if (owner.result.accountId !== scope.accountId || !queue.result.untouched || !draft.result.untouched) throw new Error('Upgrade destroyed ownership/future stores'); upgraded.close();
     handle=await openProjectStorage(scope); if (!(await handle.read(access.generation))) throw new Error('Rollback erased snapshot');
     await handle.clear(); handle.close();
-    const check=await raw(name,2); const preserved=check.transaction('future_queue'); const queued=preserved.objectStore('future_queue').get('command'); await complete(preserved); if (!queued.result.untouched) throw new Error('Replacement/clear touched queue');
+    const check=await raw(name,STORAGE_SCHEMA_VERSION); const preserved=check.transaction('future_queue'); const queued=preserved.objectStore('future_queue').get('command'); await complete(preserved); if (!queued.result.untouched) throw new Error('Replacement/clear touched queue');
     const corruption=check.transaction('confirmed','readwrite');corruption.objectStore('confirmed').put({...previous,snapshot:corrupt},'snapshot');await complete(corruption);check.close();
     await expectError(()=>openProjectStorage(scope),'invalid');
-    const retained=await raw(name,2);const inspect=retained.transaction('confirmed');const damaged=inspect.objectStore('confirmed').get('snapshot');await complete(inspect);if(damaged.result.snapshot.project.name!=='Corrupted')throw new Error('Corruption silently reset business data');retained.close();
-    const expired=await raw(name,2);const expiredTx=expired.transaction('confirmed','readwrite');expiredTx.objectStore('confirmed').put({...previous,authorizedAt:Date.now()-24*60*60*1000-1},'snapshot');await complete(expiredTx);expired.close();
+    const retained=await raw(name,STORAGE_SCHEMA_VERSION);const inspect=retained.transaction('confirmed');const damaged=inspect.objectStore('confirmed').get('snapshot');await complete(inspect);if(damaged.result.snapshot.project.name!=='Corrupted')throw new Error('Corruption silently reset business data');retained.close();
+    const expired=await raw(name,STORAGE_SCHEMA_VERSION);const expiredTx=expired.transaction('confirmed','readwrite');expiredTx.objectStore('confirmed').put({...previous,authorizedAt:Date.now()-24*60*60*1000-1},'snapshot');await complete(expiredTx);expired.close();
     await reconcilePreparedTasks(scope.organizationId,scope.projectId,wire.tasks.map(task=>task.id));
     if(!(await readOfflineAccess()))throw new Error('Expired snapshot incorrectly blocked fresh online preparation');
     handle=await openProjectStorage(scope);await expectError(()=>handle.read(access.generation),'expired');await handle.replace(refreshed,access.generation,Date.now());if(!(await handle.read(access.generation)))throw new Error('Fresh authorization could not refresh expired snapshot');handle.close();
@@ -159,7 +159,7 @@ try {
     return { upgrade: true, isolation: true, atomic: true, rollback: true, failures: true, staleAuthorization: true };
   }, wire);
   assert(Object.values(storageResults).every(Boolean)); await rawStorage.context.close();
-  console.log('PASS real IndexedDB v1→v2, retained owner/queue/draft stores, scope/generation isolation, malformed/quota/abort/unavailable failures, safe v1 rollback');
+  console.log('PASS real IndexedDB v1→v3, retained owner/queue/draft stores, scope/generation isolation, malformed/quota/abort/unavailable failures, safe v1 rollback');
   // M09's ready response has no M10 capability. The new worker is waiting,
   // while the old controller still supplies this page's offline navigation.
   const currentWorker = servedWorker, currentConfig = JSON.parse(currentWorker.match(/const shell = (.*);/)[1]);
@@ -183,7 +183,7 @@ try {
   assert(shellStatuses.waiting.capabilities.includes('project-snapshots-v1'));
   await oldShell.page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
   await oldShell.page.getByText('Powłoka offline jest niedostępna.', { exact: false }).waitFor();
-  assert.equal(oldShellDownloads, 0); assert.equal(await oldShell.page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).count(), 0);
+  assert.equal(oldShellDownloads, 0); assert.equal(await oldShell.page.getByText('Projekt gotowy offline.', { exact: true }).count(), 0);
   await oldShell.context.close(); console.log('PASS M09 controller cannot prepare M10 snapshots while a compatible ready worker is waiting');
   for (const mobile of [false,true]) {
     const { context, page: initialPage } = await open(mobile); let page = initialPage;
@@ -192,10 +192,10 @@ try {
     await page.getByRole('button',{name:'Wczytaj aktualne dane',exact:true}).click(); await page.locator('.project-details').getByText(temporary.title,{exact:true}).waitFor();
     let downloads=0; page.on('request',request=>{if(request.url().endsWith('/snapshot')) downloads++;});
     await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();
-    await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor(); assert.equal(downloads,1);
+    await page.getByText('Projekt gotowy offline.',{exact:true}).waitFor(); assert.equal(downloads,1);
     sessionUnavailable=true;await page.reload();await page.getByRole('alert').filter({hasText:'Serwer sesji chwilowo niedostępny.'}).waitFor();assert.equal(await page.evaluate(()=>navigator.onLine),true);
     await context.setOffline(true);await page.getByRole('heading',{name:'SiteGrid bez połączenia',exact:true}).waitFor();await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor();
-    assert.equal(await page.getByRole('button',{name:'Rozpocznij zadanie',exact:true}).count(),0);assert.equal(await page.locator('form:visible').count(),0);assert.equal(downloads,1);
+    assert.equal(await page.locator('.offline-viewer').getByRole('button',{name:'Rozpocznij zadanie',exact:true}).count(),2);assert.equal(await page.locator('form:visible').count(),0);assert.equal(downloads,1);
     sessionUnavailable=false;await context.setOffline(false);await selectCompany(page, companyA);
     await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click();await page.getByRole('button',{name:'Odśwież offline',exact:true}).waitFor();
     assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);
@@ -217,12 +217,12 @@ try {
     await page.getByRole('button',{name:'Odśwież offline',exact:true}).click(); await started;
     await page.getByRole('button',{name:'Anuluj przygotowanie',exact:true}).click(); await page.getByText('Przygotowanie anulowane.',{exact:true}).waitFor(); releaseDownload(); snapshotMode='';
     await owner.query('DELETE FROM tasks WHERE id=$1',[temporary.id]);
-    await page.getByRole('button',{name:'Odśwież offline',exact:true}).click(); await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Odśwież offline',exact:true}).click(); await page.getByText('Projekt gotowy offline.',{exact:true}).waitFor();
     snapshotMode='hold';const delayed=new Promise(resolve=>{downloadStarted=resolve;});
     await page.getByRole('button',{name:'Odśwież offline',exact:true}).click();await delayed;
     await selectCompany(page, companyB);releaseDownload();snapshotMode='';
     await page.getByRole('button',{name:'Projekt obcej firmy Aktywny Kontrahent: Klient Alfa',exact:true}).click();
-    await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click(); await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click(); await page.getByText('Projekt gotowy offline.',{exact:true}).waitFor();
     const access=await page.evaluate(async()=>await(await import('/test-storage.js')).readOfflineAccess()); assert.equal(access.scopes.length,2); assert.equal(access.accountId,users.worker);
     const authSecrets=[(await page.evaluate(async()=>(await(await fetch('/api/auth/session')).json()).csrfToken)),password,...(await context.cookies()).filter(cookie=>cookie.name==='sitegrid').map(cookie=>cookie.value)];
     await context.setOffline(true); await page.getByRole('heading',{name:'SiteGrid bez połączenia'}).waitFor();
@@ -230,7 +230,7 @@ try {
     await page.locator('.offline-project').getByText('Podzadanie · Kontekst Projekt Alfa',{exact:true}).waitFor();
     assert.equal(await page.getByText('Poufny opis rodzica PR22',{exact:true}).count(),0);assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);assert.equal(await page.locator('.subtask-summary:visible').count(),0);
     assert.equal(await page.getByText('Projekt Beta',{exact:true}).filter({visible:true}).count(),0); assert.equal(await page.getByText('Projekt obcej firmy',{exact:true}).filter({visible:true}).count(),0);
-    assert.equal(await page.getByRole('button').count(),0); assert.equal(await page.locator('form:visible').count(),0);
+    assert.equal(await page.locator('.offline-viewer button').filter({hasText:'Rozpocznij zadanie'}).count(),1); assert.equal(await page.locator('form:visible').count(),0);
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await page.close(); page=await context.newPage(); acceptDiscardDialogs(page); page.on('pageerror',error=>errors.push(error.message)); await page.goto(config.origin);
     await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor(); assert.equal(await page.getByText('Cudze zadanie kierownika',{exact:true}).count(),0);await page.locator('.offline-project').getByText('Podzadanie · Kontekst Projekt Alfa',{exact:true}).waitFor();assert.equal(await page.getByText('Poufny opis rodzica PR22',{exact:true}).count(),0);
@@ -255,7 +255,7 @@ try {
     await page.evaluate(()=>{Date.now=window.originalClock;}); await page.reload(); await page.getByText('Brak pobranych projektów',{exact:false}).waitFor();
     await context.setOffline(false); await selectCompany(page, companyA);
     await page.getByRole('button',{name:'Projekt Alfa Aktywny Kontrahent: Klient Alfa',exact:true}).click(); await page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();
-    await page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
+    await page.getByText('Projekt gotowy offline.',{exact:true}).waitFor();
     const other=await context.newPage(); await other.goto(config.origin); await other.locator('.workspace-account').getByText('worker@example.test',{exact:true}).waitFor();
     await page.evaluate(()=>{Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});window.dispatchEvent(new Event('offline'));}); await page.getByRole('heading',{name:'SiteGrid bez połączenia'}).waitFor();
     if(!mobile)await other.evaluate(()=>{
@@ -273,7 +273,7 @@ try {
     await other.locator('#email').fill('administratorb@example.test');await other.locator('#password').fill(password);await other.getByRole('button',{name:'Zaloguj się',exact:true}).click();
     await other.locator('.workspace-account').getByText('administratorb@example.test',{exact:true}).waitFor();
     await selectCompany(other, companyB);await other.getByRole('button',{name:'Projekt obcej firmy Aktywny Kontrahent: Klient Alfa',exact:true}).click();
-    await other.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await other.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
+    await other.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await other.getByText('Projekt gotowy offline.',{exact:true}).waitFor();
     await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'Projekt obcej firmy',exact:true}).waitFor();await page.getByText('Zadanie w firmie B',{exact:true}).waitFor();
     assert.equal(await page.getByRole('heading',{name:'Projekt Alfa',exact:true}).count(),0);assert.equal(await page.locator('.task-row').count(),1);
     if(!mobile){
@@ -296,12 +296,12 @@ try {
   }
   const selection = await open(false);
   await selection.page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
-  await selection.page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).waitFor();
+  await selection.page.getByText('Projekt gotowy offline.', { exact: true }).waitFor();
   const prepareB = async page => {
     await selectCompany(page, companyB);
     await page.getByRole('button', { name: 'Projekt obcej firmy Aktywny Kontrahent: Klient Alfa', exact: true }).click();
     await page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
-    await page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).waitFor();
+    await page.getByText('Projekt gotowy offline.', { exact: true }).waitFor();
   };
   const selectB = async () => {
     await selection.page.getByLabel('Przygotowana firma', { exact: true }).selectOption(companyB);
@@ -330,7 +330,7 @@ try {
   console.log('PASS removing selected organization B selects remaining prepared A in the same tab and across tabs');
   const inFlight = await open(false);
   await inFlight.page.getByRole('button', { name: 'Przygotuj offline', exact: true }).click();
-  await inFlight.page.getByText('Projekt gotowy offline — tylko odczyt.', { exact: true }).waitFor();
+  await inFlight.page.getByText('Projekt gotowy offline.', { exact: true }).waitFor();
   const invalidatingTab = await inFlight.context.newPage(); await invalidatingTab.goto(config.origin);
   await invalidatingTab.getByText('worker@example.test', { exact: true }).waitFor(); await inFlight.page.bringToFront();
   const generationBefore = await invalidatingTab.evaluate(async () => (await import('/test-storage.js')).offlineAccountGeneration());
@@ -366,18 +366,18 @@ try {
   assert.equal(await inFlight.page.evaluate(() => { window.snapshotObserver.disconnect(); return window.revokedSnapshotPublished; }), false);
   await inFlight.context.close(); console.log('PASS in-flight snapshot read never republishes a project revoked by another tab with unchanged account generation');
   // Confirmed revocation invalidates the prepared project before another offline launch.
-  const revoked=await open(false); await revoked.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click(); await revoked.page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
+  const revoked=await open(false); await revoked.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click(); await revoked.page.getByText('Projekt gotowy offline.',{exact:true}).waitFor();
   await withOrganization(owner,companyA,async client=>{ await client.query("SELECT set_config('sitegrid.user_id',$1,true)",[users.administrator]); await client.query("UPDATE tasks SET assignee_membership_id=NULL,version=version+1 WHERE organization_id=$1 AND project_id=$2 AND assignee_membership_id=$3",[companyA,projectOne.id,members.worker]); });
   await revoked.page.getByRole('button',{name:'Wczytaj aktualne dane',exact:true}).click(); await revoked.page.locator('.project-details').waitFor({state:'detached'});
   await revoked.context.setOffline(true); await revoked.page.reload(); await revoked.page.getByText('Brak pobranych projektów',{exact:false}).waitFor();assert.equal(await revoked.page.locator('.offline-project').count(),0);await revoked.context.close();
   await withOrganization(owner,companyA,async client=>{ await client.query("SELECT set_config('sitegrid.user_id',$1,true)",[users.administrator]); await client.query("UPDATE tasks SET assignee_membership_id=$3,version=version+1 WHERE organization_id=$1 AND project_id=$2 AND assignee_membership_id IS NULL",[companyA,projectOne.id,members.worker]); });
-  const legacy=await open(false);await legacy.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await legacy.page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
+  const legacy=await open(false);await legacy.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await legacy.page.getByText('Projekt gotowy offline.',{exact:true}).waitFor();
   const legacyTab=await legacy.context.newPage();await legacyTab.goto(config.origin);
   await legacy.page.evaluate(()=>{Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});window.dispatchEvent(new Event('offline'));});await legacy.page.getByRole('heading',{name:'Projekt Alfa',exact:true}).waitFor();
   await legacyTab.evaluate(()=>{const channel=new BroadcastChannel('sitegrid-account-change');channel.postMessage('changed');channel.close();});
   await legacy.page.getByText('Brak pobranych projektów',{exact:false}).waitFor();assert.equal(await legacy.page.locator('.offline-project').count(),0);await legacy.context.close();
   console.log('PASS legacy account-change signal invalidates M10 data across client versions');
-  const role=await open(false);await role.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await role.page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
+  const role=await open(false);await role.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await role.page.getByText('Projekt gotowy offline.',{exact:true}).waitFor();
   await owner.query('DELETE FROM membership_roles WHERE organization_id=$1 AND membership_id=$2',[companyA,members.worker]);
   await role.page.getByRole('button',{name:'Wczytaj aktualne dane',exact:true}).click();await role.page.getByText('Dostęp do zadań wymaga',{exact:false}).waitFor();
   assert.equal(await role.page.getByText('Gotowy offline.',{exact:false}).count(),0);
@@ -386,9 +386,9 @@ try {
   const missingShell=await open(false);let missingDownloads=0;missingShell.page.on('request',request=>{if(request.url().endsWith('/snapshot'))missingDownloads++;});
   await missingShell.page.evaluate(async()=>{for(const name of await caches.keys())if(name.startsWith('sitegrid-shell-v1-'))await caches.delete(name);});
   await missingShell.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await missingShell.page.getByText('Powłoka offline jest niedostępna.',{exact:false}).waitFor();assert.equal(missingDownloads,0);
-  assert.equal(await missingShell.page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).count(),0);await missingShell.context.close();
+  assert.equal(await missingShell.page.getByText('Projekt gotowy offline.',{exact:true}).count(),0);await missingShell.context.close();
   console.log('PASS revoked task role and missing static shell never claim offline readiness');
-  const expiredSession=await open(false);await expiredSession.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await expiredSession.page.getByText('Projekt gotowy offline — tylko odczyt.',{exact:true}).waitFor();
+  const expiredSession=await open(false);await expiredSession.page.getByRole('button',{name:'Przygotuj offline',exact:true}).click();await expiredSession.page.getByText('Projekt gotowy offline.',{exact:true}).waitFor();
   await owner.query('DELETE FROM sessions WHERE token_hash=$1',[createHash('sha256').update(cookies.worker).digest('hex')]);
   await expiredSession.page.getByRole('button',{name:'Rozpocznij zadanie',exact:true}).first().click();await expiredSession.page.locator('.project-details').waitFor({state:'detached'});
   await expiredSession.context.setOffline(true);await expiredSession.page.reload();await expiredSession.page.getByText('Brak pobranych projektów',{exact:false}).waitFor();assert.equal(await expiredSession.page.locator('.offline-project').count(),0);await expiredSession.context.close();

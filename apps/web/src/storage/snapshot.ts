@@ -28,7 +28,9 @@ export async function validateSnapshot(value: unknown, scope: SnapshotScope): Pr
     if (!task || typeof task !== 'object' || Array.isArray(task)) return invalid();
     const hierarchy = Object.hasOwn(task, 'parent') ? ',parent' : '';
     const progress = Object.hasOwn(task, 'subtaskProgress') ? ',subtaskProgress' : '';
-    if (!keys(task, 'id,title,description,status,version,createdAt,updatedAt,assigneeName' + hierarchy + progress) || !timed(task) ||
+    const permission = Object.hasOwn(task, 'canProgress') ? ',canProgress' : '';
+    if (permission && typeof task.canProgress !== 'boolean') return invalid();
+    if (!keys(task, 'id,title,description,status,version,createdAt,updatedAt,assigneeName' + hierarchy + progress + permission) || !timed(task) ||
       !text(task.title, 200, true) || !text(task.description, 4000) || !['planned','in_progress','submitted'].includes(task.status as string) ||
       (task.assigneeName !== null && !text(task.assigneeName, 254, true)) || ids.has(task.id as string)) return invalid();
     if (hierarchy && task.parent !== null && (!keys(task.parent, 'id,title') || !validUuid(task.parent.id) || task.parent.id === task.id || !text(task.parent.title, 200, true))) return invalid();

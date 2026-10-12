@@ -25,6 +25,7 @@ export function registerProjectSnapshotRoutes(app: FastifyInstance, pool: Pool, 
         can_access_project($1,$2,ARRAY['worker']) AS own`, [id, projectId])).rows[0];
       const tasks = access.full || access.own ? (await client.query(`SELECT ${parentColumns()}, id, title, description, status, version,
         created_at AS "createdAt", updated_at AS "updatedAt",
+        can_progress_assignment(organization_id, project_id, assignee_membership_id) AS "canProgress",
         (SELECT COALESCE(e.display_name, u.email) FROM organization_memberships m JOIN users u ON u.id = m.user_id
          LEFT JOIN employee_profiles e ON (e.organization_id,e.membership_id) = (m.organization_id,m.id)
          WHERE (m.organization_id,m.id) = (tasks.organization_id,tasks.assignee_membership_id)) AS "assigneeName"

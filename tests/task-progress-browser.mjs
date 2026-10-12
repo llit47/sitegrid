@@ -73,6 +73,7 @@ try {
   let requests = 0;
   await page.route(url('Potwierdzenie'), async route => { requests++; const response = await route.fetch(); entered(); await gate; await route.fulfill({ response }); });
   const confirm = row(page, 'Potwierdzenie');
+  await confirm.getByRole('button', { name: 'Rozpocznij zadanie' }).click({ trial: true });
   await confirm.getByRole('button', { name: 'Rozpocznij zadanie' }).evaluate(button => { button.click(); button.click(); });
   await arrived;
   assert(await confirm.getByRole('button', { name: 'Oczekiwanie na serwer…' }).isDisabled());

@@ -275,7 +275,7 @@ try {
     await invitationRegression(mobile, false, issuer);
     if (!mobile) {
       const storage = await page.evaluate(async ({ user, company, project }) => {
-        const { openProjectStorage, checkLocalStorage, projectDatabaseName } = await import('/test-storage.js');
+        const { STORAGE_SCHEMA_VERSION, openProjectStorage, checkLocalStorage, projectDatabaseName } = await import('/test-storage.js');
         const scope = { accountId: user, organizationId: company, projectId: project };
         const expectFailure = async (operation, expected) => { try { await operation(); throw new Error('False success'); } catch (error) { if (error.code !== expected) throw error; } };
         const handle = await openProjectStorage(scope); await handle.verify(); handle.close();
@@ -289,7 +289,7 @@ try {
           request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
         });
         const name = projectDatabaseName(scope);
-        const raw = await openRaw(name, 2);
+        const raw = await openRaw(name, STORAGE_SCHEMA_VERSION);
         const originalPut = IDBObjectStore.prototype.put;
         IDBObjectStore.prototype.put = function () { throw new DOMException('Full', 'QuotaExceededError'); };
         try { await expectFailure(checkLocalStorage, 'quota'); } finally { IDBObjectStore.prototype.put = originalPut; }
@@ -304,7 +304,7 @@ try {
         (await openRaw(projectDatabaseName(unknownScope), 1, db => db.createObjectStore('unexpected'))).close();
         await expectFailure(() => openProjectStorage(unknownScope), 'invalid');
         const newerScope = { ...scope, projectId: crypto.randomUUID() };
-        (await openRaw(projectDatabaseName(newerScope), 3, db => db.createObjectStore('metadata'))).close();
+        (await openRaw(projectDatabaseName(newerScope), STORAGE_SCHEMA_VERSION + 1, db => db.createObjectStore('metadata'))).close();
         await expectFailure(() => openProjectStorage(newerScope), 'invalid');
         // A deleted v1 database blocks reinitialization until an old tab releases it.
         const blocked = { ...scope, projectId: crypto.randomUUID() };
@@ -317,12 +317,12 @@ try {
         // Our handles close themselves for versionchange; an upgrade can complete safely.
         const upgradeScope = { ...scope, projectId: crypto.randomUUID() };
         const upgraded = await openProjectStorage(upgradeScope);
-        (await openRaw(projectDatabaseName(upgradeScope), 3)).close();
+        (await openRaw(projectDatabaseName(upgradeScope), STORAGE_SCHEMA_VERSION + 1)).close();
         await expectFailure(() => upgraded.verify(), 'failed');
         return { partitions: names.filter(name => name.startsWith('sitegrid-project-')).length };
       }, { user, company, project });
       assert.equal(storage.partitions, 4);
-      console.log('PASS real IndexedDB v0→v2 initialization, 4 isolated partitions, discarded handles, blocked upgrades, v3 rejection, corrupt ownership/schema, quota and aborted transaction failures');
+      console.log('PASS real IndexedDB v0→v3 initialization, 4 isolated partitions, discarded handles, blocked upgrades, future version rejection, corrupt ownership/schema, quota and aborted transaction failures');
       // Worker update never replaces a live tab or removes its working shell.
       const updateTab = await context.newPage(); await updateTab.goto(config.origin);
       await updateTab.getByText('second@example.test', { exact: true }).waitFor();
