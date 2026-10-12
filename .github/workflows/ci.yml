@@ -65,6 +65,8 @@ jobs:
       - run: node --import tsx tests/contractors-browser.mjs
       - run: node --import tsx tests/project-snapshots-browser.mjs
       - run: node --import tsx tests/task-progress-browser.mjs
+      - run: node --import tsx tests/offline-progress-browser.mjs
+      - run: node --import tsx tests/offline-progress-review-browser.mjs
       - run: node --import tsx tests/workspace-browser.mjs
       - run: node --import tsx tests/task-management-browser.mjs
       - run: node --import tsx tests/subtasks-browser.mjs
